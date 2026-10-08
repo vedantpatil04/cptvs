@@ -48,6 +48,10 @@ export const buildConfig = (env: Env) =>
       timeZone: env.CAMPUS_TIMEZONE,
       slotHoldMs: env.SLOT_HOLD_SECONDS * 1000,
     }),
+    alerts: Object.freeze({
+      nearlyFullPercent: env.ALERT_NEARLY_FULL_PERCENT,
+      longDurationHours: env.ALERT_LONG_DURATION_HOURS,
+    }),
     cors: Object.freeze({
       origins: Object.freeze(resolveCorsOrigins(env)),
     }),

@@ -13,6 +13,10 @@ export const VALIDATION_MESSAGES = {
   invalidHour: 'validation.invalidHour',
   invalidSessionNumber: 'validation.invalidSessionNumber',
   invalidSlotCode: 'validation.invalidSlotCode',
+  invalidDate: 'validation.invalidDate',
+  invalidDateRange: 'validation.invalidDateRange',
+  outOfRange: 'validation.outOfRange',
+  coordinatesPaired: 'validation.coordinatesPaired',
 } as const;
 
 export type ValidationMessageKey = (typeof VALIDATION_MESSAGES)[keyof typeof VALIDATION_MESSAGES];

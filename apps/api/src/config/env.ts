@@ -54,6 +54,10 @@ const envSchema = z
       .refine(isValidTimeZone, 'CAMPUS_TIMEZONE must be a valid IANA time zone'),
     /** Lifetime of a temporary slot hold during allocation, in seconds. */
     SLOT_HOLD_SECONDS: z.coerce.number().int().min(2).max(120).default(15),
+    /** A zone at or above this occupancy (percent of usable slots) raises a warning. */
+    ALERT_NEARLY_FULL_PERCENT: z.coerce.number().int().min(50).max(99).default(90),
+    /** An active session parked at least this many hours raises a long-duration alert. */
+    ALERT_LONG_DURATION_HOURS: z.coerce.number().int().min(1).max(23).default(8),
     /** Requests per minute per IP allowed on unauthenticated public endpoints. */
     PUBLIC_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10_000).default(120),
   })

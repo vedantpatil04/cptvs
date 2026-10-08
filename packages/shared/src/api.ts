@@ -33,6 +33,12 @@ export const API_ERROR_CODES = [
   'PAYMENT_IN_PROGRESS',
   'PAYMENT_AMOUNT_MISMATCH',
   'RECEIPT_NOT_FOUND',
+  // Management (Phase 3)
+  'SLOT_NOT_FOUND',
+  'SLOT_NOT_AVAILABLE',
+  'SLOT_NOT_BLOCKED',
+  'BLOCK_NOT_FOUND',
+  'DATE_RANGE_TOO_LARGE',
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

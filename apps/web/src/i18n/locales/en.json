@@ -147,7 +147,12 @@
     "PAYMENT_NOT_PENDING": "This payment has already been processed or cancelled.",
     "PAYMENT_IN_PROGRESS": "A payment for this session is already being processed.",
     "PAYMENT_AMOUNT_MISMATCH": "The fee changed during checkout. Please calculate the fee again.",
-    "RECEIPT_NOT_FOUND": "The receipt could not be found."
+    "RECEIPT_NOT_FOUND": "The receipt could not be found.",
+    "SLOT_NOT_FOUND": "The parking slot was not found.",
+    "SLOT_NOT_AVAILABLE": "Only an available slot can be blocked. Check the vehicle out first.",
+    "SLOT_NOT_BLOCKED": "This slot is not blocked.",
+    "BLOCK_NOT_FOUND": "The parking block was not found.",
+    "DATE_RANGE_TOO_LARGE": "The date range is too long. Choose at most one year."
   },
   "validation": {
     "required": "This field is required.",
@@ -158,7 +163,11 @@
     "invalidVehicleNumber": "Enter a valid vehicle number, for example KA22AB1234.",
     "invalidHour": "Enter an hour between 0 and 23.",
     "invalidSessionNumber": "Enter a valid session number, for example CPVTS-P-7K4M92QX.",
-    "invalidSlotCode": "Enter a valid slot ID, for example T-04."
+    "invalidSlotCode": "Enter a valid slot ID, for example T-04.",
+    "invalidDate": "Enter a valid date.",
+    "invalidDateRange": "The end date must be on or after the start date.",
+    "outOfRange": "This value is out of the allowed range.",
+    "coordinatesPaired": "Enter both latitude and longitude, or clear both."
   },
   "public": {
     "loginButton": "Admin / Staff login",
