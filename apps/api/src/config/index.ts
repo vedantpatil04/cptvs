@@ -52,6 +52,10 @@ export const buildConfig = (env: Env) =>
       nearlyFullPercent: env.ALERT_NEARLY_FULL_PERCENT,
       longDurationHours: env.ALERT_LONG_DURATION_HOURS,
     }),
+    accounts: Object.freeze({
+      emailDomains: Object.freeze(env.INSTITUTION_EMAIL_DOMAINS ?? []),
+      visitorAccessSeconds: env.VISITOR_ACCESS_HOURS * 3600,
+    }),
     cors: Object.freeze({
       origins: Object.freeze(resolveCorsOrigins(env)),
     }),
@@ -63,6 +67,7 @@ export const buildConfig = (env: Env) =>
       public: Object.freeze({
         maxPerMinute: env.PUBLIC_RATE_LIMIT_PER_MINUTE,
       }),
+      registrationPerHour: env.REGISTRATION_RATE_LIMIT_PER_HOUR,
     }),
   });
 

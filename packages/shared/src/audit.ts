@@ -18,6 +18,18 @@ export const AUDIT_ACTIONS = {
   slotPriorityChanged: 'SLOT_PRIORITY_CHANGED',
   blockLocationUpdated: 'BLOCK_LOCATION_UPDATED',
   reportExported: 'REPORT_EXPORTED',
+  userRegistered: 'USER_REGISTERED',
+  identitySubmitted: 'IDENTITY_SUBMITTED',
+  identityDocumentViewed: 'IDENTITY_DOCUMENT_VIEWED',
+  userVerified: 'USER_VERIFIED',
+  userVerificationRejected: 'USER_VERIFICATION_REJECTED',
+  userActivated: 'USER_ACTIVATED',
+  userDeactivated: 'USER_DEACTIVATED',
+  userUpdated: 'USER_UPDATED',
+  profileUpdated: 'PROFILE_UPDATED',
+  vehicleRegistered: 'VEHICLE_REGISTERED',
+  vehicleUpdated: 'VEHICLE_UPDATED',
+  visitorAccessGranted: 'VISITOR_ACCESS_GRANTED',
   /** A request was refused by a consistency/security rule (metadata.code says which). */
   integrityRejected: 'INTEGRITY_REJECTED',
 } as const;
@@ -35,6 +47,7 @@ export const AUDIT_ENTITY_TYPES = {
   receipt: 'RECEIPT',
   vehicle: 'VEHICLE',
   report: 'REPORT',
+  identityDocument: 'IDENTITY_DOCUMENT',
 } as const;
 
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[keyof typeof AUDIT_ENTITY_TYPES];

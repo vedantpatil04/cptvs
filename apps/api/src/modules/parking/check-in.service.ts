@@ -66,6 +66,17 @@ export const checkInService = {
       throw await reject(parkingErrors.vehicleTypeMismatch());
     }
 
+    // A vehicle registered to an active, verified Student / Campus Staff account
+    // is billed in that account's category, whatever the operator selected.
+    const owner = existingVehicle?.owner;
+    const accountCategory =
+      owner?.isActive &&
+      owner.role === 'PARKING_USER' &&
+      owner.parkingProfile?.verificationStatus === 'VERIFIED'
+        ? owner.parkingProfile.category
+        : null;
+    const ownerCategory: OwnerCategory = accountCategory ?? input.ownerCategory;
+
     // 2. Zone identification: only slots of active zones for this vehicle type.
     await slotHoldRepository.releaseExpired();
     const slots = await parkingRepository.findSlotsForVehicleType(input.vehicleType);
@@ -124,7 +135,7 @@ export const checkInService = {
                 vehicleId: vehicle.id,
                 slotId: candidate.slotId,
                 vehicleType: input.vehicleType,
-                ownerCategory: input.ownerCategory,
+                ownerCategory,
                 entryHour: input.entryHour,
                 entryAt: new Date(),
                 checkedInById: context.actor.id,
@@ -141,7 +152,8 @@ export const checkInService = {
                 metadata: {
                   vehicleNumber: input.vehicleNumber,
                   vehicleType: input.vehicleType,
-                  ownerCategory: input.ownerCategory,
+                  ownerCategory,
+                  categorySource: accountCategory ? 'ACCOUNT' : 'OPERATOR',
                   entryHour: input.entryHour,
                 },
                 request: context.request,
@@ -181,6 +193,7 @@ export const checkInService = {
     return {
       session: toSessionView(outcome.result, { currentHour: campusHour(), schedule }),
       allocation: outcome.explanation,
+      categorySource: accountCategory ? 'ACCOUNT' : 'OPERATOR',
     };
   },
 };

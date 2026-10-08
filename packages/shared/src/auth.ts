@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { ParkingUserCategory, VerificationStatus } from './portal.js';
 import type { UserRole } from './roles.js';
 import { VALIDATION_MESSAGES } from './validation.js';
 
@@ -34,6 +35,12 @@ export const passwordPolicySchema = z
     error: VALIDATION_MESSAGES.passwordTooLong,
   });
 
+/** Category and verification of a parking user, as decided by the server. */
+export interface ParkingUserSummary {
+  category: ParkingUserCategory;
+  verificationStatus: VerificationStatus;
+}
+
 /** Public representation of the signed-in user. Never includes credentials. */
 export interface AuthUser {
   id: string;
@@ -41,6 +48,8 @@ export interface AuthUser {
   fullName: string;
   role: UserRole;
   lastLoginAt: string | null;
+  /** Present only for `PARKING_USER` accounts. */
+  parkingUser: ParkingUserSummary | null;
 }
 
 export interface LoginResponse {

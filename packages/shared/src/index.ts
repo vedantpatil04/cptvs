@@ -5,5 +5,7 @@ export * from './locales.js';
 export * from './management.js';
 export * from './operations.js';
 export * from './parking.js';
+export * from './portal.js';
 export * from './roles.js';
+export * from './users.js';
 export * from './validation.js';

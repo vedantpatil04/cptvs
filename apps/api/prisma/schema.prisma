@@ -30,11 +30,29 @@ datasource db {
 enum UserRole {
   ADMIN
   SECURITY_STAFF
+  /// Student or Campus Staff parking user (see ParkingUserProfile.category).
+  PARKING_USER
 
   @@map("user_role")
 }
 
 /// Only Two-Wheeler and Four-Wheeler vehicles are supported (Master Blueprint §4).
+/// Parking-user account category. Visitors never get accounts.
+enum ParkingUserCategory {
+  STUDENT
+  STAFF
+
+  @@map("parking_user_category")
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+
+  @@map("verification_status")
+}
+
 enum VehicleType {
   TWO_WHEELER
   FOUR_WHEELER
@@ -108,12 +126,61 @@ model User {
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   auditLogs          AuditLog[]
-  checkedInSessions  ParkingSession[] @relation("SessionCheckedInBy")
-  checkedOutSessions ParkingSession[] @relation("SessionCheckedOutBy")
+  checkedInSessions  ParkingSession[]     @relation("SessionCheckedInBy")
+  checkedOutSessions ParkingSession[]     @relation("SessionCheckedOutBy")
   updatedSettings    Setting[]
+  parkingProfile     ParkingUserProfile?  @relation("ProfileUser")
+  reviewedProfiles   ParkingUserProfile[] @relation("ProfileReviewedBy")
+  identityDocuments  IdentityDocument[]
+  vehicles           Vehicle[]            @relation("VehicleOwner")
 
   @@index([role, isActive])
   @@map("users")
+}
+
+/// Student / Campus Staff details. Category and verification are set only by the server.
+model ParkingUserProfile {
+  userId                  String              @id @map("user_id") @db.Uuid
+  category                ParkingUserCategory
+  /// Student USN or employee ID, upper-cased.
+  institutionalId         String              @map("institutional_id") @db.VarChar(32)
+  /// Lower-cased; used to sign in.
+  email                   String              @unique @db.VarChar(254)
+  phone                   String              @db.VarChar(20)
+  verificationStatus      VerificationStatus  @default(PENDING) @map("verification_status")
+  verificationNote        String?             @map("verification_note") @db.VarChar(500)
+  verificationSubmittedAt DateTime            @map("verification_submitted_at") @db.Timestamptz(3)
+  reviewedAt              DateTime?           @map("reviewed_at") @db.Timestamptz(3)
+  reviewedById            String?             @map("reviewed_by_id") @db.Uuid
+  preferredLocale         String?             @map("preferred_locale") @db.VarChar(8)
+  createdAt               DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user       User  @relation("ProfileUser", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("ProfileReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([category, institutionalId])
+  @@index([category, verificationStatus])
+  @@map("parking_user_profiles")
+}
+
+/// Identity document submitted for verification. Visible only to its owner's reviewers (Admin).
+model IdentityDocument {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  /// The ID number the user confirmed together with this document.
+  institutionalId String   @map("institutional_id") @db.VarChar(32)
+  fileName        String   @map("file_name") @db.VarChar(255)
+  mimeType        String   @map("mime_type") @db.VarChar(64)
+  sizeBytes       Int      @map("size_bytes")
+  sha256          String   @db.VarChar(64)
+  content         Bytes
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("identity_documents")
 }
 
 model AuditLog {
@@ -228,12 +295,21 @@ model Vehicle {
   /// Stored normalised (upper-case, no separators).
   vehicleNumber String      @unique @map("vehicle_number") @db.VarChar(20)
   vehicleType   VehicleType @map("vehicle_type")
+  /// Parking user who registered the vehicle (null for unregistered vehicles).
+  ownerUserId   String?     @map("owner_user_id") @db.Uuid
+  /// Start of ownership: the owner sees only sessions that began after it.
+  ownerSince    DateTime?   @map("owner_since") @db.Timestamptz(3)
+  label         String?     @db.VarChar(40)
+  isPrimary     Boolean     @default(false) @map("is_primary")
   createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  owner    User?            @relation("VehicleOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   sessions ParkingSession[]
 
+  @@unique([ownerUserId], map: "vehicles_one_primary_per_owner", where: { isPrimary: true })
   @@index([vehicleType])
+  @@index([ownerUserId])
   @@map("vehicles")
 }
 

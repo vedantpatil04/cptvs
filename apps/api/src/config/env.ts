@@ -21,6 +21,14 @@ const originList = z
   )
   .pipe(z.array(z.url({ protocol: /^https?$/ })));
 
+/** Comma-separated e-mail domains, e.g. `college.edu.in,staff.college.edu.in`. */
+const domainList = z
+  .string()
+  .transform((value) =>
+    [...new Set(value.split(',').map((domain) => domain.trim().toLowerCase()))].filter(Boolean),
+  )
+  .pipe(z.array(z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/, 'Invalid e-mail domain')));
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(NODE_ENVS).default('development'),
@@ -60,6 +68,15 @@ const envSchema = z
     ALERT_LONG_DURATION_HOURS: z.coerce.number().int().min(1).max(23).default(8),
     /** Requests per minute per IP allowed on unauthenticated public endpoints. */
     PUBLIC_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10_000).default(120),
+    /**
+     * When set, Student / Campus Staff registration requires an e-mail address
+     * at one of these domains (or their subdomains). Empty allows any address.
+     */
+    INSTITUTION_EMAIL_DOMAINS: domainList.optional(),
+    /** Registrations allowed per IP per hour. */
+    REGISTRATION_RATE_LIMIT_PER_HOUR: z.coerce.number().int().min(1).max(1000).default(10),
+    /** Lifetime of a visitor's access to one parking session, in hours. */
+    VISITOR_ACCESS_HOURS: z.coerce.number().int().min(1).max(48).default(12),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && !env.CORS_ORIGINS?.length && !env.FRONTEND_URL) {

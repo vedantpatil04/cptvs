@@ -17,6 +17,16 @@ export const VALIDATION_MESSAGES = {
   invalidDateRange: 'validation.invalidDateRange',
   outOfRange: 'validation.outOfRange',
   coordinatesPaired: 'validation.coordinatesPaired',
+  invalidEmail: 'validation.invalidEmail',
+  emailDomain: 'validation.emailDomain',
+  invalidPhone: 'validation.invalidPhone',
+  invalidInstitutionalId: 'validation.invalidInstitutionalId',
+  institutionalIdMismatch: 'validation.institutionalIdMismatch',
+  documentRequired: 'validation.documentRequired',
+  documentTooLarge: 'validation.documentTooLarge',
+  documentType: 'validation.documentType',
+  passwordsDoNotMatch: 'validation.passwordsDoNotMatch',
+  rejectionNoteRequired: 'validation.rejectionNoteRequired',
 } as const;
 
 export type ValidationMessageKey = (typeof VALIDATION_MESSAGES)[keyof typeof VALIDATION_MESSAGES];

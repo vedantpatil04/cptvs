@@ -1,4 +1,4 @@
-import type { UserRole } from '@cpvts/shared';
+import type { ParkingUserSummary, UserRole } from '@cpvts/shared';
 
 /** The authenticated principal attached to `req.auth`. */
 export interface AuthenticatedUser {
@@ -8,6 +8,8 @@ export interface AuthenticatedUser {
   role: UserRole;
   tokenVersion: number;
   lastLoginAt: Date | null;
+  /** Category and verification, loaded fresh on every request (null for staff and admins). */
+  parkingUser: ParkingUserSummary | null;
 }
 
 export interface AuthContext {

@@ -220,6 +220,11 @@ export interface AllocationExplanation {
 export interface CheckInResponse {
   session: ParkingSessionView;
   allocation: AllocationExplanation;
+  /**
+   * `ACCOUNT` when the vehicle belongs to a verified Student / Campus Staff
+   * account: the owner category then comes from that account, not the operator.
+   */
+  categorySource: 'ACCOUNT' | 'OPERATOR';
 }
 
 export interface ActiveSessionsResponse {

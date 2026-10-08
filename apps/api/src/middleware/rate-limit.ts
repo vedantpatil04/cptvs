@@ -23,6 +23,24 @@ export const loginRateLimiter = rateLimit({
   },
 });
 
+/** Limits account creation and visitor access attempts (per client IP). */
+export const registrationRateLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  limit: config.rateLimit.registrationPerHour,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const body: ApiErrorBody = {
+      error: {
+        code: 'RATE_LIMITED',
+        message: 'Too many registrations from this network. Please try again later.',
+        requestId: req.id,
+      },
+    };
+    res.status(429).json(body);
+  },
+});
+
 /** Protects the unauthenticated public endpoints from excessive polling (per client IP). */
 export const publicRateLimiter = rateLimit({
   windowMs: 60_000,

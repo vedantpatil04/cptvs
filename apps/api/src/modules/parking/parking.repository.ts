@@ -25,8 +25,20 @@ export type ReceiptWithRelations = Prisma.ReceiptGetPayload<{ include: typeof RE
 const ACTIVE_ZONE = { isActive: true, block: { isActive: true } } as const;
 
 export const parkingRepository = {
+  /** The vehicle with its registered owner's account state, if any. */
   findVehicle(vehicleNumber: string, db: DbClient = prisma) {
-    return db.vehicle.findUnique({ where: { vehicleNumber } });
+    return db.vehicle.findUnique({
+      where: { vehicleNumber },
+      include: {
+        owner: {
+          select: {
+            isActive: true,
+            role: true,
+            parkingProfile: { select: { category: true, verificationStatus: true } },
+          },
+        },
+      },
+    });
   },
 
   findActiveSessionByVehicleNumber(vehicleNumber: string, db: DbClient = prisma) {
