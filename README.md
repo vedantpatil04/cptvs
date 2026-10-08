@@ -181,24 +181,26 @@ invalid configuration and lists the problems.
 
 ### API — `apps/api/.env` (see `apps/api/.env.example`)
 
-| Variable                                                   | Required  | Default                   | Purpose                                               |
-| ---------------------------------------------------------- | --------- | ------------------------- | ----------------------------------------------------- |
-| `NODE_ENV`                                                 |           | `development`             | `development`, `test` or `production`                 |
-| `APP_ENV`                                                  |           | `NODE_ENV`                | Display name of the environment (e.g. `staging`)      |
-| `PORT` / `HOST`                                            |           | `4000` / `0.0.0.0`        | Listen address                                        |
-| `DATABASE_URL`                                             | ✔         |                           | PostgreSQL connection used by the running API         |
-| `DIRECT_URL`                                               |           | `DATABASE_URL`            | Connection used by Prisma CLI for migrations          |
-| `JWT_SECRET`                                               | ✔         |                           | ≥ 32 random characters; signs access tokens           |
-| `JWT_EXPIRES_IN_SECONDS`                                   |           | `28800`                   | Access-token lifetime (8 h, one shift)                |
-| `JWT_ISSUER` / `JWT_AUDIENCE`                              |           | `cpvts-api` / `cpvts-web` | Token claims checked on every request                 |
-| `FRONTEND_URL`                                             | prod*     |                           | Web app URL; default CORS origin                      |
-| `CORS_ORIGINS`                                             | prod*     |                           | Comma-separated allowed origins                       |
-| `TRUST_PROXY`                                              |           | `0`                       | Reverse-proxy hops to trust (Render: `1`)             |
-| `LOGIN_RATE_LIMIT_WINDOW_MINUTES` / `LOGIN_RATE_LIMIT_MAX` |           | `15` / `10`               | Failed sign-ins allowed per IP per window             |
-| `CAMPUS_TIMEZONE`                                          |           | `Asia/Kolkata`            | Campus time zone: "today" and the current hour        |
-| `SLOT_HOLD_SECONDS`                                        |           | `15`                      | Lifetime of the temporary slot hold during allocation |
-| `PUBLIC_RATE_LIMIT_PER_MINUTE`                             |           | `120`                     | Requests per minute per IP on public endpoints        |
-| `SEED_ADMIN_*`, `SEED_STAFF_*`                             | seed only |                           | Initial accounts for `db:seed`                        |
+| Variable                                                   | Required  | Default                   | Purpose                                                 |
+| ---------------------------------------------------------- | --------- | ------------------------- | ------------------------------------------------------- |
+| `NODE_ENV`                                                 |           | `development`             | `development`, `test` or `production`                   |
+| `APP_ENV`                                                  |           | `NODE_ENV`                | Display name of the environment (e.g. `staging`)        |
+| `PORT` / `HOST`                                            |           | `4000` / `0.0.0.0`        | Listen address                                          |
+| `DATABASE_URL`                                             | ✔         |                           | PostgreSQL connection used by the running API           |
+| `DIRECT_URL`                                               |           | `DATABASE_URL`            | Connection used by Prisma CLI for migrations            |
+| `JWT_SECRET`                                               | ✔         |                           | ≥ 32 random characters; signs access tokens             |
+| `JWT_EXPIRES_IN_SECONDS`                                   |           | `28800`                   | Access-token lifetime (8 h, one shift)                  |
+| `JWT_ISSUER` / `JWT_AUDIENCE`                              |           | `cpvts-api` / `cpvts-web` | Token claims checked on every request                   |
+| `FRONTEND_URL`                                             | prod*     |                           | Web app URL; default CORS origin                        |
+| `CORS_ORIGINS`                                             | prod*     |                           | Comma-separated allowed origins                         |
+| `TRUST_PROXY`                                              |           | `0`                       | Reverse-proxy hops to trust (Render: `1`)               |
+| `LOGIN_RATE_LIMIT_WINDOW_MINUTES` / `LOGIN_RATE_LIMIT_MAX` |           | `15` / `10`               | Failed sign-ins allowed per IP per window               |
+| `CAMPUS_TIMEZONE`                                          |           | `Asia/Kolkata`            | Campus time zone: "today" and the current hour          |
+| `SLOT_HOLD_SECONDS`                                        |           | `15`                      | Lifetime of the temporary slot hold during allocation   |
+| `ALERT_NEARLY_FULL_PERCENT`                                |           | `90`                      | Zone occupancy % that raises a "nearly full" alert      |
+| `ALERT_LONG_DURATION_HOURS`                                |           | `8`                       | Active-session hours that raise a "long duration" alert |
+| `PUBLIC_RATE_LIMIT_PER_MINUTE`                             |           | `120`                     | Requests per minute per IP on public endpoints          |
+| `SEED_ADMIN_*`, `SEED_STAFF_*`                             | seed only |                           | Initial accounts for `db:seed`                          |
 
 \* In production at least one of `CORS_ORIGINS` or `FRONTEND_URL` is required.
 

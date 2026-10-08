@@ -13,10 +13,10 @@ const SEVERITY_ORDER = { critical: 0, warning: 1, info: 2 } as const;
  * thresholds from configuration; no prediction or ML.
  */
 export const alertsService = {
-  async list(): Promise<AlertsResponse> {
+  /** `hour` defaults to the current campus hour (injectable for tests). */
+  async list(hour = campusHour()): Promise<AlertsResponse> {
     await slotHoldRepository.releaseExpired();
     const { nearlyFullPercent, longDurationHours } = config.alerts;
-    const hour = campusHour();
 
     const [zones, active] = await Promise.all([
       prisma.parkingZone.findMany({

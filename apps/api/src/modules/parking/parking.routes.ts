@@ -15,10 +15,12 @@ import { requestMeta, requireAuth } from '../../lib/request-context.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { authorize } from '../../middleware/authorize.js';
 import { validate } from '../../middleware/validate.js';
+import { alertsService } from './alerts.service.js';
 import { checkInService } from './check-in.service.js';
 import { checkoutService } from './checkout.service.js';
 import type { OperationContext } from './operation-context.js';
 import { receiptService } from './receipt.service.js';
+import { timelineService } from './timeline.service.js';
 import { trackingService } from './tracking.service.js';
 
 const context = (req: Request): OperationContext => ({
@@ -56,6 +58,19 @@ parkingRouter.post(
 parkingRouter.get('/map', anyRole, async (_req, res) => {
   res.status(200).json(await trackingService.getMap());
 });
+
+parkingRouter.get('/alerts', anyRole, async (_req, res) => {
+  res.status(200).json(await alertsService.list());
+});
+
+parkingRouter.get(
+  '/sessions/:sessionNumber/timeline',
+  anyRole,
+  validate({ params: sessionParams }),
+  async (req, res) => {
+    res.status(200).json(await timelineService.forSession(String(req.params.sessionNumber)));
+  },
+);
 
 parkingRouter.get('/sessions/active', anyRole, async (_req, res) => {
   res.status(200).json(await trackingService.listActive());

@@ -35,14 +35,15 @@ const occupies = (session: DaySession, hour: number, lastActiveHour: number): bo
 
 /** Parking analytics for one campus day (Master Blueprint §25). No ML — counts only. */
 export const analyticsService = {
-  async forDate(date?: string): Promise<AnalyticsResponse> {
+  /** `currentHour` defaults to the campus clock (injectable for tests). */
+  async forDate(date?: string, currentHour = campusHour()): Promise<AnalyticsResponse> {
     const {
       from: day,
       start,
       end,
     } = resolveRange({ from: date ?? campusDateString(), to: date ?? campusDateString() });
     const isToday = day === campusDateString();
-    const lastActiveHour = isToday ? campusHour() : 23;
+    const lastActiveHour = isToday ? currentHour : 23;
 
     const [sessions, receipts, zones] = await Promise.all([
       prisma.parkingSession.findMany({

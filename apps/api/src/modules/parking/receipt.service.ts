@@ -9,7 +9,7 @@ import { parkingRepository, type ReceiptWithRelations } from './parking.reposito
  * Cross-checks a receipt against its payment and session. A receipt is valid
  * only if every record of the finalized transaction agrees.
  */
-const isConsistent = (receipt: ReceiptWithRelations): boolean => {
+export const isReceiptConsistent = (receipt: ReceiptWithRelations): boolean => {
   const { payment, session } = receipt;
   return (
     payment.status === 'PAID' &&
@@ -37,7 +37,7 @@ export const receiptService = {
     const receipt = await parkingRepository.findReceiptByVerificationReference(reference);
     if (!receipt) throw parkingErrors.receiptNotFound();
 
-    const valid = isConsistent(receipt);
+    const valid = isReceiptConsistent(receipt);
     if (!valid) {
       logger.warn('receipt failed consistency verification', {
         receiptNumber: receipt.receiptNumber,
