@@ -82,6 +82,16 @@ const envSchema = z
     REGISTRATION_RATE_LIMIT_PER_HOUR: z.coerce.number().int().min(1).max(1000).default(10),
     /** Lifetime of a visitor's access to one parking session, in hours. */
     VISITOR_ACCESS_HOURS: z.coerce.number().int().min(1).max(48).default(12),
+    /**
+     * `required`: Security Staff need a checked-in shift for gate operations (vehicle entry,
+     * checkout payments). `optional`: they may work without one, and what they do is still
+     * attributed to their shift when they have one. Administrators can always act (override).
+     */
+    SHIFT_ENFORCEMENT: z.enum(['required', 'optional']).default('required'),
+    /** Minutes before a shift starts that its Security Staff member may check in. */
+    SHIFT_EARLY_CHECK_IN_MINUTES: z.coerce.number().int().min(0).max(240).default(60),
+    /** Minutes after a shift's end during which the guard can still finish at the gate. */
+    SHIFT_OVERRUN_MINUTES: z.coerce.number().int().min(0).max(240).default(30),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && !env.CORS_ORIGINS?.length && !env.FRONTEND_URL) {

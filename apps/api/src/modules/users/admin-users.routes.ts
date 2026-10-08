@@ -1,5 +1,6 @@
 import {
   adminUserUpdateSchema,
+  adminVehicleQuerySchema,
   historyQuerySchema,
   paginationSchema,
   sendNoticeRequestSchema,
@@ -17,6 +18,8 @@ import { validate } from '../../middleware/validate.js';
 import { historyService } from '../management/history.service.js';
 import { notificationService } from '../notifications/notification.service.js';
 import type { OperationContext } from '../parking/operation-context.js';
+import { contentDisposition } from '../../lib/content-disposition.js';
+import { adminVehicleService } from './admin-vehicle.service.js';
 import { adminUserService } from './admin-user.service.js';
 
 const context = (req: Request): OperationContext => ({
@@ -27,6 +30,12 @@ const context = (req: Request): OperationContext => ({
 const userParams = z.object({ id: z.uuid({ error: VALIDATION_MESSAGES.required }) });
 const documentParams = userParams.extend({
   documentId: z.uuid({ error: VALIDATION_MESSAGES.required }),
+});
+const documentQuery = z.object({
+  /** Save the file (attachment) instead of showing it (inline); both are audited. */
+  download: z
+    .preprocess((value) => value === true || value === 'true' || value === '1', z.boolean())
+    .default(false),
 });
 
 /**
@@ -45,6 +54,11 @@ adminUsersRouter.get('/users', validate({ query: userListQuerySchema }), async (
 
 adminUsersRouter.get('/users/counts', async (_req, res) => {
   res.status(200).json(await adminUserService.counts());
+});
+
+/** Filter dropdown values: programs, and the departments and batches present in the data. */
+adminUsersRouter.get('/users/facets', async (_req, res) => {
+  res.status(200).json(await adminUserService.facets());
 });
 
 adminUsersRouter.get('/users/:id', validate({ params: userParams }), async (req, res) => {
@@ -82,24 +96,38 @@ adminUsersRouter.post(
   },
 );
 
-/** Identity documents: private, one at a time, audited, never cached. */
+/**
+ * Identity documents: administrators only, one at a time, audited (viewed or downloaded),
+ * never cached and never a static file. Images and PDFs are returned with their real
+ * (sniffed) type; `?download=1` makes the browser save the file instead of showing it.
+ */
 adminUsersRouter.get(
   '/users/:id/documents/:documentId',
-  validate({ params: documentParams }),
+  validate({ params: documentParams, query: documentQuery }),
   async (req, res) => {
+    const { download } = req.query as unknown as z.infer<typeof documentQuery>;
     const document = await adminUserService.readDocument(
       String(req.params.id),
       String(req.params.documentId),
       context(req),
+      { download },
     );
     res
       .status(200)
       .set({
         'Content-Type': document.mimeType,
         'Content-Length': String(document.content.length),
-        'Content-Disposition': `inline; filename="${encodeURIComponent(document.fileName)}"`,
+        'Content-Disposition': contentDisposition(
+          download ? 'attachment' : 'inline',
+          document.fileName,
+        ),
         'Cache-Control': 'no-store',
-        'Content-Security-Policy': "default-src 'none'; sandbox",
+        // A PDF needs the browser's viewer, which a sandboxed response would block; images
+        // and downloads stay fully sandboxed.
+        'Content-Security-Policy':
+          document.mimeType === 'application/pdf' && !download
+            ? "default-src 'none'"
+            : "default-src 'none'; sandbox",
         'X-Content-Type-Options': 'nosniff',
       })
       .send(document.content);
@@ -112,6 +140,47 @@ adminUsersRouter.get(
   async (req, res) => {
     const { page, pageSize } = req.query as unknown as z.infer<typeof paginationSchema>;
     res.status(200).json(await adminUserService.history(String(req.params.id), page, pageSize));
+  },
+);
+
+adminUsersRouter.get(
+  '/users/:id/receipts',
+  validate({ params: userParams, query: paginationSchema }),
+  async (req, res) => {
+    const { page, pageSize } = req.query as unknown as z.infer<typeof paginationSchema>;
+    res.status(200).json(await adminUserService.receipts(String(req.params.id), page, pageSize));
+  },
+);
+
+// --- Vehicle ownership ------------------------------------------------------
+
+const vehicleParams = z.object({ id: z.uuid({ error: VALIDATION_MESSAGES.required }) });
+
+/** Who actively owns a plate: search by (part of) the vehicle number. */
+adminUsersRouter.get(
+  '/vehicles',
+  validate({ query: adminVehicleQuerySchema }),
+  async (req, res) => {
+    res
+      .status(200)
+      .json(
+        await adminVehicleService.search(
+          req.query as unknown as z.output<typeof adminVehicleQuerySchema>,
+        ),
+      );
+  },
+);
+
+adminUsersRouter.get('/vehicles/:id', validate({ params: vehicleParams }), async (req, res) => {
+  res.status(200).json(await adminVehicleService.get(String(req.params.id)));
+});
+
+/** Ends an account's ownership of a plate (for example when the account holder cannot). */
+adminUsersRouter.post(
+  '/vehicles/:id/release',
+  validate({ params: vehicleParams }),
+  async (req, res) => {
+    res.status(200).json(await adminVehicleService.release(String(req.params.id), context(req)));
   },
 );
 

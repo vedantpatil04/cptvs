@@ -1,12 +1,19 @@
-import type { OwnerCategory, ParkingUserCategory, VehicleLookupResponse } from '@cpvts/shared';
+import {
+  parkNowEligibilityOf,
+  type OwnerCategory,
+  type ParkingUserCategory,
+  type VehicleLookupResponse,
+  type VerificationStatus,
+} from '@cpvts/shared';
 
 import { parkingRepository } from './parking.repository.js';
 
 /**
  * The owner category the account behind a vehicle imposes at check-in, or null
  * when the vehicle is unregistered or its account is not an active, verified
- * Student / Campus Staff account. This is the single rule used by both the
- * entry desk lookup and the check-in itself.
+ * Student / Campus Staff account (the same eligibility rule Park Now uses). This is
+ * the single rule used by both the entry desk lookup and the check-in itself, and it
+ * reads the account's current state, so a category change by Admin applies at once.
  */
 export const accountCategoryOf = (
   owner: {
@@ -14,13 +21,13 @@ export const accountCategoryOf = (
     role: string;
     parkingProfile: {
       category: ParkingUserCategory;
-      verificationStatus: string;
+      verificationStatus: VerificationStatus;
     } | null;
   } | null,
 ): OwnerCategory | null =>
-  owner?.isActive &&
-  owner.role === 'PARKING_USER' &&
-  owner.parkingProfile?.verificationStatus === 'VERIFIED'
+  owner?.role === 'PARKING_USER' &&
+  owner.parkingProfile &&
+  parkNowEligibilityOf(owner.parkingProfile.verificationStatus, owner.isActive).eligible
     ? owner.parkingProfile.category
     : null;
 

@@ -66,9 +66,9 @@ export const parkingRepository = {
     });
   },
 
-  listActiveSessions(db: DbClient = prisma) {
+  listActiveSessions({ exitRequested = false } = {}, db: DbClient = prisma) {
     return db.parkingSession.findMany({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', ...(exitRequested ? { exitRequestedAt: { not: null } } : {}) },
       include: SESSION_INCLUDE,
       orderBy: [{ entryAt: 'asc' }, { sessionNumber: 'asc' }],
     });
@@ -105,14 +105,19 @@ export const parkingRepository = {
     return new Map(groups.map((group) => [group.slotId, group._count._all]));
   },
 
-  /** Active blocks → active zones → slots, with the active session of occupied slots. */
+  /**
+   * Active blocks → active zones → slots, with the active session of occupied slots. A disabled
+   * block or zone is included only while vehicles are still parked in it (they carry on until
+   * they check out), so they stay visible on the map.
+   */
   findMapLayout(db: DbClient = prisma) {
+    const hasParkedVehicle = { slots: { some: { status: 'OCCUPIED' as const, ...IN_SERVICE } } };
     return db.parkingBlock.findMany({
-      where: { isActive: true },
+      where: { OR: [{ isActive: true }, { zones: { some: hasParkedVehicle } }] },
       orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
       include: {
         zones: {
-          where: { isActive: true },
+          where: { OR: [{ isActive: true }, hasParkedVehicle] },
           orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
           include: {
             slots: {

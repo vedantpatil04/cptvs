@@ -1,11 +1,14 @@
-import type {
-  CheckoutQuote,
-  CreatePaymentResponse,
-  PaymentMethod,
-  PaymentView,
-  ProcessPaymentResponse,
+import {
+  OPAQUE_REFERENCE_PATTERN,
+  parseEntryQrPayload,
+  type CheckoutQuote,
+  type CreatePaymentResponse,
+  type PaymentMethod,
+  type PaymentView,
+  type ProcessPaymentResponse,
 } from '@cpvts/shared';
 
+import { config } from '../../config/index.js';
 import { withTransaction } from '../../db/transaction.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { campusHour, campusYear } from '../../lib/campus-time.js';
@@ -17,6 +20,7 @@ import { auditRepository } from '../audit/audit.repository.js';
 import { notificationService } from '../notifications/notification.service.js';
 import { calculateDurationHours, calculateFee } from '../fees/fee-engine.js';
 import { feeScheduleService } from '../fees/fee-schedule.service.js';
+import { shiftErrors } from '../shifts/shift.errors.js';
 import { auditRejection, channelMetadata, type ActorContext } from './operation-context.js';
 import { parkingErrors } from './parking.errors.js';
 import { toPaymentView, toReceiptView, toSessionView } from './parking.mappers.js';
@@ -32,12 +36,31 @@ export interface CheckoutRequest {
   /** Optional identifiers the operator used; each must match the session. */
   vehicleNumber?: string;
   slotCode?: string;
+  /** The scanned session QR (or its bare reference); it must belong to this session. */
+  entryReference?: string;
 }
 
 interface PreparedCheckout {
   session: SessionWithRelations;
   quote: CheckoutQuote;
 }
+
+/**
+ * Checkout is gate-controlled: only the operational workflow (Security Staff, or an
+ * administrator overriding) may start a payment or finalize a session. A Student, Campus
+ * Staff member or Visitor acts through the SELF_SERVICE / VISITOR channels, which can see a
+ * preview of the amount but never reach a payment — this guard makes that a hard rule of
+ * the service itself, not only of the routes in front of it.
+ */
+const assertGateChannel = (context: ActorContext): void => {
+  if (context.channel || !context.actor) throw parkingErrors.gateCheckoutRequired();
+};
+
+/** The reference carried by a scanned QR text, or null if it is not a CPVTS session QR. */
+const referenceOf = (scanned: string): string | null => {
+  const text = scanned.trim();
+  return parseEntryQrPayload(text) ?? (OPAQUE_REFERENCE_PATTERN.test(text) ? text : null);
+};
 
 /**
  * Verifies the session and the operator's identifiers, validates the exit hour
@@ -72,6 +95,21 @@ const prepareCheckout = async (
       ...subject,
       metadata: { providedSlotCode: request.slotCode },
     });
+  }
+  if (request.entryReference !== undefined) {
+    const reference = referenceOf(request.entryReference);
+    if (!reference) {
+      throw await auditRejection(parkingErrors.invalidQrReference(), context, {
+        ...subject,
+        metadata: { source: 'ENTRY_QR' },
+      });
+    }
+    if (reference !== session.entryReference) {
+      throw await auditRejection(parkingErrors.qrSessionMismatch(), context, {
+        ...subject,
+        metadata: { source: 'ENTRY_QR' },
+      });
+    }
   }
 
   let durationHours: number;
@@ -116,33 +154,45 @@ const uniqueValue = async (
 };
 
 export const checkoutService = {
-  /** Step 1: fee preview with a transparent breakdown. */
-  async quote(request: CheckoutRequest, context: ActorContext): Promise<CheckoutQuote> {
+  /**
+   * Step 1: fee preview with a transparent breakdown. The gate records it (an audit entry);
+   * a user's or visitor's own "what would I owe" preview passes `record: false` and leaves
+   * no trace — it is not the start of a checkout.
+   */
+  async quote(
+    request: CheckoutRequest,
+    context: ActorContext,
+    { record = true }: { record?: boolean } = {},
+  ): Promise<CheckoutQuote> {
     const { session, quote } = await prepareCheckout(request, context);
-    await auditRepository.record({
-      action: AUDIT_ACTIONS.checkoutInitiated,
-      actorId: context.actor?.id,
-      entityType: AUDIT_ENTITY_TYPES.parkingSession,
-      entityId: session.sessionNumber,
-      metadata: {
-        exitHour: quote.exitHour,
-        durationHours: quote.durationHours,
-        totalPaise: quote.fee.totalPaise,
-        ...channelMetadata(context),
-      },
-      request: context.request,
-    });
+    if (record) {
+      await auditRepository.record({
+        action: AUDIT_ACTIONS.checkoutInitiated,
+        actorId: context.actor?.id,
+        entityType: AUDIT_ENTITY_TYPES.parkingSession,
+        entityId: session.sessionNumber,
+        metadata: {
+          exitHour: quote.exitHour,
+          durationHours: quote.durationHours,
+          totalPaise: quote.fee.totalPaise,
+          ...channelMetadata(context),
+        },
+        request: context.request,
+      });
+    }
     return quote;
   },
 
   /**
    * Step 2: creates a PENDING simulated payment for the authoritative amount.
-   * Any earlier pending attempt for the session is cancelled.
+   * Any earlier pending attempt for the session is cancelled. The payment belongs to the
+   * operator's duty shift from this moment, so cash taken is the shift's responsibility.
    */
   async createPayment(
     request: CheckoutRequest & { method: PaymentMethod },
     context: ActorContext,
   ): Promise<CreatePaymentResponse> {
+    assertGateChannel(context);
     const { session, quote } = await prepareCheckout(request, context);
     if (!allowedMethod(quote.fee.totalPaise, request.method)) {
       throw parkingErrors.invalidPaymentMethod();
@@ -169,6 +219,7 @@ export const checkoutService = {
           amountPaise: quote.fee.totalPaise,
           exitHour: quote.exitHour,
           isSimulated: true,
+          shiftId: context.shiftId ?? null,
         },
       });
       await auditRepository.record(
@@ -196,15 +247,24 @@ export const checkoutService = {
 
   /**
    * Step 3: runs the simulated provider and, on success, finalizes the
-   * transaction atomically: payment PAID, session COMPLETED with frozen
-   * duration/fee, receipt issued, slot released. Any failure rolls back.
+   * transaction atomically: payment PAID (by this operator, in this shift), session
+   * COMPLETED with frozen duration/fee, receipt issued, slot released. Any failure rolls back.
+   * A shift that ends while the payment is open does not stop it from completing.
    */
   async processPayment(
     paymentId: string,
     request: { sessionNumber: string; outcome: 'SUCCESS' | 'FAILURE' },
     context: ActorContext,
   ): Promise<ProcessPaymentResponse> {
+    assertGateChannel(context);
     const payment = await loadPaymentForSession(paymentId, request.sessionNumber, context);
+
+    // Accountability: Security Staff finalize under a shift (the payment's own, or their active
+    // one). The payment's shift stays valid after the shift's end so an in-flight transaction
+    // is never broken; an administrator override needs none.
+    if (!context.override && config.shifts.enforcement === 'required') {
+      if (!(payment.shiftId ?? context.shiftId)) throw shiftErrors.required();
+    }
 
     // PENDING → PROCESSING is the lock against double processing.
     const claimed = await withTransaction((tx) =>
@@ -246,6 +306,7 @@ export const checkoutService = {
     sessionNumber: string,
     context: ActorContext,
   ): Promise<PaymentView> {
+    assertGateChannel(context);
     const payment = await loadPaymentForSession(paymentId, sessionNumber, context);
     const cancelled = await withTransaction(async (tx) => {
       const { count } = await tx.payment.updateMany({
@@ -323,12 +384,26 @@ const markFailed = async (paymentId: string, reason: string, context: ActorConte
  * and the whole transaction rolls back.
  */
 const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context: ActorContext) => {
+  const operatorId = context.actor?.id;
+  if (!operatorId) throw parkingErrors.gateCheckoutRequired();
+
   const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
   const session = await tx.parkingSession.findUniqueOrThrow({
     where: { id: payment.sessionId },
-    include: { slot: true, vehicle: { select: { ownerUserId: true, ownerSince: true } } },
+    include: { slot: true },
   });
   if (session.status !== 'ACTIVE') throw parkingErrors.sessionNotActive();
+
+  // The payment belongs to the shift it was created in, unless it had none; a reconciled
+  // (closed) shift's cash can no longer change.
+  const shiftId = payment.shiftId ?? context.shiftId ?? null;
+  if (shiftId) {
+    const shift = await tx.securityShift.findUnique({
+      where: { id: shiftId },
+      select: { status: true },
+    });
+    if (!shift || shift.status === 'CLOSED') throw shiftErrors.invalidState();
+  }
 
   // Re-price with the authoritative engine; it must equal the amount being paid.
   const schedule = await feeScheduleService.require();
@@ -340,7 +415,7 @@ const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context
 
   const paid = await tx.payment.updateMany({
     where: { id: payment.id, status: 'PROCESSING', sessionId: session.id },
-    data: { status: 'PAID', paidAt: now },
+    data: { status: 'PAID', paidAt: now, processedById: operatorId, shiftId },
   });
   if (paid.count !== 1) throw parkingErrors.paymentNotPending();
 
@@ -353,13 +428,8 @@ const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context
       durationHours,
       feeAmountPaise: fee.totalPaise,
       feeBreakdown: fee as unknown as Prisma.InputJsonObject,
-      checkedOutById: context.actor?.id ?? null,
-      checkedOutVia:
-        context.channel === 'VISITOR'
-          ? 'VISITOR'
-          : context.channel === 'SELF_SERVICE'
-            ? 'SELF_SERVICE'
-            : 'SECURITY',
+      checkedOutById: operatorId,
+      checkedOutVia: 'SECURITY',
     },
   });
   if (completed.count !== 1) throw parkingErrors.sessionNotActive();
@@ -399,10 +469,10 @@ const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context
     auditRepository.record(
       {
         action,
-        actorId: context.actor?.id,
+        actorId: operatorId,
         entityType,
         entityId,
-        metadata: { ...metadata, ...channelMetadata(context) },
+        metadata: { ...metadata, ...channelMetadata({ ...context, shiftId }) },
         request: context.request,
       },
       tx,
@@ -436,14 +506,10 @@ const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context
     });
   }
 
-  // Tell the registered owner (if any) that the receipt is ready.
-  if (
-    session.vehicle.ownerUserId &&
-    session.vehicle.ownerSince &&
-    session.vehicle.ownerSince <= session.entryAt
-  ) {
+  // Tell the account that owned the vehicle for this session that the receipt is ready.
+  if (session.ownerUserId) {
     await notificationService.notify(
-      session.vehicle.ownerUserId,
+      session.ownerUserId,
       'RECEIPT_GENERATED',
       {
         receiptNumber: receipt.receiptNumber,

@@ -1,13 +1,15 @@
 import type {
+  AcademicProfile,
   LoginResponse,
   ParkingUserCategory,
   RegistrationInput,
-  VerificationResubmission,
+  VerificationResubmissionInput,
 } from '@cpvts/shared';
 
 import type { DbClient } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { withTransaction } from '../../db/transaction.js';
+import { validationError } from '../../lib/errors.js';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';
 import { authService } from '../auth/auth.service.js';
@@ -55,17 +57,34 @@ const mapUniqueViolation = (error: unknown): never => {
   throw error;
 };
 
+/** Student academic columns of a profile row; Campus Staff have none. */
+const academicColumns = (academic: AcademicProfile | undefined) =>
+  academic
+    ? {
+        program: academic.program,
+        department: academic.department,
+        admissionYear: academic.admissionYear,
+        currentSemester: academic.currentSemester,
+      }
+    : {};
+
 export const registrationService = {
   /**
-   * Creates a Student or Campus Staff account with its identity document.
-   * The account starts PENDING: it can sign in and see its verification
-   * status, but parking features wait for an administrator's approval.
+   * Creates a Student or Campus Staff account with its identity document (and, for a
+   * student, the academic identity Admin tracks). The account starts PENDING: it can sign
+   * in and see its verification status, but parking features wait for an administrator's
+   * approval.
    */
   async register(
     category: ParkingUserCategory,
-    input: RegistrationInput,
+    input: RegistrationInput & { academic?: AcademicProfile },
     request: RequestMeta,
   ): Promise<LoginResponse> {
+    if (category === 'STUDENT' && !input.academic) {
+      throw validationError([{ path: 'body.academic', message: 'validation.academicIncomplete' }]);
+    }
+    // Campus Staff have no academic identity: whatever a client sends is not stored.
+    const academic = category === 'STUDENT' ? input.academic : undefined;
     if (!emailDomainAllowed(input.email)) throw accountErrors.emailDomainNotAllowed();
     const document = decodeIdentityDocument(input.document);
     const passwordHash = await hashPassword(input.password);
@@ -95,6 +114,7 @@ export const registrationService = {
                 email: input.email,
                 phone: input.phone,
                 verificationSubmittedAt: new Date(),
+                ...academicColumns(academic),
               },
             },
           },
@@ -108,7 +128,13 @@ export const registrationService = {
             actorId: user.id,
             entityType: AUDIT_ENTITY_TYPES.user,
             entityId: user.id,
-            metadata: { category, institutionalId: input.institutionalId },
+            metadata: {
+              category,
+              institutionalId: input.institutionalId,
+              ...(academic
+                ? { program: academic.program, admissionYear: academic.admissionYear }
+                : {}),
+            },
             request,
           },
           tx,
@@ -132,7 +158,7 @@ export const registrationService = {
   },
 
   /** After a rejection: a new document (and possibly corrected ID) puts the account back to PENDING. */
-  async resubmit(input: VerificationResubmission, context: OperationContext): Promise<void> {
+  async resubmit(input: VerificationResubmissionInput, context: OperationContext): Promise<void> {
     const userId = context.actor.id;
     const document = decodeIdentityDocument(input.document);
     const institutionalId = input.institutionalId.trim().toUpperCase();
@@ -153,6 +179,8 @@ export const registrationService = {
             verificationSubmittedAt: new Date(),
             reviewedAt: null,
             reviewedById: null,
+            // A student may correct the academic details together with the new document.
+            ...(profile.category === 'STUDENT' ? academicColumns(input.academic) : {}),
           },
         });
         if (updated.count === 0) throw accountErrors.verificationNotRejected();
@@ -167,6 +195,9 @@ export const registrationService = {
             metadata: {
               resubmission: true,
               institutionalId,
+              ...(input.academic && profile.category === 'STUDENT'
+                ? { academicCorrected: true }
+                : {}),
               mimeType: document.mimeType,
               sizeBytes: document.sizeBytes,
             },

@@ -1,15 +1,12 @@
 import {
-  cancelPaymentRequestSchema,
   notificationListQuerySchema,
   paginationSchema,
   parkNowDecisionRequestSchema,
   parkNowStartRequestSchema,
   portalHistoryQuerySchema,
-  processPaymentRequestSchema,
   profileUpdateSchema,
   registerVehicleRequestSchema,
   selfCheckoutQuoteRequestSchema,
-  selfPaymentRequestSchema,
   sessionNumberSchema,
   updateVehicleRequestSchema,
   type VehiclesResponse,
@@ -23,7 +20,9 @@ import { requestMeta, requireAuth } from '../../lib/request-context.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { authorize } from '../../middleware/authorize.js';
 import { validate } from '../../middleware/validate.js';
+import { accountStateService } from '../accounts/account-state.js';
 import { registrationService } from '../accounts/registration.service.js';
+import { parkingErrors } from '../parking/parking.errors.js';
 import { notificationService } from '../notifications/notification.service.js';
 import type { OperationContext } from '../parking/operation-context.js';
 import { parkNowService } from './park-now.service.js';
@@ -43,22 +42,34 @@ const userId = (req: Request): string => requireAuth(req).user.id;
 const idParams = z.object({ id: z.uuid({ error: VALIDATION_MESSAGES.required }) });
 const vehicleParams = z.object({ vehicleId: z.uuid({ error: VALIDATION_MESSAGES.required }) });
 const sessionParams = z.object({ sessionNumber: sessionNumberSchema });
-const paymentParams = z.object({ paymentId: z.uuid({ error: VALIDATION_MESSAGES.required }) });
 const receiptParams = z.object({
   receiptNumber: z.string().trim().toUpperCase().min(1).max(32),
 });
 
 /**
  * Student / Campus Staff self-service API. Every route requires a
- * `PARKING_USER` account; everything except the profile, verification and
- * notifications also requires approved identity verification. All data is
- * scoped to the signed-in user's own vehicles and sessions on the server.
+ * `PARKING_USER` account; everything except the account state, profile, verification
+ * and notifications also requires approved identity verification (decided from the
+ * database on each request, never from the token). All data is scoped to the signed-in
+ * user's own vehicles and sessions on the server.
+ *
+ * Checkout is gate-controlled: from here a user can preview the amount due and say they are
+ * ready to leave, but the payment and the completion of the session happen at the exit
+ * through Security Staff.
  */
 export const portalRouter = Router();
 
 portalRouter.use(authenticate, authorize('PARKING_USER'));
 
 // --- Available while verification is pending or rejected -------------------
+
+/**
+ * The one authoritative answer to "what may this account do right now?": verification,
+ * Park Now eligibility and academic details, read from the database on this request.
+ */
+portalRouter.get('/account', async (req, res) => {
+  res.status(200).json(await accountStateService.get(userId(req)));
+});
 
 portalRouter.get('/profile', async (req, res) => {
   res.status(200).json(await profileService.get(userId(req)));
@@ -137,6 +148,15 @@ portalRouter.patch(
   },
 );
 
+/** Removes the vehicle from the account (not while it is parked). */
+portalRouter.delete(
+  '/vehicles/:vehicleId',
+  validate({ params: vehicleParams }),
+  async (req, res) => {
+    res.status(200).json(await vehicleService.remove(String(req.params.vehicleId), context(req)));
+  },
+);
+
 portalRouter.post(
   '/vehicles/:vehicleId/primary',
   validate({ params: vehicleParams }),
@@ -207,8 +227,9 @@ portalRouter.get(
   },
 );
 
-// Checkout and payment
+// Preparing to leave. Checkout itself is gate-controlled.
 
+/** A read-only preview of the amount due if the vehicle left now. Nothing is recorded or reserved. */
 portalRouter.post(
   '/checkout/quote',
   validate({ body: selfCheckoutQuoteRequestSchema }),
@@ -218,49 +239,36 @@ portalRouter.post(
   },
 );
 
+/** "I am ready to leave": tells the gate. The slot stays occupied until the gate checkout. */
 portalRouter.post(
-  '/checkout/payments',
-  validate({ body: selfPaymentRequestSchema }),
+  '/sessions/:sessionNumber/exit-request',
+  validate({ params: sessionParams }),
   async (req, res) => {
-    const { sessionNumber, method } = req.body as z.infer<typeof selfPaymentRequestSchema>;
     res
-      .status(201)
-      .json(await selfCheckoutService.createPayment(sessionNumber, method, context(req)));
+      .status(200)
+      .json(await selfCheckoutService.requestExit(String(req.params.sessionNumber), context(req)));
   },
 );
 
-portalRouter.post(
-  '/checkout/payments/:paymentId/process',
-  validate({ params: paymentParams, body: processPaymentRequestSchema }),
+portalRouter.delete(
+  '/sessions/:sessionNumber/exit-request',
+  validate({ params: sessionParams }),
   async (req, res) => {
-    const { sessionNumber, outcome } = req.body as z.infer<typeof processPaymentRequestSchema>;
     res
       .status(200)
       .json(
-        await selfCheckoutService.processPayment(
-          String(req.params.paymentId),
-          sessionNumber,
-          outcome,
-          context(req),
-        ),
+        await selfCheckoutService.cancelExitRequest(String(req.params.sessionNumber), context(req)),
       );
   },
 );
 
-portalRouter.post(
-  '/checkout/payments/:paymentId/cancel',
-  validate({ params: paymentParams, body: cancelPaymentRequestSchema }),
-  async (req, res) => {
-    const { sessionNumber } = req.body as z.infer<typeof cancelPaymentRequestSchema>;
-    res.status(200).json({
-      payment: await selfCheckoutService.cancelPayment(
-        String(req.params.paymentId),
-        sessionNumber,
-        context(req),
-      ),
-    });
-  },
-);
+/**
+ * There is no self-service payment or finalization: a session is completed only by the exit
+ * gate's checkout. A client still calling the old payment routes gets a clear, stable answer.
+ */
+portalRouter.all('/checkout/payments{/*splat}', () => {
+  throw parkingErrors.gateCheckoutRequired();
+});
 
 // History and receipts
 

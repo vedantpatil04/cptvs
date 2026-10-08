@@ -44,6 +44,23 @@ export const AUDIT_ACTIONS = {
   zoneCreated: 'ZONE_CREATED',
   zoneUpdated: 'ZONE_UPDATED',
   noticeSent: 'NOTICE_SENT',
+  securityStaffCreated: 'SECURITY_STAFF_CREATED',
+  passwordReset: 'PASSWORD_RESET',
+  exitRequested: 'EXIT_REQUESTED',
+  exitRequestCancelled: 'EXIT_REQUEST_CANCELLED',
+  checkoutQrScanned: 'CHECKOUT_QR_SCANNED',
+  vehicleReleased: 'VEHICLE_RELEASED',
+  identityDocumentDownloaded: 'IDENTITY_DOCUMENT_DOWNLOADED',
+  shiftTemplateCreated: 'SHIFT_TEMPLATE_CREATED',
+  shiftTemplateUpdated: 'SHIFT_TEMPLATE_UPDATED',
+  shiftAssigned: 'SHIFT_ASSIGNED',
+  shiftUpdated: 'SHIFT_UPDATED',
+  shiftCancelled: 'SHIFT_CANCELLED',
+  shiftCheckedIn: 'SHIFT_CHECKED_IN',
+  shiftCheckedOut: 'SHIFT_CHECKED_OUT',
+  shiftMissed: 'SHIFT_MISSED',
+  cashHandoverRecorded: 'CASH_HANDOVER_RECORDED',
+  cashDiscrepancyResolved: 'CASH_DISCREPANCY_RESOLVED',
   /** A request was refused by a consistency/security rule (metadata.code says which). */
   integrityRejected: 'INTEGRITY_REJECTED',
 } as const;
@@ -64,6 +81,9 @@ export const AUDIT_ENTITY_TYPES = {
   vehicle: 'VEHICLE',
   report: 'REPORT',
   identityDocument: 'IDENTITY_DOCUMENT',
+  securityShift: 'SECURITY_SHIFT',
+  shiftTemplate: 'SHIFT_TEMPLATE',
+  cashHandover: 'CASH_HANDOVER',
 } as const;
 
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[keyof typeof AUDIT_ENTITY_TYPES];

@@ -109,6 +109,69 @@ const CHECKS: Record<IntegrityCheckCode, Check> = {
     });
     return payments.map((payment) => payment.transactionId);
   },
+
+  /** Every payment taken at the gate records who took it (visitor payments of earlier versions have no account). */
+  async PAID_PAYMENT_HAS_OPERATOR() {
+    const payments = await prisma.payment.findMany({
+      where: {
+        status: 'PAID',
+        processedById: null,
+        session: { checkedOutVia: { not: 'VISITOR' } },
+      },
+      select: { transactionId: true },
+      take: MAX_FINDINGS,
+    });
+    return payments.map((payment) => payment.transactionId);
+  },
+
+  /**
+   * A shift with a recorded cash handover agrees with its payments: it expected exactly the
+   * cash the payments attributed to it add up to, and a CLOSED shift has a handover at all.
+   */
+  async SHIFT_CASH_MATCHES_HANDOVER() {
+    const findings: string[] = [];
+    const missing = await prisma.securityShift.findMany({
+      where: { status: 'CLOSED', handover: { is: null } },
+      select: { id: true },
+      take: MAX_FINDINGS,
+    });
+    findings.push(...missing.map((shift) => `${shift.id} (closed without a handover)`));
+
+    const handovers = await prisma.cashHandover.findMany({
+      select: { shiftId: true, expectedCashPaise: true },
+      take: 1000,
+      orderBy: { receivedAt: 'desc' },
+    });
+    const cash = await prisma.payment.groupBy({
+      by: ['shiftId'],
+      where: {
+        status: 'PAID',
+        method: 'CASH',
+        shiftId: { in: handovers.map((handover) => handover.shiftId) },
+      },
+      _sum: { amountPaise: true },
+    });
+    const actual = new Map(cash.map((row) => [row.shiftId, row._sum.amountPaise ?? 0]));
+    for (const handover of handovers) {
+      if ((actual.get(handover.shiftId) ?? 0) !== handover.expectedCashPaise) {
+        findings.push(`${handover.shiftId} (cash changed after the handover)`);
+      }
+    }
+    return findings.slice(0, MAX_FINDINGS);
+  },
+
+  /** No Security Staff member has two shifts that overlap in time. */
+  async NO_OVERLAPPING_SHIFTS() {
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT a.id::text AS id
+      FROM security_shifts a
+      JOIN security_shifts b
+        ON a.staff_id = b.staff_id AND a.id < b.id
+       AND a.status <> 'MISSED' AND b.status <> 'MISSED'
+       AND a.starts_at < b.ends_at AND b.starts_at < a.ends_at
+      LIMIT ${MAX_FINDINGS}`;
+    return rows.map((row) => row.id);
+  },
 };
 
 export const integrityService = {

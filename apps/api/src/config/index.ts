@@ -57,6 +57,11 @@ export const buildConfig = (env: Env) =>
       emailDomains: Object.freeze(env.INSTITUTION_EMAIL_DOMAINS ?? []),
       visitorAccessSeconds: env.VISITOR_ACCESS_HOURS * 3600,
     }),
+    shifts: Object.freeze({
+      enforcement: env.SHIFT_ENFORCEMENT,
+      earlyCheckInMs: env.SHIFT_EARLY_CHECK_IN_MINUTES * 60_000,
+      overrunMs: env.SHIFT_OVERRUN_MINUTES * 60_000,
+    }),
     cors: Object.freeze({
       origins: Object.freeze(resolveCorsOrigins(env)),
     }),

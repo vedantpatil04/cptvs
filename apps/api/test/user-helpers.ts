@@ -1,4 +1,9 @@
-import type { ApiErrorBody, ParkingUserCategory, VerificationStatus } from '@cpvts/shared';
+import type {
+  AcademicProgram,
+  ApiErrorBody,
+  ParkingUserCategory,
+  VerificationStatus,
+} from '@cpvts/shared';
 import type { Express } from 'express';
 import request from 'supertest';
 
@@ -20,6 +25,23 @@ export const identityDocument = (bytes: Buffer = PNG_BYTES, mimeType = 'image/pn
   contentBase64: bytes.toString('base64'),
 });
 
+/** What a student gives at registration to identify themselves academically. */
+export interface AcademicDetails {
+  program: AcademicProgram;
+  department: string;
+  admissionYear: number;
+  currentSemester: number;
+}
+
+export const academicDetails = (overrides: Partial<AcademicDetails> = {}): AcademicDetails => ({
+  program: 'BCA',
+  department: 'Computer Applications',
+  admissionYear: 2024,
+  currentSemester: 3,
+  ...overrides,
+});
+
+/** A student registration; Campus Staff registration ignores the `academic` block. */
 export const registrationBody = (overrides: Record<string, unknown> = {}) => ({
   fullName: 'Asha Patil',
   institutionalId: '2bt22cs001',
@@ -28,6 +50,7 @@ export const registrationBody = (overrides: Record<string, unknown> = {}) => ({
   phone: '+91 98450 12345',
   password: TEST_PASSWORD,
   document: identityDocument(),
+  academic: academicDetails(),
   ...overrides,
 });
 
@@ -56,6 +79,8 @@ export interface ParkingUserOptions {
   fullName?: string;
   isActive?: boolean;
   note?: string;
+  /** Students only. `null` leaves the academic profile empty (an account from before it existed). */
+  academic?: Partial<AcademicDetails> | null;
 }
 
 /** Creates a Student / Campus Staff account directly (fast path for tests that are not about registration). */
@@ -85,6 +110,10 @@ export const createParkingUser = async (options: ParkingUserOptions = {}) => {
             verification === 'REJECTED' ? (options.note ?? 'Photo unreadable') : null,
           verificationSubmittedAt: new Date(),
           ...(verification === 'PENDING' ? {} : { reviewedAt: new Date() }),
+          // Students carry academic details unless the test asks for an older, empty account.
+          ...(category === 'STUDENT' && options.academic !== null
+            ? academicDetails(options.academic ?? {})
+            : {}),
         },
       },
     },

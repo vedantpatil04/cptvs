@@ -1,11 +1,10 @@
 import { z } from 'zod';
 
+import { academicProfileSchema, type AcademicProfileView } from './academic.js';
 import { PASSWORD_INPUT_MAX_LENGTH, passwordPolicySchema } from './auth.js';
 import { campusDateSchema, paginationSchema, type HistoryItem } from './management.js';
 import {
-  MOCK_PAYMENT_OUTCOMES,
   normalizeVehicleNumber,
-  PAYMENT_METHODS,
   sessionNumberSchema,
   vehicleNumberSchema,
   type AllocationExplanation,
@@ -105,28 +104,45 @@ export type IdentityDocumentUpload = z.infer<typeof identityDocumentUploadSchema
 // Registration and sign-in
 // ---------------------------------------------------------------------------
 
+const registrationFields = {
+  fullName: fullNameSchema,
+  institutionalId: institutionalIdSchema,
+  email: emailSchema,
+  phone: phoneSchema,
+  password: passwordPolicySchema,
+  /** Step 2: the user confirms the ID printed on the document. */
+  confirmInstitutionalId: institutionalIdSchema,
+  document: identityDocumentUploadSchema,
+};
+
+const idsMatch = (value: { institutionalId: string; confirmInstitutionalId: string }) =>
+  value.institutionalId === value.confirmInstitutionalId;
+const idsMismatchIssue = {
+  path: ['confirmInstitutionalId'],
+  error: VALIDATION_MESSAGES.institutionalIdMismatch,
+};
+
 /**
- * Student or Campus Staff registration. The category comes from the endpoint
- * (`/auth/register/student` or `/auth/register/staff`), never from the body.
+ * Campus Staff registration. The category comes from the endpoint
+ * (`/auth/register/staff`), never from the body.
  */
 export const registrationRequestSchema = z
-  .object({
-    fullName: fullNameSchema,
-    institutionalId: institutionalIdSchema,
-    email: emailSchema,
-    phone: phoneSchema,
-    password: passwordPolicySchema,
-    /** Step 2: the user confirms the ID printed on the document. */
-    confirmInstitutionalId: institutionalIdSchema,
-    document: identityDocumentUploadSchema,
-  })
-  .refine((value) => value.institutionalId === value.confirmInstitutionalId, {
-    path: ['confirmInstitutionalId'],
-    error: VALIDATION_MESSAGES.institutionalIdMismatch,
-  });
+  .object(registrationFields)
+  .refine(idsMatch, idsMismatchIssue);
 export type RegistrationRequest = z.input<typeof registrationRequestSchema>;
 /** The validated, normalised registration (what the server works with). */
 export type RegistrationInput = z.output<typeof registrationRequestSchema>;
+
+/**
+ * Student registration (`/auth/register/student`): the same fields plus the academic
+ * identity Administrators use to find and track students. The batch (e.g. 2024–2027)
+ * is derived from the admission year and program, never typed.
+ */
+export const studentRegistrationRequestSchema = z
+  .object({ ...registrationFields, academic: academicProfileSchema })
+  .refine(idsMatch, idsMismatchIssue);
+export type StudentRegistrationRequest = z.input<typeof studentRegistrationRequestSchema>;
+export type StudentRegistrationInput = z.output<typeof studentRegistrationRequestSchema>;
 
 export const userLoginRequestSchema = z.object({
   email: emailSchema,
@@ -137,18 +153,22 @@ export const userLoginRequestSchema = z.object({
 });
 export type UserLoginRequest = z.input<typeof userLoginRequestSchema>;
 
-/** Resubmission after a rejection: a new document, and the (possibly corrected) ID. */
+/**
+ * Resubmission after a rejection: a new document, and the (possibly corrected) ID. A
+ * student may also correct the academic details here (ignored for Campus Staff); outside
+ * a rejected verification those details are changed by an administrator only.
+ */
 export const verificationResubmissionSchema = z
   .object({
     institutionalId: institutionalIdSchema,
     confirmInstitutionalId: institutionalIdSchema,
     document: identityDocumentUploadSchema,
+    academic: academicProfileSchema.optional(),
   })
-  .refine((value) => value.institutionalId === value.confirmInstitutionalId, {
-    path: ['confirmInstitutionalId'],
-    error: VALIDATION_MESSAGES.institutionalIdMismatch,
-  });
+  .refine(idsMatch, idsMismatchIssue);
 export type VerificationResubmission = z.input<typeof verificationResubmissionSchema>;
+/** The validated, normalised resubmission (what the server works with). */
+export type VerificationResubmissionInput = z.output<typeof verificationResubmissionSchema>;
 
 // ---------------------------------------------------------------------------
 // Profile
@@ -169,10 +189,60 @@ export interface ParkingUserProfileView {
   phone: string;
   category: ParkingUserCategory;
   institutionalId: string;
+  /** Always the current server-side state: the same value Admin sees. */
   verification: VerificationInfo;
+  /** Students only (null for Campus Staff, and for students who registered before it was collected). */
+  academic: AcademicProfileView | null;
   preferredLocale: string | null;
   vehicleCount: number;
   memberSince: string;
+}
+
+/** Why a verified-only feature (Park Now, vehicles, history …) is closed to an account. */
+export const PARK_NOW_BLOCKERS = [
+  'VERIFICATION_PENDING',
+  'VERIFICATION_REJECTED',
+  'ACCOUNT_INACTIVE',
+] as const;
+export type ParkNowBlocker = (typeof PARK_NOW_BLOCKERS)[number];
+
+export interface ParkNowEligibility {
+  eligible: boolean;
+  /** Null when eligible. */
+  blockedBy: ParkNowBlocker | null;
+}
+
+/**
+ * The single rule that decides whether an account may use the verified-only features:
+ * VERIFIED and active. Everything that checks eligibility goes through this function.
+ */
+export const parkNowEligibilityOf = (
+  verificationStatus: VerificationStatus,
+  isActive = true,
+): ParkNowEligibility => {
+  if (!isActive) return { eligible: false, blockedBy: 'ACCOUNT_INACTIVE' };
+  if (verificationStatus === 'VERIFIED') return { eligible: true, blockedBy: null };
+  return {
+    eligible: false,
+    blockedBy: verificationStatus === 'REJECTED' ? 'VERIFICATION_REJECTED' : 'VERIFICATION_PENDING',
+  };
+};
+
+/**
+ * The one authoritative answer to "what is this account allowed to do right now?",
+ * read from the database on every request — never from the token. Sign-in, `GET /auth/me`,
+ * `GET /portal/account`, `GET /portal/profile` and Park Now all derive from the same record,
+ * so an administrator's decision is visible everywhere on the next request.
+ */
+export interface ParkingAccountState {
+  userId: string;
+  category: ParkingUserCategory;
+  isActive: boolean;
+  verification: VerificationInfo;
+  parkNow: ParkNowEligibility;
+  academic: AcademicProfileView | null;
+  /** When this snapshot was read. */
+  asOf: string;
 }
 
 /** Safe self-service edits. Category, ID, email and verification are not editable. */
@@ -226,6 +296,16 @@ export interface VehicleParkingState {
 
 export interface VehiclesResponse {
   vehicles: RegisteredVehicle[];
+}
+
+/**
+ * Removing a vehicle ends the account's ownership of the plate, which another account may
+ * then register. A vehicle that never parked is deleted; one with parking history is released
+ * and its sessions stay with the account that owned it at the time.
+ */
+export interface VehicleReleaseResult {
+  vehicleNumber: string;
+  outcome: 'DELETED' | 'RELEASED';
 }
 
 export interface RegisteredVehicle {
@@ -334,34 +414,23 @@ export interface ParkNowConfirmation {
 }
 
 // ---------------------------------------------------------------------------
-// Self-service checkout and payment (Student, Campus Staff)
+// Preparing to leave (Student, Campus Staff, Visitor)
 // ---------------------------------------------------------------------------
 
 /**
- * The exit time is the server's current campus hour: the user cannot choose
- * it. The fee always comes from the backend fee engine.
+ * Checkout is gate-controlled: a user or visitor prepares to leave — sees the current
+ * amount and says "ready to leave" — but only Security Staff (or an administrator)
+ * completes the session at the exit, with the payment and receipt. The exit time of a
+ * preview is the server's current campus hour, and the fee always comes from the fee engine.
  */
 export const selfCheckoutQuoteRequestSchema = z.object({ sessionNumber: sessionNumberSchema });
 export type SelfCheckoutQuoteRequest = z.input<typeof selfCheckoutQuoteRequestSchema>;
 
-export const selfPaymentRequestSchema = selfCheckoutQuoteRequestSchema.extend({
-  method: z.enum(PAYMENT_METHODS, { error: VALIDATION_MESSAGES.selectOption }),
-});
-export type SelfPaymentRequest = z.input<typeof selfPaymentRequestSchema>;
-
-// ---------------------------------------------------------------------------
-// Visitor checkout (the access token already identifies the one session)
-// ---------------------------------------------------------------------------
-
-export const visitorPaymentRequestSchema = z.object({
-  method: z.enum(PAYMENT_METHODS, { error: VALIDATION_MESSAGES.selectOption }),
-});
-export type VisitorPaymentRequest = z.input<typeof visitorPaymentRequestSchema>;
-
-export const visitorProcessRequestSchema = z.object({
-  outcome: z.enum(MOCK_PAYMENT_OUTCOMES).default('SUCCESS'),
-});
-export type VisitorProcessRequest = z.input<typeof visitorProcessRequestSchema>;
+/** The state of a session's "ready to leave" flag. The slot stays occupied either way. */
+export interface ExitRequestState {
+  sessionNumber: string;
+  exitRequestedAt: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Notifications
@@ -373,6 +442,12 @@ export const NOTIFICATION_KINDS = [
   'PARKING_STARTED',
   'RECEIPT_GENERATED',
   'PARKING_NOTICE',
+  // Security Staff
+  'SHIFT_ASSIGNED',
+  // Administrators
+  'SHIFT_CASH_DUE',
+  'CASH_DISCREPANCY',
+  'SHIFT_MISSED',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -389,6 +464,14 @@ export type NotificationParams = Partial<{
   /** PARKING_NOTICE: administrator-written text (shown as written). */
   title: string;
   message: string;
+  /** Shift notifications: who, which shift and when (campus date, YYYY-MM-DD). */
+  staffName: string;
+  shiftName: string;
+  shiftId: string;
+  date: string;
+  gate: string;
+  /** CASH_DISCREPANCY: actual − expected, in paise (negative = short). */
+  differencePaise: number;
 }>;
 
 export interface NotificationView {
@@ -402,6 +485,11 @@ export interface NotificationView {
 export interface NotificationsResponse {
   items: NotificationView[];
   unreadCount: number;
+}
+
+export interface MarkAllReadResponse {
+  /** How many notifications were marked read. */
+  updated: number;
 }
 
 export const notificationListQuerySchema = z.object({

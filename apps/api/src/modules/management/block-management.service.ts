@@ -28,11 +28,24 @@ const audit = (
     tx,
   );
 
-/** Vehicles parked, or slots temporarily held, in the given zones. */
-const hasLiveUse = async (tx: Prisma.TransactionClient, zoneWhere: Prisma.ParkingZoneWhereInput) =>
-  (await tx.parkingSlot.count({
-    where: { zone: zoneWhere, status: { in: ['OCCUPIED', 'HELD'] } },
-  })) > 0;
+/**
+ * Takes the slots of the given zones out of the allocation pool without touching a parked
+ * vehicle: slots only held for a Park Now offer go back to AVAILABLE (the offer is cancelled),
+ * while every OCCUPIED slot and its ACTIVE session carry on until the vehicle checks out.
+ */
+const stopAllocating = async (
+  tx: Prisma.TransactionClient,
+  zoneWhere: Prisma.ParkingZoneWhereInput,
+) => {
+  await tx.parkNowOffer.updateMany({
+    where: { status: 'OFFERED', slot: { zone: zoneWhere } },
+    data: { status: 'CANCELLED' },
+  });
+  await tx.parkingSlot.updateMany({
+    where: { status: 'HELD', zone: zoneWhere },
+    data: { status: 'AVAILABLE', holdToken: null, holdExpiresAt: null },
+  });
+};
 
 const definedOnly = <T extends object>(patch: T): Partial<T> =>
   Object.fromEntries(
@@ -89,8 +102,9 @@ export const blockManagementService = {
       const block = await tx.parkingBlock.findUnique({ where: { code } });
       if (!block) throw managementErrors.blockNotFound();
       const data = definedOnly(patch);
+      // Disabling a block stops new allocations to it; vehicles already parked there continue.
       if (patch.isActive === false && block.isActive) {
-        if (await hasLiveUse(tx, { blockId: block.id })) throw managementErrors.blockInUse();
+        await stopAllocating(tx, { blockId: block.id });
       }
       if (Object.keys(data).length === 0) return;
       await tx.parkingBlock.update({ where: { code }, data });
@@ -144,7 +158,7 @@ export const blockManagementService = {
     return loadManagedBlock(request.blockCode);
   },
 
-  /** The vehicle type can change only while the zone has no slots; deactivation needs no parked vehicle. */
+  /** The vehicle type can change only while the zone has no slots; deactivation lets parked vehicles carry on. */
   async updateZone(
     code: string,
     patch: UpdateZoneRequest,
@@ -164,8 +178,9 @@ export const blockManagementService = {
       ) {
         throw managementErrors.zoneInUse();
       }
-      if (patch.isActive === false && zone.isActive && (await hasLiveUse(tx, { id: zone.id }))) {
-        throw managementErrors.zoneInUse();
+      // Likewise for a zone: no new allocations, parked vehicles continue.
+      if (patch.isActive === false && zone.isActive) {
+        await stopAllocating(tx, { id: zone.id });
       }
 
       const data = definedOnly(patch);

@@ -355,7 +355,7 @@ describe('receipts and QR verification', () => {
       receipt: {
         receiptNumber: receipt.receiptNumber,
         issuedAt: receipt.issuedAt,
-        vehicleNumber: 'KA22AB1234',
+        vehicleNumber: 'KA****1234', // masked: the public check is a capability link
         blockName: 'Two-Wheeler Parking Block',
         slotCode: 'T-01',
         durationHours: 4,

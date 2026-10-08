@@ -4,17 +4,15 @@ import { isUniqueViolation } from '../../db/errors.js';
 import { withTransaction } from '../../db/transaction.js';
 import { campusHour } from '../../lib/campus-time.js';
 import { AppError } from '../../lib/errors.js';
-import { newOpaqueReference, newSessionNumber } from '../../lib/identifiers.js';
-import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
-import { auditRepository } from '../audit/audit.repository.js';
+import { AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { feeScheduleService } from '../fees/fee-schedule.service.js';
-import { notificationService } from '../notifications/notification.service.js';
 import { allocateWithHold, type RankedCandidate } from './allocation.js';
 import { loadRankedCandidates } from './allocation-candidates.js';
 import { auditRejection, type OperationContext } from './operation-context.js';
 import { parkingErrors } from './parking.errors.js';
 import { toSessionView } from './parking.mappers.js';
-import { parkingRepository, SESSION_INCLUDE } from './parking.repository.js';
+import { parkingRepository } from './parking.repository.js';
+import { createActiveSession } from './session-factory.js';
 import { slotHoldRepository, slotHoldStore } from './slot-hold.repository.js';
 import { accountCategoryOf } from './vehicle-lookup.service.js';
 
@@ -35,22 +33,13 @@ const DUPLICATE_CHECK_IN_CONSTRAINTS = [
   'vehicles_vehicle_number_key',
 ];
 
-/** Generates a session number not yet in use (collisions are astronomically unlikely). */
-export const uniqueSessionNumber = async (
-  exists: (candidate: string) => Promise<boolean>,
-): Promise<string> => {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const candidate = newSessionNumber();
-    if (!(await exists(candidate))) return candidate;
-  }
-  throw new Error('Could not generate a unique session number');
-};
-
 export const checkInService = {
   /**
    * Vehicle check-in (Master Blueprint §9): validate, prevent duplicates,
    * determine the zone, rank available compatible slots, hold the best one,
    * verify it one final time and commit the session — all server-side.
+   * The session itself is created by `createActiveSession`, the same function
+   * Park Now uses, so a desk session and a self-service session are one model.
    */
   async checkIn(input: CheckInInput, context: OperationContext): Promise<CheckInResponse> {
     const reject = (error: AppError) =>
@@ -101,75 +90,28 @@ export const checkInService = {
             create: { vehicleNumber: input.vehicleNumber, vehicleType: input.vehicleType },
             update: {},
           });
-          const sessionNumber = await uniqueSessionNumber(
-            async (value) =>
-              (await tx.parkingSession.count({ where: { sessionNumber: value } })) > 0,
-          );
-          const session = await tx.parkingSession.create({
-            data: {
-              sessionNumber,
-              entryReference: newOpaqueReference(),
-              vehicleId: vehicle.id,
-              slotId: candidate.slotId,
-              vehicleType: input.vehicleType,
-              ownerCategory,
-              entryHour: input.entryHour,
-              entryAt: new Date(),
-              checkedInById: context.actor.id,
+          return createActiveSession(tx, {
+            vehicle,
+            vehicleType: input.vehicleType,
+            slot: {
+              id: candidate.slotId,
+              code: candidate.slotCode,
+              blockName: candidate.blockName,
             },
-            include: SESSION_INCLUDE,
+            ownerCategory,
+            categorySource: accountCategory ? 'ACCOUNT' : 'OPERATOR',
+            entryHour: input.entryHour,
+            checkedInById: context.actor.id,
+            channel: 'SECURITY',
+            allocation: {
+              score: candidate.score,
+              priority: candidate.priority,
+              usesToday: candidate.usesToday,
+              layoutPosition: candidate.layoutPosition,
+              candidates: ranked.length,
+            },
+            request: context.request,
           });
-
-          await auditRepository.record(
-            {
-              action: AUDIT_ACTIONS.vehicleCheckedIn,
-              actorId: context.actor.id,
-              entityType: AUDIT_ENTITY_TYPES.parkingSession,
-              entityId: session.sessionNumber,
-              metadata: {
-                vehicleNumber: input.vehicleNumber,
-                vehicleType: input.vehicleType,
-                ownerCategory,
-                categorySource: accountCategory ? 'ACCOUNT' : 'OPERATOR',
-                entryHour: input.entryHour,
-              },
-              request: context.request,
-            },
-            tx,
-          );
-          await auditRepository.record(
-            {
-              action: AUDIT_ACTIONS.slotAssigned,
-              actorId: context.actor.id,
-              entityType: AUDIT_ENTITY_TYPES.parkingSlot,
-              entityId: candidate.slotCode,
-              metadata: {
-                sessionNumber: session.sessionNumber,
-                score: candidate.score,
-                priority: candidate.priority,
-                usesToday: candidate.usesToday,
-                layoutPosition: candidate.layoutPosition,
-                candidates: ranked.length,
-              },
-              request: context.request,
-            },
-            tx,
-          );
-          // A vehicle registered to a Student / Campus Staff account: tell its owner.
-          if (vehicle.ownerUserId && vehicle.ownerSince && accountCategory) {
-            await notificationService.notify(
-              vehicle.ownerUserId,
-              'PARKING_STARTED',
-              {
-                sessionNumber: session.sessionNumber,
-                slotCode: candidate.slotCode,
-                blockName: candidate.blockName,
-                vehicleNumber: input.vehicleNumber,
-              },
-              tx,
-            );
-          }
-          return session;
         }),
       );
     } catch (error) {

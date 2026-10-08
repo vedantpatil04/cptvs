@@ -31,6 +31,7 @@ import { blockManagementService } from './block-management.service.js';
 import { historyService } from './history.service.js';
 import { integrityService } from './integrity.service.js';
 import { reportsService } from './reports.service.js';
+import { adminShiftsRouter } from '../shifts/shifts.routes.js';
 import { adminUsersRouter } from '../users/admin-users.routes.js';
 import { slotManagementService } from './slot-management.service.js';
 
@@ -50,6 +51,10 @@ adminRouter.use(authenticate, authorize('ADMIN'));
 // --- Users, verification, visitors, notices -------------------------------
 
 adminRouter.use(adminUsersRouter);
+
+// --- Security Staff, shifts and cash ----------------------------------------
+
+adminRouter.use(adminShiftsRouter);
 
 // --- Slot management -------------------------------------------------------
 

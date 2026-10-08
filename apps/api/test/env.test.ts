@@ -35,6 +35,21 @@ describe('parseEnv', () => {
     );
   });
 
+  it('requires shifts for gate operations unless told otherwise', () => {
+    expect(parseEnv({ ...base })).toMatchObject({
+      SHIFT_ENFORCEMENT: 'required',
+      SHIFT_EARLY_CHECK_IN_MINUTES: 60,
+      SHIFT_OVERRUN_MINUTES: 30,
+    });
+    expect(parseEnv({ ...base, SHIFT_ENFORCEMENT: 'optional' }).SHIFT_ENFORCEMENT).toBe('optional');
+    expect(() => parseEnv({ ...base, SHIFT_ENFORCEMENT: 'sometimes' })).toThrow(
+      /SHIFT_ENFORCEMENT/,
+    );
+    expect(() => parseEnv({ ...base, SHIFT_OVERRUN_MINUTES: '999' })).toThrow(
+      /SHIFT_OVERRUN_MINUTES/,
+    );
+  });
+
   it('requires an allowed origin in production', () => {
     expect(() => parseEnv({ ...base, NODE_ENV: 'production' })).toThrow(/CORS_ORIGINS/);
     expect(

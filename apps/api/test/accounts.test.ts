@@ -210,6 +210,7 @@ describe('Campus Staff registration', () => {
     expect((res.body as LoginResponse).user.parkingUser).toEqual({
       category: 'STAFF',
       verificationStatus: 'PENDING',
+      parkNow: { eligible: false, blockedBy: 'VERIFICATION_PENDING' },
     });
   });
 });

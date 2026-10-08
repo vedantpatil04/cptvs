@@ -30,6 +30,16 @@ const BHARAT_REGISTRATION = /^\d{2}BH\d{4}[A-Z]{1,2}$/;
 export const isValidVehicleNumber = (normalized: string): boolean =>
   STANDARD_REGISTRATION.test(normalized) || BHARAT_REGISTRATION.test(normalized);
 
+/**
+ * Hides the middle of a plate for places anyone holding a link can see (the public receipt
+ * check): "KA22AB1234" → "KA****1234". The holder of the receipt can still recognise their own.
+ */
+export const maskVehicleNumber = (vehicleNumber: string): string => {
+  const keepEnd = vehicleNumber.length >= 8 ? 4 : 2;
+  const hidden = Math.max(0, vehicleNumber.length - 2 - keepEnd);
+  return `${vehicleNumber.slice(0, 2)}${'*'.repeat(hidden)}${vehicleNumber.slice(vehicleNumber.length - keepEnd)}`;
+};
+
 /** Unambiguous upper-case alphabet (Crockford base32: no I, L, O, U). */
 export const IDENTIFIER_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
@@ -122,8 +132,28 @@ export const checkoutQuoteRequestSchema = z.object({
   exitHour: hourSchema,
   vehicleNumber: vehicleNumberSchema.optional(),
   slotCode: slotCodeSchema.optional(),
+  /**
+   * The scanned session QR (`cpvts:session:<ref>`) or its bare reference, when the
+   * checkout started from a scan. It must belong to this session, so a QR cannot be
+   * attached to a different session's checkout.
+   */
+  entryReference: z.string().trim().max(300, { error: VALIDATION_MESSAGES.tooLong }).optional(),
 });
 export type CheckoutQuoteRequest = z.input<typeof checkoutQuoteRequestSchema>;
+
+/**
+ * Gate checkout by camera: the scanned text of the session QR. The server extracts the
+ * opaque reference, looks it up and verifies the session before anything else happens —
+ * the QR alone never completes a checkout (an authorized operator still pays and finalizes).
+ */
+export const scanCheckoutRequestSchema = z.object({
+  qr: z
+    .string({ error: VALIDATION_MESSAGES.required })
+    .trim()
+    .min(1, { error: VALIDATION_MESSAGES.required })
+    .max(300, { error: VALIDATION_MESSAGES.tooLong }),
+});
+export type ScanCheckoutRequest = z.input<typeof scanCheckoutRequestSchema>;
 
 export const PAYMENT_METHODS = ['UPI', 'CARD', 'CASH', 'NO_CHARGE'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
@@ -156,6 +186,13 @@ export const cancelPaymentRequestSchema = z.object({ sessionNumber: sessionNumbe
 export type SlotStatus = 'AVAILABLE' | 'HELD' | 'OCCUPIED' | 'BLOCKED';
 export type ParkingSessionStatus = 'ACTIVE' | 'COMPLETED';
 
+/**
+ * ACTIVE → (optional) EXIT_REQUESTED → COMPLETED. EXIT_REQUESTED means the owner or
+ * visitor said "ready to leave"; the vehicle is still parked, the slot is still occupied
+ * and only the gate checkout (payment, receipt) completes the session.
+ */
+export type SessionLifecycle = 'ACTIVE' | 'EXIT_REQUESTED' | 'COMPLETED';
+
 export interface Coordinates {
   latitude: number;
   longitude: number;
@@ -184,6 +221,10 @@ export interface FeeBreakdown {
 export interface ParkingSessionView {
   sessionNumber: string;
   status: ParkingSessionStatus;
+  /** ACTIVE, EXIT_REQUESTED (ready to leave, still parked) or COMPLETED. */
+  lifecycle: SessionLifecycle;
+  /** When the owner or visitor marked the session "ready to leave"; null if they have not. */
+  exitRequestedAt: string | null;
   vehicleNumber: string;
   vehicleType: VehicleType;
   ownerCategory: OwnerCategory;
@@ -259,6 +300,35 @@ export interface TrackingResponse {
   session: ParkingSessionView;
 }
 
+/**
+ * What the server verified before returning a scanned session: the reference is a real
+ * session reference, the session is ACTIVE, and the vehicle, session and slot records agree.
+ */
+export interface ScanChecks {
+  reference: true;
+  sessionActive: true;
+  vehicleMatchesSession: true;
+  slotMatchesSession: true;
+}
+
+/** Result of scanning a session QR at the exit gate. The next step is the checkout quote. */
+export interface ScanCheckoutResponse {
+  matchedBy: 'ENTRY_QR';
+  session: ParkingSessionView;
+  /** The owner or visitor already marked the session "ready to leave". */
+  exitRequested: boolean;
+  checks: ScanChecks;
+}
+
+/** Query of the active-sessions board. */
+export const activeSessionsQuerySchema = z.object({
+  /** Only sessions whose owner or visitor marked them "ready to leave". */
+  exitRequested: z
+    .preprocess((value) => value === true || value === 'true' || value === '1', z.boolean())
+    .default(false),
+});
+export type ActiveSessionsQuery = z.input<typeof activeSessionsQuerySchema>;
+
 export interface ParkingMapOccupant {
   sessionNumber: string;
   vehicleNumber: string;
@@ -289,6 +359,11 @@ export interface ParkingMapZone {
   code: string;
   name: string;
   vehicleType: VehicleType;
+  /**
+   * False when the zone (or its block) is disabled: nothing new is allocated there. Such a zone
+   * only appears while vehicles are still parked in it, and then lists just those vehicles.
+   */
+  isActive: boolean;
   counts: SlotCounts;
   slots: ParkingMapSlot[];
 }
@@ -298,6 +373,8 @@ export interface ParkingMapBlock {
   name: string;
   description: string | null;
   coordinates: Coordinates | null;
+  /** False for a disabled block that still has vehicles parked in it. */
+  isActive: boolean;
   zones: ParkingMapZone[];
 }
 
@@ -371,6 +448,7 @@ export interface ReceiptVerificationResponse {
   receipt: {
     receiptNumber: string;
     issuedAt: string;
+    /** Masked (e.g. KA****1234): the public check never reveals a full plate. */
     vehicleNumber: string;
     blockName: string;
     slotCode: string;

@@ -85,6 +85,7 @@ describe('Parking User API (/portal)', () => {
         ['get', '/portal/notifications'],
         ['post', '/portal/notifications/read-all'],
         ['post', '/portal/verification/resubmit'],
+        ['get', '/portal/account'],
       ],
       ['student', 'pending'],
     );
@@ -102,7 +103,9 @@ describe('Parking User API (/portal)', () => {
       ['post', '/portal/park-now/cancel'],
       ['get', '/portal/sessions/active'],
       ['post', '/portal/checkout/quote'],
-      ['post', '/portal/checkout/payments'],
+      ['post', '/portal/sessions/CPVTS-P-00000000/exit-request'],
+      ['delete', '/portal/sessions/CPVTS-P-00000000/exit-request'],
+      ['delete', '/portal/vehicles/00000000-0000-4000-8000-000000000000'],
       ['get', '/portal/history'],
       ['get', '/portal/receipts'],
     ];
@@ -151,14 +154,18 @@ describe('Administrator API (/admin)', () => {
 });
 
 describe('Security Staff operations (/parking, /dashboard)', () => {
-  it('keeps the gate operations for Security Staff', async () => {
+  it('keeps vehicle entry for Security Staff', async () => {
+    await expectBoundary([['post', '/parking/check-ins']], ['security']);
+  });
+
+  it('keeps the gate checkout for Security Staff and administrators (an override)', async () => {
     await expectBoundary(
       [
-        ['post', '/parking/check-ins'],
+        ['post', '/parking/checkouts/scan'],
         ['post', '/parking/checkouts/quote'],
         ['post', '/parking/payments'],
       ],
-      ['security'],
+      ['security', 'admin'],
     );
   });
 

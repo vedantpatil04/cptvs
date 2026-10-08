@@ -12,11 +12,12 @@ import { SESSION_INCLUDE } from '../parking/parking.repository.js';
  * Requires a Student / Campus Staff account whose identity verification has
  * been approved. Use after `authenticate` and `authorize('PARKING_USER')`.
  * Pending and rejected accounts can sign in and see their status, but parking
- * features wait for approval.
+ * features wait for approval. The decision uses the account state `authenticate`
+ * read from the database on this very request — never the token.
  */
 export const requireVerified: RequestHandler = (req, _res, next) => {
   const { user } = requireAuth(req);
-  if (user.parkingUser?.verificationStatus !== 'VERIFIED') {
+  if (!user.parkingUser?.parkNow.eligible) {
     next(accountErrors.verificationRequired());
     return;
   }
@@ -25,38 +26,26 @@ export const requireVerified: RequestHandler = (req, _res, next) => {
 
 /** The verified account's category: the single source of the billing category. */
 export const accountCategory = (user: AuthenticatedUser) => {
-  if (user.parkingUser?.verificationStatus !== 'VERIFIED') {
+  if (!user.parkingUser?.parkNow.eligible) {
     throw accountErrors.verificationRequired();
   }
   return user.parkingUser.category;
 };
 
 /**
- * Sessions a user may see: those of their own vehicles that began after they
- * registered the vehicle (a new owner never sees a previous owner's history).
- * Every portal read and action goes through this single scope.
+ * Sessions a user may see: exactly those that carry their account as the owner of the
+ * vehicle when the session began. A later owner of the same plate never sees them, and the
+ * previous owner keeps them after releasing the vehicle. Every portal read and action goes
+ * through this single scope.
  */
-export const ownedSessionWhere = async (
-  userId: string,
-  db: Pick<typeof prisma, 'vehicle'> = prisma,
-): Promise<Prisma.ParkingSessionWhereInput> => {
-  const vehicles = await db.vehicle.findMany({
-    where: { ownerUserId: userId },
-    select: { id: true, ownerSince: true },
-  });
-  if (vehicles.length === 0) return { id: { in: [] } };
-  return {
-    OR: vehicles.map((vehicle) => ({
-      vehicleId: vehicle.id,
-      entryAt: { gte: vehicle.ownerSince ?? new Date(0) },
-    })),
-  };
-};
+export const ownedSessionWhere = (userId: string): Prisma.ParkingSessionWhereInput => ({
+  ownerUserId: userId,
+});
 
 /** The user's session, or "not found" — never a hint that someone else's session exists. */
 export const findOwnSession = async (userId: string, sessionNumber: string) => {
   const session = await prisma.parkingSession.findFirst({
-    where: { sessionNumber, ...(await ownedSessionWhere(userId)) },
+    where: { sessionNumber, ...ownedSessionWhere(userId) },
     include: SESSION_INCLUDE,
   });
   if (!session) throw parkingErrors.sessionNotFound();

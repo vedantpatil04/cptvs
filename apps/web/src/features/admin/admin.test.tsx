@@ -438,6 +438,8 @@ describe('alerts and session timeline', () => {
     const session: ParkingSessionView = {
       sessionNumber: 'CPVTS-P-7K4M92QX',
       status: 'COMPLETED',
+      lifecycle: 'COMPLETED',
+      exitRequestedAt: null,
       vehicleNumber: 'KA22AB1234',
       vehicleType: 'TWO_WHEELER',
       ownerCategory: 'STUDENT',

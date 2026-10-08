@@ -1,20 +1,23 @@
-import type {
-  ApiErrorBody,
-  CheckoutQuote,
-  CreatePaymentResponse,
-  HistoryItem,
-  NotificationsResponse,
-  Page,
-  ParkingUserProfileView,
-  ParkNowConfirmation,
-  ParkNowOffer,
-  PortalLayoutResponse,
-  PortalOverview,
-  ProcessPaymentResponse,
-  ReceiptView,
-  RegisteredVehicle,
-  SessionTimelineResponse,
-  VehiclesResponse,
+import {
+  entryQrPayload,
+  type ActiveSessionsResponse,
+  type ApiErrorBody,
+  type CheckoutQuote,
+  type CreatePaymentResponse,
+  type HistoryItem,
+  type NotificationsResponse,
+  type Page,
+  type ParkingSessionView,
+  type ParkingUserProfileView,
+  type ParkNowConfirmation,
+  type ParkNowOffer,
+  type PortalLayoutResponse,
+  type PortalOverview,
+  type ProcessPaymentResponse,
+  type ReceiptView,
+  type RegisteredVehicle,
+  type SessionTimelineResponse,
+  type VehiclesResponse,
 } from '@cpvts/shared';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -709,41 +712,49 @@ describe('Park Now', () => {
   });
 });
 
-describe('self-service checkout, payment and receipt', () => {
-  it('runs the whole student journey: Park Now → check out → pay → receipt → history', async () => {
+describe('preparing to leave: checkout is completed at the gate', () => {
+  it('runs the whole student journey: Park Now → ready to leave → gate checkout → receipt → history', async () => {
     const { token, user, vehicle } = await createParkingUserWithVehicle(app);
     const portal = client(app, token);
     const { session } = await parkNow(portal, vehicle.id);
+    expect(session).toMatchObject({ status: 'ACTIVE', lifecycle: 'ACTIVE', exitRequestedAt: null });
 
-    // Same hour: nothing to pay, so the only method is NO_CHARGE.
+    // A preview: the exit hour is the server's current hour (the user cannot pick it), the
+    // fee comes from the fee engine, and nothing is recorded or reserved.
     const quote = (
       await portal.post('/portal/checkout/quote', {
         sessionNumber: session.sessionNumber,
         exitHour: 23,
       })
     ).body as CheckoutQuote;
-    expect(quote.exitHour).toBe(campusHour()); // the user cannot pick the exit hour
+    expect(quote.exitHour).toBe(campusHour());
     expect(quote.fee.totalPaise).toBe(0);
+    expect(await prisma.payment.count()).toBe(0);
+    expect(await prisma.auditLog.count({ where: { action: 'CHECKOUT_INITIATED' } })).toBe(0);
 
-    const wrongMethod = await portal.post('/portal/checkout/payments', {
-      sessionNumber: session.sessionNumber,
-      method: 'UPI',
-    });
-    expect(errorCode(wrongMethod)).toBe('INVALID_PAYMENT_METHOD');
+    // "Ready to leave" tells the gate; the vehicle is still parked and the slot occupied.
+    const ready = await portal.post(`/portal/sessions/${session.sessionNumber}/exit-request`);
+    expect(ready.status).toBe(200);
+    expect(ready.body).toMatchObject({ sessionNumber: session.sessionNumber });
+    expect((ready.body as { exitRequestedAt: string | null }).exitRequestedAt).not.toBeNull();
+    const view = (await portal.get(`/portal/sessions/${session.sessionNumber}`))
+      .body as ParkingSessionView;
+    expect(view).toMatchObject({ status: 'ACTIVE', lifecycle: 'EXIT_REQUESTED' });
+    expect(await slotStatus(session.slotCode)).toBe('OCCUPIED');
 
-    const created = await portal.post('/portal/checkout/payments', {
-      sessionNumber: session.sessionNumber,
-      method: 'NO_CHARGE',
+    // Security sees who is waiting, scans the session QR and completes the checkout.
+    const board = await guard.active({ exitRequested: true });
+    expect((board.body as ActiveSessionsResponse).sessions.map((s) => s.sessionNumber)).toEqual([
+      session.sessionNumber,
+    ]);
+    const scanned = await guard.scan(entryQrPayload(session.entryReference!));
+    expect(scanned.status).toBe(200);
+    expect(scanned.body).toMatchObject({
+      matchedBy: 'ENTRY_QR',
+      exitRequested: true,
+      session: { sessionNumber: session.sessionNumber },
     });
-    expect(created.status).toBe(201);
-    const { payment } = created.body as CreatePaymentResponse;
-    expect(payment).toMatchObject({ status: 'PENDING', amountPaise: 0, isSimulated: true });
-
-    const processed = await portal.post(`/portal/checkout/payments/${payment.id}/process`, {
-      sessionNumber: session.sessionNumber,
-    });
-    expect(processed.status).toBe(200);
-    const { receipt } = processed.body as ProcessPaymentResponse;
+    const { receipt } = await guard.checkOutOk(session.sessionNumber, session.entryHour);
     expect(receipt).toMatchObject({
       sessionNumber: session.sessionNumber,
       vehicleNumber: 'KA22AB1234',
@@ -752,16 +763,17 @@ describe('self-service checkout, payment and receipt', () => {
       payment: { status: 'PAID', method: 'NO_CHARGE' },
     });
 
-    // Finalized: session completed, slot released, how it happened recorded.
+    // Finalized by the gate: session completed, slot released, who did it recorded.
     expect(await slotStatus(session.slotCode)).toBe('AVAILABLE');
     const stored = await prisma.parkingSession.findUniqueOrThrow({
       where: { sessionNumber: session.sessionNumber },
     });
     expect(stored).toMatchObject({
       status: 'COMPLETED',
-      checkedOutById: user.id,
-      checkedOutVia: 'SELF_SERVICE',
+      checkedOutVia: 'SECURITY',
+      ownerUserId: user.id,
     });
+    expect(stored.checkedOutById).not.toBe(user.id);
 
     // Receipts and history.
     const receipts = (await portal.get('/portal/receipts')).body as Page<HistoryItem>;
@@ -794,9 +806,70 @@ describe('self-service checkout, payment and receipt', () => {
     expect((await parkNow(portal, vehicle.id)).session.slotCode).toBe('T-02');
   });
 
-  it('charges the official student rate from the backend fee engine (2W 09→15 = ₹40)', async () => {
+  it('can take "ready to leave" back, and it never releases the slot', async () => {
+    const { token, vehicle } = await createParkingUserWithVehicle(app);
+    const portal = client(app, token);
+    const { session } = await parkNow(portal, vehicle.id);
+    const path = `/portal/sessions/${session.sessionNumber}/exit-request`;
+
+    const first = (await portal.post(path)).body as { exitRequestedAt: string };
+    const again = (await portal.post(path)).body as { exitRequestedAt: string };
+    expect(again.exitRequestedAt).toBe(first.exitRequestedAt); // asking twice changes nothing
+    expect(await slotStatus(session.slotCode)).toBe('OCCUPIED');
+
+    const cleared = await portal.delete(path);
+    expect(cleared.status).toBe(200);
+    expect((cleared.body as { exitRequestedAt: string | null }).exitRequestedAt).toBeNull();
+    expect(
+      ((await portal.get(`/portal/sessions/${session.sessionNumber}`)).body as ParkingSessionView)
+        .lifecycle,
+    ).toBe('ACTIVE');
+    const actions = await prisma.auditLog.findMany({
+      where: { entityId: session.sessionNumber, action: { startsWith: 'EXIT_REQUEST' } },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(actions.map((a) => a.action)).toEqual(['EXIT_REQUESTED', 'EXIT_REQUEST_CANCELLED']);
+  });
+
+  it('cannot finalize remotely: there is no self-service payment, and the gate routes are closed to users', async () => {
+    const { token, vehicle } = await createParkingUserWithVehicle(app);
+    const portal = client(app, token);
+    const { session } = await parkNow(portal, vehicle.id);
+    const body = { sessionNumber: session.sessionNumber, method: 'NO_CHARGE' };
+
+    for (const [method, path] of [
+      ['post', '/portal/checkout/payments'],
+      ['post', '/portal/checkout/payments/00000000-0000-4000-8000-000000000000/process'],
+      ['post', '/portal/checkout/payments/00000000-0000-4000-8000-000000000000/cancel'],
+    ] as const) {
+      const res = await portal[method](path, body);
+      expect(res.status, path).toBe(403);
+      expect(errorCode(res), path).toBe('GATE_CHECKOUT_REQUIRED');
+    }
+    // The operational routes refuse a Student / Campus Staff token outright.
+    for (const path of [
+      '/parking/checkouts/quote',
+      '/parking/checkouts/scan',
+      '/parking/payments',
+    ]) {
+      expect((await portal.post(path, body)).status, path).toBe(403);
+    }
+
+    // Nothing changed: still parked, nothing paid.
+    expect(await slotStatus(session.slotCode)).toBe('OCCUPIED');
+    expect(await prisma.payment.count()).toBe(0);
+    expect(
+      (
+        await prisma.parkingSession.findUniqueOrThrow({
+          where: { sessionNumber: session.sessionNumber },
+        })
+      ).status,
+    ).toBe('ACTIVE');
+  });
+
+  it('previews the official student rate (2W 09→15 = ₹40) and the gate charges exactly that', async () => {
     const { token, user, vehicle } = await createParkingUserWithVehicle(app);
-    // The desk checks the student's scooter in at 09:00; the owner checks out at 15:00.
+    // The desk checks the student's scooter in at 09:00; the owner previews at 15:00.
     const entry = await guard.checkInOk(vehicle.vehicleNumber, 'TWO_WHEELER', 'VISITOR', 9);
     expect(entry.session.ownerCategory).toBe('STUDENT'); // the account decides, not the desk
 
@@ -811,32 +884,17 @@ describe('self-service checkout, payment and receipt', () => {
       { kind: 'FREE', hours: 2 },
       { kind: 'CHARGED', hours: 4, ratePaise: 1000, amountPaise: 4000 },
     ]);
+    vi.useRealTimers();
 
-    // A declined payment leaves the session active and can be retried.
-    const first = (
-      await portal.post('/portal/checkout/payments', {
-        sessionNumber: entry.session.sessionNumber,
-        method: 'UPI',
-      })
-    ).body as CreatePaymentResponse;
-    const declined = await portal.post(`/portal/checkout/payments/${first.payment.id}/process`, {
-      sessionNumber: entry.session.sessionNumber,
-      outcome: 'FAILURE',
-    });
+    // The gate completes it: a declined payment leaves the session active, a retry succeeds.
+    const sessionNumber = entry.session.sessionNumber;
+    const first = (await guard.createPayment({ sessionNumber, exitHour: 15, method: 'UPI' }))
+      .body as CreatePaymentResponse;
+    const declined = await guard.process(first.payment.id, { sessionNumber, outcome: 'FAILURE' });
     expect((declined.body as ProcessPaymentResponse).payment.status).toBe('FAILED');
-    expect((declined.body as ProcessPaymentResponse).receipt).toBeNull();
     expect(await slotStatus(entry.session.slotCode)).toBe('OCCUPIED');
 
-    const second = (
-      await portal.post('/portal/checkout/payments', {
-        sessionNumber: entry.session.sessionNumber,
-        method: 'CARD',
-      })
-    ).body as CreatePaymentResponse;
-    const paid = await portal.post(`/portal/checkout/payments/${second.payment.id}/process`, {
-      sessionNumber: entry.session.sessionNumber,
-    });
-    const { receipt, payment } = paid.body as ProcessPaymentResponse;
+    const { receipt, payment } = await guard.checkOutOk(sessionNumber, 15, 'CARD');
     expect(payment).toMatchObject({ status: 'PAID', amountPaise: 4000, method: 'CARD' });
     expect(receipt).toMatchObject({
       totalPaise: 4000,
@@ -845,14 +903,15 @@ describe('self-service checkout, payment and receipt', () => {
       entryHour: 9,
     });
     expect(receipt?.payment.transactionId).toMatch(/^TXN-/);
-
-    const record = await prisma.parkingSession.findUniqueOrThrow({
-      where: { sessionNumber: entry.session.sessionNumber },
+    expect(
+      await prisma.parkingSession.findUniqueOrThrow({ where: { sessionNumber } }),
+    ).toMatchObject({
+      feeAmountPaise: 4000,
+      checkedOutVia: 'SECURITY',
     });
-    expect(record).toMatchObject({ feeAmountPaise: 4000, checkedOutVia: 'SELF_SERVICE' });
   });
 
-  it('charges Campus Staff nothing', async () => {
+  it('shows Campus Staff a nothing-to-pay preview', async () => {
     const { user, vehicle } = await createParkingUserWithVehicle(app, {
       category: 'STAFF',
       vehicleNumber: 'KA01EF0001',
@@ -866,93 +925,38 @@ describe('self-service checkout, payment and receipt', () => {
       await portal.post('/portal/checkout/quote', { sessionNumber: entry.session.sessionNumber })
     ).body as CheckoutQuote;
     expect(quote.fee).toMatchObject({ totalPaise: 0, durationHours: 9 });
-    const { payment } = (
-      await portal.post('/portal/checkout/payments', {
-        sessionNumber: entry.session.sessionNumber,
-        method: 'NO_CHARGE',
-      })
-    ).body as CreatePaymentResponse;
-    const done = await portal.post(`/portal/checkout/payments/${payment.id}/process`, {
-      sessionNumber: entry.session.sessionNumber,
-    });
-    expect((done.body as ProcessPaymentResponse).receipt?.totalPaise).toBe(0);
   });
 
-  it('cancels a pending payment', async () => {
-    const { user, vehicle } = await createParkingUserWithVehicle(app);
-    const entry = await guard.checkInOk(vehicle.vehicleNumber, 'TWO_WHEELER', 'STUDENT', 9);
-    const portal = clockAtHour(14, user);
-    const { payment } = (
-      await portal.post('/portal/checkout/payments', {
-        sessionNumber: entry.session.sessionNumber,
-        method: 'UPI',
-      })
-    ).body as CreatePaymentResponse;
-    const cancelled = await portal.post(`/portal/checkout/payments/${payment.id}/cancel`, {
-      sessionNumber: entry.session.sessionNumber,
-    });
-    expect((cancelled.body as { payment: { status: string } }).payment.status).toBe('CANCELLED');
-  });
-
-  it("cannot check out someone else's session or use their payment", async () => {
+  it("cannot preview or prepare someone else's session", async () => {
     const a = await createParkingUserWithVehicle(app, { institutionalId: '2BT22CS001' });
     const b = await createParkingUserWithVehicle(app, {
       institutionalId: '2BT22CS002',
       vehicleNumber: 'KA01AB0002',
     });
     const entryA = await guard.checkInOk(a.vehicle.vehicleNumber, 'TWO_WHEELER', 'STUDENT', 9);
-    const entryB = await guard.checkInOk(b.vehicle.vehicleNumber, 'TWO_WHEELER', 'STUDENT', 9);
-    const portalA = clockAtHour(15, a.user);
     const portalB = client(
       app,
       tokenService.issueAccessToken(b.user.id, b.user.tokenVersion).token,
     );
-
-    const { payment } = (
-      await portalA.post('/portal/checkout/payments', {
-        sessionNumber: entryA.session.sessionNumber,
-        method: 'UPI',
-      })
-    ).body as CreatePaymentResponse;
+    const sessionA = entryA.session.sessionNumber;
 
     // B asking about A's session looks exactly like asking about a session that does not exist.
-    const sessionA = entryA.session.sessionNumber;
     expect(
       errorCode(await portalB.post('/portal/checkout/quote', { sessionNumber: sessionA })),
     ).toBe('SESSION_NOT_FOUND');
+    expect(errorCode(await portalB.post(`/portal/sessions/${sessionA}/exit-request`))).toBe(
+      'SESSION_NOT_FOUND',
+    );
+    expect(errorCode(await portalB.delete(`/portal/sessions/${sessionA}/exit-request`))).toBe(
+      'SESSION_NOT_FOUND',
+    );
     expect(
-      errorCode(
-        await portalB.post('/portal/checkout/payments', { sessionNumber: sessionA, method: 'UPI' }),
-      ),
-    ).toBe('SESSION_NOT_FOUND');
-    expect(
-      errorCode(
-        await portalB.post(`/portal/checkout/payments/${payment.id}/process`, {
-          sessionNumber: sessionA,
-        }),
-      ),
-    ).toBe('SESSION_NOT_FOUND');
-    // B using their own session number with A's payment id is also "not found".
-    expect(
-      errorCode(
-        await portalB.post(`/portal/checkout/payments/${payment.id}/process`, {
-          sessionNumber: entryB.session.sessionNumber,
-        }),
-      ),
-    ).toBe('PAYMENT_NOT_FOUND');
-    expect(
-      errorCode(
-        await portalB.post(`/portal/checkout/payments/${payment.id}/cancel`, {
-          sessionNumber: entryB.session.sessionNumber,
-        }),
-      ),
-    ).toBe('PAYMENT_NOT_FOUND');
-    expect(await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).toMatchObject({
-      status: 'PENDING',
-    });
+      (await prisma.parkingSession.findUniqueOrThrow({ where: { sessionNumber: sessionA } }))
+        .exitRequestedAt,
+    ).toBeNull();
   });
 
-  it('cannot check out after midnight with the whole-hour model', async () => {
+  it('cannot preview after midnight with the whole-hour model', async () => {
     const { user, vehicle } = await createParkingUserWithVehicle(app);
     const entry = await guard.checkInOk(vehicle.vehicleNumber, 'TWO_WHEELER', 'STUDENT', 22);
     const portal = clockAtHour(5, user);
@@ -990,19 +994,7 @@ describe('history and receipts', () => {
   const finishedStudent = async () => {
     const account = await createParkingUserWithVehicle(app, { institutionalId: '2BT22CS001' });
     const entry = await guard.checkInOk(account.vehicle.vehicleNumber, 'TWO_WHEELER', 'STUDENT', 9);
-    const portal = clockAtHour(13, account.user);
-    const { payment } = (
-      await portal.post('/portal/checkout/payments', {
-        sessionNumber: entry.session.sessionNumber,
-        method: 'UPI',
-      })
-    ).body as CreatePaymentResponse;
-    const done = (
-      await portal.post(`/portal/checkout/payments/${payment.id}/process`, {
-        sessionNumber: entry.session.sessionNumber,
-      })
-    ).body as ProcessPaymentResponse;
-    vi.useRealTimers();
+    const done = await guard.checkOutOk(entry.session.sessionNumber, 13, 'UPI');
     return { ...account, entry, receipt: done.receipt!, portal: client(app, account.token) };
   };
 

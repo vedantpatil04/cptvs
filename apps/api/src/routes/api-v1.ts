@@ -3,9 +3,11 @@ import { Router } from 'express';
 import { authRouter } from '../modules/auth/auth.routes.js';
 import { dashboardRouter } from '../modules/dashboard/dashboard.routes.js';
 import { adminRouter } from '../modules/management/admin.routes.js';
+import { notificationRouter } from '../modules/notifications/notification.routes.js';
 import { parkingRouter } from '../modules/parking/parking.routes.js';
 import { portalRouter } from '../modules/portal/portal.routes.js';
 import { publicRouter } from '../modules/public/public.routes.js';
+import { securityRouter } from '../modules/shifts/shifts.routes.js';
 import { systemRouter } from '../modules/system/system.routes.js';
 import { visitorRouter } from '../modules/visitor/visitor.routes.js';
 
@@ -23,3 +25,5 @@ apiV1Router.use('/dashboard', dashboardRouter);
 apiV1Router.use('/admin', adminRouter);
 apiV1Router.use('/portal', portalRouter);
 apiV1Router.use('/visitor', visitorRouter);
+apiV1Router.use('/security', securityRouter);
+apiV1Router.use('/notifications', notificationRouter);

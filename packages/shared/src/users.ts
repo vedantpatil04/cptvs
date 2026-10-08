@@ -1,7 +1,14 @@
 import { z } from 'zod';
 
+import {
+  academicProfileUpdateSchema,
+  ACADEMIC_PROGRAMS,
+  parseBatchLabel,
+  type AcademicProfileView,
+} from './academic.js';
 import { paginationSchema } from './management.js';
-import type { ParkingSessionView } from './operations.js';
+import { normalizeVehicleNumber, type ParkingSessionView } from './operations.js';
+import { VEHICLE_TYPES, type VehicleType } from './parking.js';
 import {
   emailSchema,
   fullNameSchema,
@@ -22,12 +29,38 @@ export type UserListKind = (typeof USER_LIST_KINDS)[number];
 const optional = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === '' || value === null ? undefined : value), schema.optional());
 
+/** Whether a user's vehicle is parked right now. */
+export const PARKING_STATUSES = ['PARKED', 'NOT_PARKED'] as const;
+export type ParkingStatus = (typeof PARKING_STATUSES)[number];
+
 export const userListQuerySchema = paginationSchema.extend({
   kind: optional(z.enum(USER_LIST_KINDS)).transform((value) => value ?? 'ALL'),
-  /** Name, username, email or institutional ID (partial, case-insensitive). */
+  /** Name, username, email or institutional ID (USN / staff ID), partial and case-insensitive. */
   q: optional(z.string().trim().max(64)),
   verification: optional(z.enum(VERIFICATION_STATUSES)),
   status: optional(z.enum(['ACTIVE', 'INACTIVE'])),
+  /** Parked right now / not parked. */
+  parking: optional(z.enum(PARKING_STATUSES)),
+  // Student filters
+  program: optional(z.enum(ACADEMIC_PROGRAMS)),
+  department: optional(z.string().trim().max(80)),
+  /** "2024–2027" (a hyphen works too): the admission year and program duration it implies. */
+  batch: optional(
+    z
+      .string()
+      .trim()
+      .max(20)
+      .refine((value) => parseBatchLabel(value) !== null, {
+        error: VALIDATION_MESSAGES.invalidBatch,
+      }),
+  ),
+  semester: optional(
+    z.coerce
+      .number({ error: VALIDATION_MESSAGES.semesterOutOfRange })
+      .int({ error: VALIDATION_MESSAGES.semesterOutOfRange })
+      .min(1, { error: VALIDATION_MESSAGES.semesterOutOfRange })
+      .max(6, { error: VALIDATION_MESSAGES.semesterOutOfRange }),
+  ),
 });
 export type UserListQuery = z.input<typeof userListQuerySchema>;
 
@@ -37,6 +70,8 @@ export interface ManagedParkingProfile {
   email: string;
   phone: string;
   verificationStatus: VerificationStatus;
+  /** Students only; null for Campus Staff and for students registered before it was collected. */
+  academic: AcademicProfileView | null;
 }
 
 export interface CurrentParking {
@@ -92,15 +127,58 @@ export interface UserDetail extends UserListItem {
   activeSessions: ParkingSessionView[];
 }
 
-/** Fields an administrator may correct. Role, category and credentials are not editable here. */
+/**
+ * Fields an administrator may correct. Role, category and credentials are not editable here.
+ * `academic` is the legitimate-change path for a student's program, department, admission
+ * year and semester (students cannot change them themselves); a student who has no academic
+ * details yet needs all four.
+ */
 export const adminUserUpdateSchema = z
   .object({
     fullName: fullNameSchema.optional(),
     email: emailSchema.optional(),
     phone: phoneSchema.optional(),
+    academic: academicProfileUpdateSchema.optional(),
   })
   .strict();
 export type AdminUserUpdate = z.input<typeof adminUserUpdateSchema>;
+
+// ---------------------------------------------------------------------------
+// Vehicle ownership lookup (Admin)
+// ---------------------------------------------------------------------------
+
+export const adminVehicleQuerySchema = paginationSchema.extend({
+  /** Partial plate; spaces, dots and hyphens are ignored. */
+  q: optional(z.string().trim().max(20).transform(normalizeVehicleNumber)),
+  owned: optional(z.enum(['OWNED', 'UNOWNED'])),
+  vehicleType: optional(z.enum(VEHICLE_TYPES)),
+});
+export type AdminVehicleQuery = z.input<typeof adminVehicleQuerySchema>;
+
+export interface AdminVehicleItem {
+  id: string;
+  vehicleNumber: string;
+  vehicleType: VehicleType;
+  label: string | null;
+  /** The one account that actively owns this plate; null for plates only the desk has seen. */
+  owner: {
+    userId: string;
+    fullName: string;
+    category: ParkingUserCategory;
+    institutionalId: string;
+    verificationStatus: VerificationStatus;
+    isActive: boolean;
+    since: string;
+  } | null;
+  sessionCount: number;
+  activeSession: {
+    sessionNumber: string;
+    blockName: string;
+    slotCode: string;
+    entryAt: string;
+  } | null;
+  firstSeenAt: string;
+}
 
 export const userStatusRequestSchema = z.object({
   isActive: z.boolean({ error: VALIDATION_MESSAGES.selectOption }),

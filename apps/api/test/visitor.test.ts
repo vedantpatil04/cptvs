@@ -1,12 +1,12 @@
-import type {
-  ApiErrorBody,
-  CheckoutQuote,
-  CreatePaymentResponse,
-  ParkingSessionView,
-  PortalLayoutResponse,
-  ProcessPaymentResponse,
-  SessionTimelineResponse,
-  VisitorAccessResponse,
+import {
+  entryQrPayload,
+  type ActiveSessionsResponse,
+  type ApiErrorBody,
+  type CheckoutQuote,
+  type ParkingSessionView,
+  type PortalLayoutResponse,
+  type SessionTimelineResponse,
+  type VisitorAccessResponse,
 } from '@cpvts/shared';
 import type { Express } from 'express';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -198,7 +198,7 @@ describe('visitor parking', () => {
     expect(JSON.stringify(layout)).not.toContain('MH12CD5678');
   });
 
-  it('checks out and pays: the visitor rate 4W 09→13 = ₹160, then shows the receipt', async () => {
+  it('previews the amount due (visitor rate 4W 09→13 = ₹160) but cannot pay or complete the session', async () => {
     const entry = await enterVisitor();
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(nextInstantAtCampusHour(13));
@@ -213,20 +213,60 @@ describe('visitor parking', () => {
     const quote = (await visitor.post('/visitor/checkout/quote')).body as CheckoutQuote;
     expect(quote).toMatchObject({ exitHour: 13, durationHours: 4 });
     expect(quote.fee.totalPaise).toBe(16000);
+    // A preview leaves no trace: it is not the start of a checkout.
+    expect(await prisma.auditLog.count({ where: { action: 'CHECKOUT_INITIATED' } })).toBe(0);
 
-    // The amount is due, so "no charge" is refused.
+    // There is no visitor payment or finalization: the exit gate completes the session.
+    const payment = '00000000-0000-4000-8000-000000000000';
+    for (const [method, path] of [
+      ['post', '/visitor/checkout/payments'],
+      ['post', `/visitor/checkout/payments/${payment}/process`],
+      ['post', `/visitor/checkout/payments/${payment}/cancel`],
+    ] as const) {
+      const res = await visitor[method](path, { method: 'UPI' });
+      expect(res.status, path).toBe(403);
+      expect(errorCode(res), path).toBe('GATE_CHECKOUT_REQUIRED');
+    }
+    expect(await slotStatus(entry.session.slotCode)).toBe('OCCUPIED');
+    expect(await prisma.payment.count()).toBe(0);
     expect(
-      errorCode(await visitor.post('/visitor/checkout/payments', { method: 'NO_CHARGE' })),
-    ).toBe('INVALID_PAYMENT_METHOD');
+      (
+        await prisma.parkingSession.findUniqueOrThrow({
+          where: { sessionNumber: entry.session.sessionNumber },
+        })
+      ).status,
+    ).toBe('ACTIVE');
+  });
 
-    const created = await visitor.post('/visitor/checkout/payments', { method: 'UPI' });
-    expect(created.status).toBe(201);
-    const { payment } = created.body as CreatePaymentResponse;
-    expect(payment).toMatchObject({ amountPaise: 16000, status: 'PENDING', isSimulated: true });
+  it('says "ready to leave" without releasing the slot, and can take it back', async () => {
+    const { visitor, entry } = await visitorSession();
 
-    const processed = await visitor.post(`/visitor/checkout/payments/${payment.id}/process`, {});
-    expect(processed.status).toBe(200);
-    const { receipt } = processed.body as ProcessPaymentResponse;
+    const ready = await visitor.post('/visitor/exit-request');
+    expect(ready.status).toBe(200);
+    expect((ready.body as { exitRequestedAt: string | null }).exitRequestedAt).not.toBeNull();
+    expect(((await visitor.get('/visitor/session')).body as ParkingSessionView).lifecycle).toBe(
+      'EXIT_REQUESTED',
+    );
+    expect(await slotStatus(entry.session.slotCode)).toBe('OCCUPIED');
+
+    const waiting = (await guard.active({ exitRequested: true })).body as ActiveSessionsResponse;
+    expect(waiting.sessions.map((s) => s.sessionNumber)).toEqual([entry.session.sessionNumber]);
+
+    const cleared = await visitor.delete('/visitor/exit-request');
+    expect((cleared.body as { exitRequestedAt: string | null }).exitRequestedAt).toBeNull();
+    expect(((await visitor.get('/visitor/session')).body as ParkingSessionView).lifecycle).toBe(
+      'ACTIVE',
+    );
+  });
+
+  it('is completed at the gate by Security Staff, after which the visitor opens the receipt', async () => {
+    const { visitor, entry } = await visitorSession();
+    await visitor.post('/visitor/exit-request');
+
+    // The guard scans the session QR on the slip and completes the checkout: 4 h × ₹40 = ₹160.
+    const scanned = await guard.scan(entryQrPayload(entry.session.entryReference!));
+    expect(scanned.body).toMatchObject({ exitRequested: true });
+    const { receipt } = await guard.checkOutOk(entry.session.sessionNumber, 13, 'UPI');
     expect(receipt).toMatchObject({
       sessionNumber: entry.session.sessionNumber,
       vehicleNumber: 'MH12CD5678',
@@ -245,83 +285,48 @@ describe('visitor parking', () => {
     });
     expect(stored).toMatchObject({
       status: 'COMPLETED',
-      checkedOutById: null,
-      checkedOutVia: 'VISITOR',
+      checkedOutVia: 'SECURITY',
       feeAmountPaise: 16000,
     });
+    expect(stored.checkedOutById).not.toBeNull(); // the Security Staff member who took the payment
 
-    // The audit trail records the visitor channel instead of an account.
+    // The audit trail records the guard, and the visitor's own timeline names nobody.
     const finalized = await prisma.auditLog.findFirstOrThrow({
       where: { action: 'TRANSACTION_FINALIZED' },
     });
-    expect(finalized).toMatchObject({ actorId: null });
-    expect(finalized.metadata).toMatchObject({ via: 'VISITOR' });
-
+    expect(finalized.actorId).toBe(stored.checkedOutById);
     const timeline = (await visitor.get('/visitor/timeline')).body as SessionTimelineResponse;
-    expect(timeline.events.map((e) => e.channel)).toContain('VISITOR');
+    expect(timeline.events.map((e) => e.action)).toEqual(
+      expect.arrayContaining(['EXIT_REQUESTED', 'TRANSACTION_FINALIZED']),
+    );
     expect(timeline.events.every((e) => e.actor === null)).toBe(true);
 
-    // The slip still works for the receipt after checkout.
+    // The visitor can no longer prepare to leave, but the slip still opens the receipt.
+    expect(errorCode(await visitor.post('/visitor/exit-request'))).toBe('SESSION_NOT_ACTIVE');
     const again = await access('MH12CD5678', entry.session.sessionNumber);
     expect((again.body as VisitorAccessResponse).session).toMatchObject({
       status: 'COMPLETED',
+      lifecycle: 'COMPLETED',
       receiptNumber: receipt!.receiptNumber,
     });
   });
 
-  it('keeps the slot occupied after a declined payment and allows a retry', async () => {
-    const entry = await enterVisitor('MH12ZZ0001', 'TWO_WHEELER');
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(nextInstantAtCampusHour(11));
-    const visitor = client(
-      app,
-      ((await access('MH12ZZ0001', entry.session.sessionNumber)).body as VisitorAccessResponse)
-        .accessToken,
-    );
+  it("cannot prepare or preview another visitor's session", async () => {
+    const first = await visitorSession('MH12CD5678');
+    const second = await visitorSession('MH12ZZ0001', 'TWO_WHEELER');
 
-    const first = (await visitor.post('/visitor/checkout/payments', { method: 'CARD' }))
-      .body as CreatePaymentResponse;
-    const declined = await visitor.post(`/visitor/checkout/payments/${first.payment.id}/process`, {
-      outcome: 'FAILURE',
-    });
-    expect((declined.body as ProcessPaymentResponse).payment.status).toBe('FAILED');
-    expect(await slotStatus(entry.session.slotCode)).toBe('OCCUPIED');
-
-    const second = (await visitor.post('/visitor/checkout/payments', { method: 'CARD' }))
-      .body as CreatePaymentResponse;
-    const cancelled = await visitor.post(`/visitor/checkout/payments/${second.payment.id}/cancel`);
-    expect((cancelled.body as { payment: { status: string } }).payment.status).toBe('CANCELLED');
-
-    const third = (await visitor.post('/visitor/checkout/payments', { method: 'UPI' }))
-      .body as CreatePaymentResponse;
-    const paid = await visitor.post(`/visitor/checkout/payments/${third.payment.id}/process`, {});
-    expect((paid.body as ProcessPaymentResponse).receipt?.totalPaise).toBe(4000); // 2 h × ₹20
-  });
-
-  it("cannot touch another visitor's payment", async () => {
-    const first = await enterVisitor('MH12CD5678');
-    const second = await enterVisitor('MH12ZZ0001', 'TWO_WHEELER');
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(nextInstantAtCampusHour(12));
-    const tokenOf = async (vehicle: string, sessionNumber: string) =>
-      client(
-        app,
-        ((await access(vehicle, sessionNumber)).body as VisitorAccessResponse).accessToken,
-      );
-    const a = await tokenOf('MH12CD5678', first.session.sessionNumber);
-    const b = await tokenOf('MH12ZZ0001', second.session.sessionNumber);
-
-    const { payment } = (await a.post('/visitor/checkout/payments', { method: 'UPI' }))
-      .body as CreatePaymentResponse;
-    expect(errorCode(await b.post(`/visitor/checkout/payments/${payment.id}/process`, {}))).toBe(
-      'PAYMENT_NOT_FOUND',
-    );
-    expect(errorCode(await b.post(`/visitor/checkout/payments/${payment.id}/cancel`))).toBe(
-      'PAYMENT_NOT_FOUND',
-    );
-    expect((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe(
-      'PENDING',
-    );
+    await first.visitor.post('/visitor/exit-request');
+    // Each token reaches its own session only: the other's flag is untouched.
+    expect(
+      ((await second.visitor.get('/visitor/session')).body as ParkingSessionView).lifecycle,
+    ).toBe('ACTIVE');
+    expect(
+      (
+        await prisma.parkingSession.findUniqueOrThrow({
+          where: { sessionNumber: second.entry.session.sessionNumber },
+        })
+      ).exitRequestedAt,
+    ).toBeNull();
   });
 
   it('closes access once a completed session is older than the access window', async () => {

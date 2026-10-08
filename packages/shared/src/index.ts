@@ -1,3 +1,4 @@
+export * from './academic.js';
 export * from './api.js';
 export * from './audit.js';
 export * from './auth.js';
@@ -7,5 +8,6 @@ export * from './operations.js';
 export * from './parking.js';
 export * from './portal.js';
 export * from './roles.js';
+export * from './shifts.js';
 export * from './users.js';
 export * from './validation.js';

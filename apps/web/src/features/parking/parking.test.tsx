@@ -16,6 +16,8 @@ import { jsonResponse, mockApi, renderAt, signInAs } from '@/test/utils';
 const session: ParkingSessionView = {
   sessionNumber: 'CPVTS-P-7K4M92QX',
   status: 'ACTIVE',
+  lifecycle: 'ACTIVE',
+  exitRequestedAt: null,
   vehicleNumber: 'KA22AB1234',
   vehicleType: 'TWO_WHEELER',
   ownerCategory: 'STUDENT',
@@ -213,11 +215,13 @@ describe('live parking map', () => {
           name: 'Two-Wheeler Parking Block',
           description: null,
           coordinates: { latitude: 15.85, longitude: 74.5 },
+          isActive: true,
           zones: [
             {
               code: 'ZONE-2W',
               name: 'Two-Wheeler Zone',
               vehicleType: 'TWO_WHEELER',
+              isActive: true,
               counts: { total: 3, available: 1, occupied: 1, blocked: 1, held: 0 },
               slots: [
                 { code: 'T-01', status: 'AVAILABLE', blockedReason: null, occupant: null },

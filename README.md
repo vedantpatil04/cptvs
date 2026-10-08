@@ -16,15 +16,22 @@ Branding and the institution name are configurable per deployment.
 > allocation priority, block coordinates) and audit logs. The Android WebView
 > APK and demo-data tooling (Phase 4) are **not** part of this phase.
 >
-> **Parking Users (backend).** Students and Campus Staff register with an
-> identity document, are verified by an administrator, add their vehicles and
-> use **Park Now** (the server picks and holds the slot with the same
-> deterministic allocation, the user confirms), check out, pay (simulated) and
-> get receipts, history and notifications. Visitors get a token for their one
-> session from the number on their slip. Administrators manage users,
-> verification and the whole slot inventory (create, edit, enable/disable,
-> block, archive, safe delete). See `docs/ARCHITECTURE.md`; the web screens for
-> these flows are a separate step.
+> **Parking Users, Security shifts and the finalized backend.** Students
+> (with Program, Department, Admission Year and Semester) and Campus Staff
+> register with an identity document, are verified by an administrator, add
+> their vehicles and use **Park Now** (the server picks and holds the slot with
+> the same deterministic allocation as the security desk, the user confirms).
+> They can tell the gate they are _ready to exit_, but **checkout is
+> gate-controlled**: only Security Staff or an Administrator scans the session
+> QR, takes the (simulated) payment, finalizes the session and releases the
+> slot. Visitors get a short-lived token for their one session from the number
+> on their slip. Security Staff work in **shifts**: every payment is tied to the
+> guard and the shift that took it, and an Administrator, as cash custodian,
+> receives and reconciles each shift's cash. Administrators manage users,
+> verification, vehicles, shifts, cash and the whole slot inventory. A user's
+> verification status has one source of truth — the database row, read on every
+> request — so Admin and the user always see the same state. See
+> `docs/ARCHITECTURE.md`; the web screens for these flows are a separate step.
 
 The app opens on a **public parking overview** at `/` — free two-wheeler and
 four-wheeler space counts, parking blocks (with Google Maps links once real
@@ -73,6 +80,43 @@ sessions, revenue, audit logs or users. Admin and Security Staff sign in at
 | **Integrity** (Admin)                      | Read-only Parking Integrity Engine report: occupied slots ↔ active sessions, one active session per vehicle, no expired holds, completed sessions and paid payments have receipts, receipts match transactions, no stuck payments; plus recently rejected operations.           |
 | **Audit logs** (Admin)                     | Filter by action, record type, record ID, username and date range; each entry shows actor, record and details.                                                                                                                                                                  |
 
+### Parking users, gate checkout and shifts (API)
+
+These flows are implemented and tested in the API (`/auth`, `/portal`, `/visitor`,
+`/parking`, `/security`, `/admin`, `/notifications`); the web screens for them are a
+separate step. Endpoint tables are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#endpoints-by-area).
+
+| Flow                           | Who                                | What the backend does                                                                                                                                                                                                                                                               |
+| ------------------------------ | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Register and get verified**  | Student, Campus Staff → Admin      | Registration creates a `PENDING` account with an identity document (Students also give Program, Department, Admission Year and Semester; the batch, e.g. 2024–2027, is derived). Admin approves, or rejects with a reason; the user is notified and may resubmit after a rejection. |
+| **Account state**              | Student, Campus Staff              | `GET /portal/account` and `GET /auth/me` return the verification status and `parkNow` eligibility read from the database on that request, never from the sign-in token, so an Admin decision shows on the next call.                                                                |
+| **Vehicles**                   | Student, Campus Staff, Admin       | Up to 5 per user, one primary, one active owner per normalized plate. Add, edit the label (number and type until the vehicle has history), set primary, remove. Admin looks up who owns a plate and can release it.                                                                 |
+| **Park Now**                   | Verified Student, Campus Staff     | The server ranks the free slots with the desk's allocation, **holds** one (`AVAILABLE → HELD`), and the user confirms (`HELD → OCCUPIED`). It starts the same parking session as a desk entry; it is not an advance reservation.                                                    |
+| **Ready to exit**              | Student, Campus Staff, Visitor     | Flags the active session (`EXIT_REQUESTED`) so the gate sees it. Nothing else changes: the slot stays occupied and no payment is made. It can be withdrawn. A fee estimate is available without creating a payment.                                                                 |
+| **Gate checkout**              | Security Staff (on shift), Admin   | `POST /parking/checkouts/scan` takes the scanned **session QR**, finds the active session and checks vehicle, slot and session agree. The QR alone completes nothing: the guard then quotes, takes the simulated payment and finalizes. Receipt QRs are never accepted.             |
+| **Visitor**                    | Visitor                            | Vehicle number + session number from the slip give a token that is valid for that one session only (`VISITOR_ACCESS_HOURS`). Visitors view, request exit and open the receipt; they cannot pay or finalize.                                                                         |
+| **Shifts**                     | Admin assigns; Security Staff work | Templates (Morning / Evening / Night are seeded), a daily roster, shift history. A guard checks in and out. With `SHIFT_ENFORCEMENT=required` (default) vehicle entry and checkout payments need an on-duty shift; an Administrator can always act, flagged as an override.         |
+| **Cash handover**              | Admin (cash custodian)             | After check-out the Admin counts the cash handed over; the system compares it with the shift's cash payments. A difference needs a reason and keeps the shift open until an Admin reviews it. Digital payments are reported separately.                                             |
+| **Users, documents, vehicles** | Admin                              | Filter by program, department, batch, semester, verification, account status and parking status; approve or reject; correct academic details; view or download an identity document (each access audited); vehicle ownership lookup.                                                |
+
+Rules the backend enforces, independent of any screen:
+
+- **One verification state.** The `Admin = VERIFIED, Student = NOT VERIFIED` mismatch
+  cannot happen server-side: every authenticated request reloads the account and its
+  profile, and every verified-only check goes through one function
+  (`parkNowEligibilityOf`). Authenticated responses are `Cache-Control: no-store`.
+- **Gate-controlled final checkout.** Students, Staff and Visitors cannot pay for or
+  finalize their own checkout; those routes answer `403 GATE_CHECKOUT_REQUIRED`.
+- **Two different QR codes.** The _session QR_ (created at entry) is the only code the
+  checkout accepts; the _receipt QR_ only verifies a finished receipt. Neither contains
+  personal data.
+- **Accountable payments.** A payment records the guard who finalized it and the shift
+  it belongs to. A shift ending does not break a payment already in flight.
+- **Public data stays aggregate.** Public receipt verification masks the plate
+  (`KA****1234`); the public overview exposes no vehicles, sessions or users.
+- **Safe slot changes.** Deactivating a block or zone stops new allocations and cancels
+  holds, but vehicles already parked there keep their session and can check out.
+
 Official fees (configurable in the `settings` table, seeded by `db:seed`):
 Staff free; Student first 2 hours free then ₹10/h (2W) or ₹20/h (4W); Visitor
 ₹20/h (2W) or ₹40/h (4W). Duration = exit hour − entry hour (whole hours).
@@ -101,10 +145,16 @@ npm workspaces monorepo:
 │   │   │   ├── middleware/       Authentication, role authorisation, validation, errors, request ID/logging, rate limiting
 │   │   │   ├── modules/          Feature modules (routes → controller → service → repository)
 │   │   │   │   ├── auth/         Login, logout, current user, JWT, password hashing
-│   │   │   │   ├── users/        User repository and public mappers
+│   │   │   │   ├── accounts/     Registration, verification state (single source of truth), academic profile
+│   │   │   │   ├── users/        Admin user management, vehicle ownership lookup, identity documents
+│   │   │   │   ├── portal/       Student / Campus Staff: vehicles, Park Now, exit request, history, receipts
+│   │   │   │   ├── visitor/      Visitor access token and the visitor's one session
+│   │   │   │   ├── shifts/       Security shifts, roster, cash handover and reconciliation
+│   │   │   │   ├── notifications/ In-app notifications for every signed-in role
+│   │   │   │   ├── management/   Admin: slot inventory, integrity, history, analytics, reports, audit logs
 │   │   │   │   ├── audit/        Audit-log repository and action names
-│   │   │   │   ├── parking/      Check-in, allocation, slot holds, tracking, map,
-│   │   │   │   │                 checkout, mock payment, finalization, receipts
+│   │   │   │   ├── parking/      Check-in (one session factory), allocation, slot holds, tracking, map,
+│   │   │   │   │                 QR scan, gate checkout, mock payment, finalization, receipts
 │   │   │   │   ├── fees/         The single authoritative fee engine + fee schedule
 │   │   │   │   ├── dashboard/    Live operational summary
 │   │   │   │   ├── public/       Public overview and receipt verification
@@ -199,32 +249,43 @@ invalid configuration and lists the problems.
 
 ### API — `apps/api/.env` (see `apps/api/.env.example`)
 
-| Variable                                                   | Required  | Default                   | Purpose                                                 |
-| ---------------------------------------------------------- | --------- | ------------------------- | ------------------------------------------------------- |
-| `NODE_ENV`                                                 |           | `development`             | `development`, `test` or `production`                   |
-| `APP_ENV`                                                  |           | `NODE_ENV`                | Display name of the environment (e.g. `staging`)        |
-| `PORT` / `HOST`                                            |           | `4000` / `0.0.0.0`        | Listen address                                          |
-| `DATABASE_URL`                                             | ✔         |                           | PostgreSQL connection used by the running API           |
-| `DIRECT_URL`                                               |           | `DATABASE_URL`            | Connection used by Prisma CLI for migrations            |
-| `JWT_SECRET`                                               | ✔         |                           | ≥ 32 random characters; signs access tokens             |
-| `JWT_EXPIRES_IN_SECONDS`                                   |           | `28800`                   | Access-token lifetime (8 h, one shift)                  |
-| `JWT_ISSUER` / `JWT_AUDIENCE`                              |           | `cpvts-api` / `cpvts-web` | Token claims checked on every request                   |
-| `FRONTEND_URL`                                             | prod*     |                           | Web app URL; default CORS origin                        |
-| `CORS_ORIGINS`                                             | prod*     |                           | Comma-separated allowed origins                         |
-| `TRUST_PROXY`                                              |           | `0`                       | Reverse-proxy hops to trust (Render: `1`)               |
-| `LOGIN_RATE_LIMIT_WINDOW_MINUTES` / `LOGIN_RATE_LIMIT_MAX` |           | `15` / `10`               | Failed sign-ins allowed per IP per window               |
-| `CAMPUS_TIMEZONE`                                          |           | `Asia/Kolkata`            | Campus time zone: "today" and the current hour          |
-| `SLOT_HOLD_SECONDS`                                        |           | `15`                      | Lifetime of the temporary slot hold during allocation   |
-| `ALERT_NEARLY_FULL_PERCENT`                                |           | `90`                      | Zone occupancy % that raises a "nearly full" alert      |
-| `ALERT_LONG_DURATION_HOURS`                                |           | `8`                       | Active-session hours that raise a "long duration" alert |
-| `PUBLIC_RATE_LIMIT_PER_MINUTE`                             |           | `120`                     | Requests per minute per IP on public endpoints          |
-| `PARK_NOW_HOLD_SECONDS`                                    |           | `90`                      | How long a Park Now allocation is held for confirmation |
-| `INSTITUTION_EMAIL_DOMAINS`                                |           | _(any)_                   | Restrict Student / Staff registration e-mail domains    |
-| `REGISTRATION_RATE_LIMIT_PER_HOUR`                         |           | `10`                      | Registrations per IP per hour                           |
-| `VISITOR_ACCESS_HOURS`                                     |           | `12`                      | Lifetime of a visitor's access to their one session     |
-| `SEED_ADMIN_*`, `SEED_STAFF_*`                             | seed only |                           | Initial accounts for `db:seed`                          |
+| Variable                                                   | Required  | Default                   | Purpose                                                                                                        |
+| ---------------------------------------------------------- | --------- | ------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                                                 |           | `development`             | `development`, `test` or `production`                                                                          |
+| `APP_ENV`                                                  |           | `NODE_ENV`                | Display name of the environment (e.g. `staging`)                                                               |
+| `PORT` / `HOST`                                            |           | `4000` / `0.0.0.0`        | Listen address                                                                                                 |
+| `DATABASE_URL`                                             | ✔         |                           | PostgreSQL connection used by the running API                                                                  |
+| `DIRECT_URL`                                               |           | `DATABASE_URL`            | Connection used by Prisma CLI for migrations                                                                   |
+| `JWT_SECRET`                                               | ✔         |                           | ≥ 32 random characters; signs access tokens                                                                    |
+| `JWT_EXPIRES_IN_SECONDS`                                   |           | `28800`                   | Access-token lifetime (8 h, one shift)                                                                         |
+| `JWT_ISSUER` / `JWT_AUDIENCE`                              |           | `cpvts-api` / `cpvts-web` | Token claims checked on every request                                                                          |
+| `FRONTEND_URL`                                             | prod*     |                           | Web app URL; default CORS origin                                                                               |
+| `CORS_ORIGINS`                                             | prod*     |                           | Comma-separated allowed origins                                                                                |
+| `TRUST_PROXY`                                              |           | `0`                       | Reverse-proxy hops to trust (Render: `1`)                                                                      |
+| `LOGIN_RATE_LIMIT_WINDOW_MINUTES` / `LOGIN_RATE_LIMIT_MAX` |           | `15` / `10`               | Failed sign-ins allowed per IP per window                                                                      |
+| `CAMPUS_TIMEZONE`                                          |           | `Asia/Kolkata`            | Campus time zone: "today" and the current hour                                                                 |
+| `SLOT_HOLD_SECONDS`                                        |           | `15`                      | Lifetime of the temporary slot hold during allocation                                                          |
+| `ALERT_NEARLY_FULL_PERCENT`                                |           | `90`                      | Zone occupancy % that raises a "nearly full" alert                                                             |
+| `ALERT_LONG_DURATION_HOURS`                                |           | `8`                       | Active-session hours that raise a "long duration" alert                                                        |
+| `PUBLIC_RATE_LIMIT_PER_MINUTE`                             |           | `120`                     | Requests per minute per IP on public endpoints                                                                 |
+| `PARK_NOW_HOLD_SECONDS`                                    |           | `90`                      | How long a Park Now allocation is held for confirmation                                                        |
+| `INSTITUTION_EMAIL_DOMAINS`                                |           | _(any)_                   | Restrict Student / Staff registration e-mail domains                                                           |
+| `REGISTRATION_RATE_LIMIT_PER_HOUR`                         |           | `10`                      | Registrations per IP per hour                                                                                  |
+| `VISITOR_ACCESS_HOURS`                                     |           | `12`                      | Lifetime of a visitor's access to their one session                                                            |
+| `SHIFT_ENFORCEMENT`                                        |           | `required`                | `required`: gate operations need an on-duty shift; `optional`: Security Staff may work without one (see below) |
+| `SHIFT_EARLY_CHECK_IN_MINUTES`                             |           | `60`                      | How long before its start a guard may check in                                                                 |
+| `SHIFT_OVERRUN_MINUTES`                                    |           | `30`                      | Grace after a shift's end to finish an in-flight job                                                           |
+| `SEED_ADMIN_*`, `SEED_STAFF_*`                             | seed only |                           | Initial accounts for `db:seed`                                                                                 |
+| `TEST_DATABASE_URL`                                        | tests     | local `cpvts_test`        | Disposable database for the API tests (never Supabase)                                                         |
 
 \* In production at least one of `CORS_ORIGINS` or `FRONTEND_URL` is required.
+
+`SHIFT_ENFORCEMENT=required` (the default) means a Security Staff member must be
+checked in to a shift that is under way to enter a vehicle or take a payment;
+Administrators always can (an audited override). Use `optional` while the
+roster is not in use yet: guards may then work without a shift, what they do is
+still attributed to their shift when they have one, and cash taken outside any
+shift is reported separately.
 
 ### Web — `apps/web/.env.local` (see `apps/web/.env.example`)
 
@@ -246,6 +307,17 @@ Branding defaults are defined once in `apps/web/src/config/branding-defaults.ts`
 
 CPVTS uses a standard PostgreSQL connection; Supabase is only the host. Any
 PostgreSQL 14+ server works by changing the URLs.
+
+**The shared Supabase database is the normal development database.**
+`apps/api/.env` points `DATABASE_URL` at it, and `npm run dev`, the migrations
+and the seed all run against it. Its data is the project's development data, so:
+
+- Prisma (`schema.prisma` + `migrations/`) is the only way its structure changes.
+  Never create tables, columns or constraints by hand in the Supabase dashboard.
+- Never reset, drop or truncate it. Use `npm run db:migrate:deploy` against it —
+  never `prisma migrate reset` or `prisma db push --force-reset`.
+- The automated tests **truncate every table**, so they never run against it
+  (see [Development commands](#development-commands)).
 
 1. Create a Supabase project (choose a region near users, e.g. **Mumbai / ap-south-1**)
    and note the database password.
@@ -275,6 +347,19 @@ PostgreSQL 14+ server works by changing the URLs.
    npm run db:seed
    ```
 
+5. Check that the app really talks to the database and that nothing drifted
+   (read-only; run in `apps/api`):
+
+   ```bash
+   npx prisma validate
+   npx prisma migrate status
+   npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+   ```
+
+   `migrate status` must say "Database schema is up to date!" and `migrate diff`
+   must report no difference (exit code 0). `GET /health/ready` then confirms the
+   running API can reach the database.
+
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#supabase-postgresql) for details.
 
 ## Prisma setup and migrations
@@ -287,7 +372,13 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#supabase-postgresql) for details.
   `audit_logs` and `settings`, with foreign keys, unique constraints, indexes,
   partial unique indexes (one active session per vehicle and per slot, one paid
   payment per session) and CHECK constraints (hour ranges, non-negative amounts,
-  consistent completed sessions).
+  consistent completed sessions). Later migrations add the parking-user tables
+  (profiles with their academic details, identity documents, notifications, Park
+  Now offers) and, in `20261009100000_backend_finalization`, the security-shift
+  tables (`shift_templates`, `security_shifts`, `cash_handovers`), the session
+  owner snapshot, the exit-request flag and the payment operator/shift columns.
+  That migration backfills existing rows (session owners, payment operators) and
+  adds CHECK constraints for the academic profile, shift windows and cash handovers.
 
 | Task                                                      | Command                                   |
 | --------------------------------------------------------- | ----------------------------------------- |
@@ -317,7 +408,11 @@ Run from the repository root:
 
 API tests run against a real PostgreSQL database. They default to
 `postgresql://cpvts:cpvts@localhost:5432/cpvts_test`; override with
-`TEST_DATABASE_URL`. The test database is migrated and **truncated**.
+`TEST_DATABASE_URL`. The test database is migrated and **truncated**, so it must
+be a disposable local (or CI) database whose name contains `test`. The suite
+refuses to start against anything else — including the shared Supabase
+database — and pins both `DATABASE_URL` and `DIRECT_URL` to the test database,
+so the connection in `apps/api/.env` is never used by a test run.
 
 ## Production build
 

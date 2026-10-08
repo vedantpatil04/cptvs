@@ -11,7 +11,8 @@ const BEARER_PREFIX = /^Bearer\s+(.+)$/i;
  * `authenticate` (and account tokens are rejected here). It never carries a
  * user, role or any account permission.
  */
-export const authenticateVisitor: RequestHandler = (req, _res, next) => {
+export const authenticateVisitor: RequestHandler = (req, res, next) => {
+  res.set({ 'Cache-Control': 'no-store', Vary: 'Authorization' });
   const token = BEARER_PREFIX.exec(req.get('Authorization') ?? '')?.[1]?.trim();
   if (!token) {
     next(unauthenticated());

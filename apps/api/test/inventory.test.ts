@@ -557,14 +557,8 @@ describe('blocks and zones', () => {
     expect((await guard.checkInOk('KA01CD0001', 'FOUR_WHEELER')).session.slotCode).toBe('F-01');
   });
 
-  it('refuses to deactivate a block or zone with vehicles parked, and to retype a zone that has slots', async () => {
+  it('refuses to retype a zone that has slots, whatever is parked', async () => {
     await guard.checkInOk('KA01AB0001');
-    expect(errorCode(await admin.patch('/admin/blocks/BLOCK-2W', { isActive: false }))).toBe(
-      'BLOCK_IN_USE',
-    );
-    expect(errorCode(await admin.patch('/admin/zones/ZONE-2W', { isActive: false }))).toBe(
-      'ZONE_IN_USE',
-    );
     expect(
       errorCode(await admin.patch('/admin/zones/ZONE-2W', { vehicleType: 'FOUR_WHEELER' })),
     ).toBe('ZONE_IN_USE');

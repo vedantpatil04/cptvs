@@ -69,6 +69,9 @@ const detailsFor = (action: string, entityId: string | null, meta: Metadata): Ti
 const LIFECYCLE_ORDER: readonly string[] = [
   AUDIT_ACTIONS.vehicleCheckedIn,
   AUDIT_ACTIONS.slotAssigned,
+  AUDIT_ACTIONS.exitRequested,
+  AUDIT_ACTIONS.exitRequestCancelled,
+  AUDIT_ACTIONS.checkoutQrScanned,
   AUDIT_ACTIONS.checkoutInitiated,
   AUDIT_ACTIONS.paymentInitiated,
   AUDIT_ACTIONS.paymentFailed,

@@ -1,6 +1,7 @@
 import {
   loginRequestSchema,
   registrationRequestSchema,
+  studentRegistrationRequestSchema,
   userLoginRequestSchema,
 } from '@cpvts/shared';
 import { Router } from 'express';
@@ -28,7 +29,7 @@ authRouter.post(
 authRouter.post(
   '/register/student',
   registrationRateLimiter,
-  validate({ body: registrationRequestSchema }),
+  validate({ body: studentRegistrationRequestSchema }),
   authController.register('STUDENT'),
 );
 authRouter.post(

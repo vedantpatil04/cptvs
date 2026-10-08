@@ -190,7 +190,25 @@
     "ZONE_CODE_TAKEN": "A zone with this code already exists.",
     "ZONE_IN_USE": "This zone has slots or parked vehicles, so this change is not allowed.",
     "BLOCK_CODE_TAKEN": "A block with this code already exists.",
-    "BLOCK_IN_USE": "Vehicles are parked (or slots held) in this block, so it cannot be deactivated."
+    "BLOCK_IN_USE": "Vehicles are parked (or slots held) in this block, so it cannot be deactivated.",
+    "GATE_CHECKOUT_REQUIRED": "Final checkout is completed at the exit gate by Security Staff. Tell them you are ready to leave.",
+    "QR_SESSION_MISMATCH": "This QR code does not belong to the session being checked out.",
+    "SESSION_INCONSISTENT": "The parking records for this session do not agree. Ask an administrator to check them.",
+    "SHIFT_REQUIRED": "You need to be checked in to a shift to do this. Check in to your shift, or ask an administrator.",
+    "SHIFT_NOT_FOUND": "Shift not found.",
+    "SHIFT_CONFLICT": "This person already has a shift that overlaps this time.",
+    "SHIFT_INVALID_STATE": "This shift cannot be changed in its current state.",
+    "SHIFT_TOO_EARLY": "It is too early to check in to this shift.",
+    "SHIFT_ENDED": "Your shift has ended. Check out, or ask an administrator to extend it.",
+    "SHIFT_HAS_OPEN_PAYMENTS": "A payment of this shift is still open. Finish or cancel it first.",
+    "SHIFT_TEMPLATE_NOT_FOUND": "Shift template not found.",
+    "SHIFT_TEMPLATE_NAME_TAKEN": "A shift template with this name already exists.",
+    "SECURITY_STAFF_NOT_FOUND": "The selected person is not an active Security Staff member.",
+    "HANDOVER_ALREADY_RECORDED": "The cash handover of this shift has already been recorded.",
+    "HANDOVER_NOT_FOUND": "No cash handover has been recorded for this shift.",
+    "DISCREPANCY_NOT_OPEN": "This handover has no unresolved cash difference.",
+    "CASH_NOTE_REQUIRED": "The cash does not match what the system expects. Enter the reason for the difference.",
+    "VEHICLE_PARKED": "A vehicle that is parked right now cannot be removed. Check it out first."
   },
   "validation": {
     "required": "This field is required.",
@@ -218,7 +236,13 @@
     "rejectionNoteRequired": "Enter a reason for rejecting the verification.",
     "invalidInventoryCode": "Use letters, numbers and hyphens only (up to 32 characters).",
     "slotCodePrefix": "The slot ID must start with T- for two-wheelers and F- for four-wheelers.",
-    "nothingToUpdate": "Change at least one field."
+    "nothingToUpdate": "Change at least one field.",
+    "semesterOutOfRange": "Enter a semester that exists in your program (1–6 for BCA, B.Com, BBA; 1–4 for MCA, MBA).",
+    "admissionYearInvalid": "Enter a valid admission year (2000 up to this year).",
+    "academicIncomplete": "Enter all the academic details: program, department, admission year and semester.",
+    "invalidTime": "Enter a time as HH:MM, for example 08:00.",
+    "shiftTimesEqual": "A shift cannot start and end at the same time.",
+    "invalidBatch": "Enter a batch such as 2024–2027."
   },
   "public": {
     "loginButton": "Admin / Staff login",
@@ -570,7 +594,24 @@
       "BLOCK_UPDATED": "Block updated",
       "ZONE_CREATED": "Zone created",
       "ZONE_UPDATED": "Zone updated",
-      "NOTICE_SENT": "Notice sent"
+      "NOTICE_SENT": "Notice sent",
+      "SECURITY_STAFF_CREATED": "Security Staff account created",
+      "PASSWORD_RESET": "Password reset",
+      "EXIT_REQUESTED": "Exit requested",
+      "EXIT_REQUEST_CANCELLED": "Exit request cancelled",
+      "CHECKOUT_QR_SCANNED": "Session QR scanned at checkout",
+      "VEHICLE_RELEASED": "Vehicle removed from account",
+      "IDENTITY_DOCUMENT_DOWNLOADED": "Identity document downloaded",
+      "SHIFT_TEMPLATE_CREATED": "Shift template created",
+      "SHIFT_TEMPLATE_UPDATED": "Shift template updated",
+      "SHIFT_ASSIGNED": "Shift assigned",
+      "SHIFT_UPDATED": "Shift updated",
+      "SHIFT_CANCELLED": "Shift removed",
+      "SHIFT_CHECKED_IN": "Checked in to shift",
+      "SHIFT_CHECKED_OUT": "Checked out of shift",
+      "SHIFT_MISSED": "Shift missed",
+      "CASH_HANDOVER_RECORDED": "Cash handover recorded",
+      "CASH_DISCREPANCY_RESOLVED": "Cash difference reviewed"
     },
     "entityTypes": {
       "USER": "User",
@@ -583,7 +624,10 @@
       "REPORT": "Report",
       "PARKING_ZONE": "Parking zone",
       "PARK_NOW_OFFER": "Parking offer",
-      "IDENTITY_DOCUMENT": "Identity document"
+      "IDENTITY_DOCUMENT": "Identity document",
+      "SECURITY_SHIFT": "Security shift",
+      "SHIFT_TEMPLATE": "Shift template",
+      "CASH_HANDOVER": "Cash handover"
     }
   },
   "history": {
@@ -713,7 +757,10 @@
       "COMPLETED_SESSION_HAS_RECEIPT": "Every completed session has a receipt",
       "PAID_PAYMENT_HAS_RECEIPT": "Every paid payment has a receipt",
       "RECEIPT_MATCHES_TRANSACTION": "Every receipt matches its finalized transaction",
-      "NO_STUCK_PAYMENTS": "No payment is stuck in processing"
+      "NO_STUCK_PAYMENTS": "No payment is stuck in processing",
+      "PAID_PAYMENT_HAS_OPERATOR": "Every payment records who took it",
+      "SHIFT_CASH_MATCHES_HANDOVER": "Every cash handover matches the payments of its shift",
+      "NO_OVERLAPPING_SHIFTS": "No Security Staff member has overlapping shifts"
     }
   }
 }

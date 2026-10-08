@@ -4,6 +4,7 @@ import { prisma } from '../../db/prisma.js';
 import { withTransaction } from '../../db/transaction.js';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';
+import { academicViewOf, verificationInfoOf } from '../accounts/account-state.js';
 import { accountErrors } from '../accounts/accounts.errors.js';
 import type { OperationContext } from '../parking/operation-context.js';
 
@@ -21,12 +22,8 @@ const loadProfile = async (userId: string): Promise<ParkingUserProfileView> => {
     phone: profile.phone,
     category: profile.category,
     institutionalId: profile.institutionalId,
-    verification: {
-      status: profile.verificationStatus,
-      note: profile.verificationNote,
-      submittedAt: profile.verificationSubmittedAt.toISOString(),
-      reviewedAt: profile.reviewedAt?.toISOString() ?? null,
-    },
+    verification: verificationInfoOf(profile),
+    academic: academicViewOf(profile),
     preferredLocale: profile.preferredLocale,
     vehicleCount: user._count.vehicles,
     memberSince: user.createdAt.toISOString(),
@@ -36,7 +33,10 @@ const loadProfile = async (userId: string): Promise<ParkingUserProfileView> => {
 export const profileService = {
   get: loadProfile,
 
-  /** Name, phone and language only: category, ID, e-mail and verification are not self-editable. */
+  /**
+   * Name, phone and language only: category, ID, e-mail, verification and the academic
+   * identity are not self-editable (an administrator corrects those).
+   */
   async update(update: ProfileUpdate, context: OperationContext): Promise<ParkingUserProfileView> {
     const userId = context.actor.id;
     await withTransaction(async (tx) => {

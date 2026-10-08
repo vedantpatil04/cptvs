@@ -34,7 +34,7 @@ interface PageRequest {
 /** Reads for a Student / Campus Staff member. Every query is limited to their own sessions. */
 export const portalService = {
   async overview(userId: string): Promise<PortalOverview> {
-    const scope = await ownedSessionWhere(userId);
+    const scope = ownedSessionWhere(userId);
     const [availability, active, recent, vehicles, live] = await Promise.all([
       publicService.getAvailability(),
       prisma.parkingSession.findMany({
@@ -64,7 +64,7 @@ export const portalService = {
     const [map, active] = await Promise.all([
       trackingService.getMap(),
       prisma.parkingSession.findMany({
-        where: { ...(await ownedSessionWhere(userId)), status: 'ACTIVE' },
+        where: { ...ownedSessionWhere(userId), status: 'ACTIVE' },
         select: { slot: { select: { code: true } } },
       }),
     ]);
@@ -77,7 +77,7 @@ export const portalService = {
   async activeSessions(userId: string): Promise<ActiveSessionsResponse> {
     const [sessions, live] = await Promise.all([
       prisma.parkingSession.findMany({
-        where: { ...(await ownedSessionWhere(userId)), status: 'ACTIVE' },
+        where: { ...ownedSessionWhere(userId), status: 'ACTIVE' },
         include: SESSION_INCLUDE,
         orderBy: [{ entryAt: 'asc' }, { sessionNumber: 'asc' }],
       }),
@@ -130,7 +130,7 @@ export const portalService = {
     const receipt = await parkingRepository.findReceiptByNumber(receiptNumber);
     if (!receipt) throw parkingErrors.receiptNotFound();
     const owned = await prisma.parkingSession.count({
-      where: { id: receipt.sessionId, ...(await ownedSessionWhere(userId)) },
+      where: { id: receipt.sessionId, ...ownedSessionWhere(userId) },
     });
     // Someone else's receipt looks exactly like one that does not exist.
     if (owned === 0) throw parkingErrors.receiptNotFound();
@@ -145,7 +145,7 @@ const listSessions = async (
   pageSize: number,
 ): Promise<Page<HistoryItem>> => {
   const where: Prisma.ParkingSessionWhereInput = {
-    AND: [await ownedSessionWhere(userId), filters],
+    AND: [ownedSessionWhere(userId), filters],
   };
   const [total, sessions] = await Promise.all([
     prisma.parkingSession.count({ where }),

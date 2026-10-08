@@ -2,6 +2,7 @@ import {
   NOTIFICATION_KINDS,
   type NotificationKind,
   type NotificationParams,
+  type MarkAllReadResponse,
   type NotificationsResponse,
   type NotificationView,
   type SendNoticeRequest,
@@ -58,6 +59,35 @@ export const notificationService = {
     });
   },
 
+  /**
+   * Tells every active administrator (cash and shift alerts). `exceptUserId` leaves out the
+   * administrator whose own action caused it — they already know.
+   */
+  async notifyAdmins(
+    kind: NotificationKind,
+    params: NotificationParams,
+    db: DbClient = prisma,
+    exceptUserId?: string,
+  ): Promise<number> {
+    const admins = await db.user.findMany({
+      where: {
+        role: 'ADMIN',
+        isActive: true,
+        ...(exceptUserId ? { id: { not: exceptUserId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (admins.length === 0) return 0;
+    await db.notification.createMany({
+      data: admins.map((admin) => ({
+        userId: admin.id,
+        kind,
+        params: params as Prisma.InputJsonObject,
+      })),
+    });
+    return admins.length;
+  },
+
   async list(
     userId: string,
     { unreadOnly, limit }: { unreadOnly: boolean; limit: number },
@@ -89,7 +119,7 @@ export const notificationService = {
     return toView(updated);
   },
 
-  async markAllRead(userId: string): Promise<{ updated: number }> {
+  async markAllRead(userId: string): Promise<MarkAllReadResponse> {
     const { count } = await prisma.notification.updateMany({
       where: { userId, readAt: null },
       data: { readAt: new Date() },

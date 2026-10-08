@@ -1,4 +1,5 @@
 import type {
+  AcademicProfile,
   CurrentUserResponse,
   LoginRequest,
   ParkingUserCategory,
@@ -28,7 +29,7 @@ export const authController = {
     (async (req, res) => {
       const result = await registrationService.register(
         category,
-        req.body as RegistrationInput,
+        req.body as RegistrationInput & { academic?: AcademicProfile },
         requestMeta(req),
       );
       res.status(201).json(result);

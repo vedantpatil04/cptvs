@@ -15,6 +15,10 @@ export interface ActorContext {
   actor: { id: string } | null;
   request: RequestMeta;
   channel?: OperationChannel;
+  /** The duty shift of the Security Staff member acting (null for administrators and when none). */
+  shiftId?: string | null;
+  /** An administrator acting outside any shift (emergency / management override). */
+  override?: boolean;
 }
 
 /** Who is performing a parking operation, for authorisation context and the audit log. */
@@ -22,9 +26,15 @@ export interface OperationContext extends ActorContext {
   actor: AuthenticatedUser;
 }
 
-/** Audit metadata that records the channel of a self-service or visitor step. */
-export const channelMetadata = (context: ActorContext): Prisma.InputJsonObject =>
-  context.channel ? { via: context.channel } : {};
+/**
+ * Audit metadata that records how a step happened: the channel of a self-service or
+ * visitor step, the duty shift of a gate operation and an administrator's override.
+ */
+export const channelMetadata = (context: ActorContext): Prisma.InputJsonObject => ({
+  ...(context.channel ? { via: context.channel } : {}),
+  ...(context.shiftId ? { shiftId: context.shiftId } : {}),
+  ...(context.override ? { override: true } : {}),
+});
 
 /**
  * Records a refused operation (duplicate entry, mismatch, repeated checkout …)

@@ -53,6 +53,32 @@ enum VerificationStatus {
   @@map("verification_status")
 }
 
+/// Programs offered to students. UG programs run 3 years (6 semesters), PG programs
+/// 2 years (4 semesters); the batch (e.g. 2024–2027) is derived from the admission
+/// year and the program duration, never typed by the student.
+enum AcademicProgram {
+  BCA
+  BCOM
+  BBA
+  MCA
+  MBA
+
+  @@map("academic_program")
+}
+
+/// Lifecycle of a Security Staff duty shift (operational gate duty, not HR).
+/// `CHECKED_IN` = checked in before the shift's start; it counts as on duty from the start.
+enum ShiftStatus {
+  SCHEDULED
+  CHECKED_IN
+  ACTIVE
+  CHECKED_OUT
+  CLOSED
+  MISSED
+
+  @@map("shift_status")
+}
+
 enum VehicleType {
   TWO_WHEELER
   FOUR_WHEELER
@@ -157,6 +183,12 @@ model User {
   vehicles           Vehicle[]            @relation("VehicleOwner")
   notifications      Notification[]
   parkNowOffers      ParkNowOffer[]
+  ownedSessions      ParkingSession[]     @relation("SessionOwner")
+  processedPayments  Payment[]            @relation("PaymentProcessedBy")
+  shifts             SecurityShift[]      @relation("ShiftStaff")
+  createdShifts      SecurityShift[]      @relation("ShiftCreatedBy")
+  receivedHandovers  CashHandover[]       @relation("HandoverReceivedBy")
+  resolvedHandovers  CashHandover[]       @relation("HandoverResolvedBy")
 
   @@index([role, isActive])
   @@map("users")
@@ -177,6 +209,14 @@ model ParkingUserProfile {
   reviewedAt              DateTime?           @map("reviewed_at") @db.Timestamptz(3)
   reviewedById            String?             @map("reviewed_by_id") @db.Uuid
   preferredLocale         String?             @map("preferred_locale") @db.VarChar(8)
+  /// Student academic identity, set together or not at all (a CHECK constraint enforces
+  /// this, the semester limit of the program, and that Campus Staff have none). Accounts
+  /// created before academic details were collected keep them null until an administrator
+  /// fills them in. The batch is derived from `admissionYear` and the program duration.
+  program                 AcademicProgram?
+  department              String?             @db.VarChar(80)
+  admissionYear           Int?                @map("admission_year") @db.SmallInt
+  currentSemester         Int?                @map("current_semester") @db.SmallInt
   createdAt               DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt               DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -185,6 +225,7 @@ model ParkingUserProfile {
 
   @@unique([category, institutionalId])
   @@index([category, verificationStatus])
+  @@index([program, admissionYear, currentSemester])
   @@map("parking_user_profiles")
 }
 
@@ -368,8 +409,17 @@ model ParkingSession {
   feeBreakdown   Json?                @map("fee_breakdown")
   checkedInById  String               @map("checked_in_by_id") @db.Uuid
   checkedOutById String?              @map("checked_out_by_id") @db.Uuid
-  /// Who finalized the session. A VISITOR checkout has no `checkedOutById`.
+  /// Who finalized the session. Final checkout is gate-controlled, so new sessions are
+  /// finalized by SECURITY only; SELF_SERVICE and VISITOR remain for sessions finalized
+  /// before the gate-controlled model (a VISITOR checkout has no `checkedOutById`).
   checkedOutVia  CheckoutChannel?     @map("checked_out_via")
+  /// The account that owned the vehicle when the session began (null for an unregistered
+  /// vehicle). The owner sees exactly the sessions that carry their id, even after they
+  /// release the vehicle; a later owner of the same plate never sees them.
+  ownerUserId    String?              @map("owner_user_id") @db.Uuid
+  /// "Ready to leave": set by the owner or visitor from the app. It never releases the slot;
+  /// only the gate checkout (payment, receipt) completes the session.
+  exitRequestedAt DateTime?           @map("exit_requested_at") @db.Timestamptz(3)
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -377,6 +427,7 @@ model ParkingSession {
   slot         ParkingSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
   checkedInBy  User        @relation("SessionCheckedInBy", fields: [checkedInById], references: [id], onDelete: Restrict)
   checkedOutBy User?       @relation("SessionCheckedOutBy", fields: [checkedOutById], references: [id], onDelete: Restrict)
+  owner        User?       @relation("SessionOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   payments     Payment[]
   receipt      Receipt?
 
@@ -388,6 +439,7 @@ model ParkingSession {
   @@index([slotId, createdAt])
   @@index([status, entryAt])
   @@index([exitAt])
+  @@index([ownerUserId, entryAt])
   @@map("parking_sessions")
 }
 
@@ -405,11 +457,20 @@ model Payment {
   isSimulated   Boolean       @default(true) @map("is_simulated")
   failureReason String?       @map("failure_reason") @db.VarChar(64)
   paidAt        DateTime?     @map("paid_at") @db.Timestamptz(3)
+  /// Accountability: the Security Staff member (or administrator) who took this payment.
+  /// Set when the payment is finalized; every PAID payment has one.
+  processedById String?       @map("processed_by_id") @db.Uuid
+  /// The duty shift the payment belongs to: the operator's active shift when the payment
+  /// was created. Null for administrator overrides and for payments taken before shifts.
+  /// Cash payments of a shift add up to the cash that shift must hand over.
+  shiftId       String?       @map("shift_id") @db.Uuid
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  session ParkingSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
-  receipt Receipt?
+  session     ParkingSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  processedBy User?          @relation("PaymentProcessedBy", fields: [processedById], references: [id], onDelete: Restrict)
+  shift       SecurityShift? @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  receipt     Receipt?
 
   /// Database-level guarantee: a session can be paid at most once.
   @@unique([sessionId], map: "payments_one_paid_per_session", where: { status: "PAID" })
@@ -417,6 +478,8 @@ model Payment {
   @@unique([sessionId], map: "payments_one_open_per_session", where: raw("status = ANY (ARRAY['PENDING'::payment_status, 'PROCESSING'::payment_status])"))
   @@index([sessionId, createdAt])
   @@index([status, paidAt])
+  @@index([shiftId, status, method])
+  @@index([processedById, paidAt])
   @@map("payments")
 }
 
@@ -469,6 +532,100 @@ model ParkNowOffer {
   @@index([status, expiresAt])
   @@index([slotId])
   @@map("park_now_offers")
+}
+
+// ---------------------------------------------------------------------------
+// Security Staff shifts and cash accountability (operational gate duty, not HR)
+// ---------------------------------------------------------------------------
+
+/// A reusable shift pattern an administrator can create and edit (e.g. Morning 08:00–16:00).
+/// Assignments copy the name and times, so editing a template never rewrites history.
+model ShiftTemplate {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique @db.VarChar(60)
+  /// Minutes after midnight (campus time). An end at or before the start means the shift
+  /// ends the next day: 16:00–00:00 is start 960, end 0; 22:00–06:00 is start 1320, end 360.
+  startMinute Int      @map("start_minute") @db.SmallInt
+  endMinute   Int      @map("end_minute") @db.SmallInt
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shifts SecurityShift[]
+
+  @@map("shift_templates")
+}
+
+/// One Security Staff member on duty for one shift on one date, optionally at a gate.
+/// Gate operations and payments taken during the shift are attributed to it, which is
+/// what makes the cash a guard collected their responsibility until it is handed over.
+model SecurityShift {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  staffId      String      @map("staff_id") @db.Uuid
+  templateId   String?     @map("template_id") @db.Uuid
+  /// Copy of the template name when the shift was assigned.
+  shiftName    String      @map("shift_name") @db.VarChar(60)
+  /// Campus calendar date on which the shift starts.
+  shiftDate    DateTime    @map("shift_date") @db.Date
+  startsAt     DateTime    @map("starts_at") @db.Timestamptz(3)
+  /// An administrator may extend or correct this while the shift is open.
+  endsAt       DateTime    @map("ends_at") @db.Timestamptz(3)
+  /// Optional gate or parking location, e.g. "Main Gate".
+  gate         String?     @db.VarChar(60)
+  status       ShiftStatus @default(SCHEDULED)
+  checkedInAt  DateTime?   @map("checked_in_at") @db.Timestamptz(3)
+  checkedOutAt DateTime?   @map("checked_out_at") @db.Timestamptz(3)
+  /// Set when the cash handover is reconciled; a shift with an unresolved discrepancy is not closed.
+  closedAt     DateTime?   @map("closed_at") @db.Timestamptz(3)
+  note         String?     @db.VarChar(255)
+  createdById  String?     @map("created_by_id") @db.Uuid
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  staff     User           @relation("ShiftStaff", fields: [staffId], references: [id], onDelete: Restrict)
+  template  ShiftTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  createdBy User?          @relation("ShiftCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  payments  Payment[]
+  handover  CashHandover?
+
+  @@index([staffId, startsAt])
+  @@index([shiftDate, status])
+  @@index([status, endsAt])
+  @@map("security_shifts")
+}
+
+/// The cash a guard hands over when a shift ends, counted and received by an administrator
+/// (the cash custodian). Expected cash is what the system recorded; actual is what was
+/// handed over. A difference needs a reason and an administrator's review before the
+/// shift counts as financially closed.
+model CashHandover {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shiftId           String    @unique @map("shift_id") @db.Uuid
+  /// PAID cash payments attributed to the shift when the handover was recorded.
+  expectedCashPaise Int       @map("expected_cash_paise")
+  actualCashPaise   Int       @map("actual_cash_paise")
+  /// actual − expected: negative = short, positive = over, zero = balanced.
+  differencePaise   Int       @map("difference_paise")
+  cashTransactions  Int       @map("cash_transactions")
+  /// UPI and card collections of the shift (kept separate from cash).
+  digitalPaise      Int       @map("digital_paise")
+  /// Why the cash does not match; required when the difference is not zero.
+  note              String?   @db.VarChar(500)
+  receivedById      String    @map("received_by_id") @db.Uuid
+  receivedAt        DateTime  @map("received_at") @db.Timestamptz(3)
+  /// An administrator's review of a mismatch.
+  resolutionNote    String?   @map("resolution_note") @db.VarChar(500)
+  resolvedById      String?   @map("resolved_by_id") @db.Uuid
+  resolvedAt        DateTime? @map("resolved_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shift      SecurityShift @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  receivedBy User          @relation("HandoverReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  resolvedBy User?         @relation("HandoverResolvedBy", fields: [resolvedById], references: [id], onDelete: Restrict)
+
+  @@index([differencePaise, resolvedAt])
+  @@map("cash_handovers")
 }
 
 /// Lightweight in-app notification. `kind` + `params` are translated by the client.

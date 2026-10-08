@@ -45,6 +45,8 @@ export const toSessionView = (
   return {
     sessionNumber: session.sessionNumber,
     status: session.status,
+    lifecycle: !isActive ? 'COMPLETED' : session.exitRequestedAt ? 'EXIT_REQUESTED' : 'ACTIVE',
+    exitRequestedAt: session.exitRequestedAt?.toISOString() ?? null,
     vehicleNumber: session.vehicle.vehicleNumber,
     vehicleType: session.vehicleType,
     ownerCategory: session.ownerCategory,

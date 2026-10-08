@@ -3,6 +3,7 @@ import {
   type RegisteredVehicle,
   type RegisterVehicleRequest,
   type UpdateVehicleRequest,
+  type VehicleReleaseResult,
 } from '@cpvts/shared';
 
 import type { DbClient } from '../../db/client.js';
@@ -16,6 +17,7 @@ import { auditRepository } from '../audit/audit.repository.js';
 import { accountErrors } from '../accounts/accounts.errors.js';
 import type { OperationContext } from '../parking/operation-context.js';
 import { parkingErrors } from '../parking/parking.errors.js';
+import { cancelOffersForVehicle } from './park-now.service.js';
 
 /** A registered vehicle with its live parking state. */
 export const VEHICLE_VIEW_INCLUDE = {
@@ -87,9 +89,84 @@ const mapVehicleViolation = (error: unknown): never => {
   throw error;
 };
 
+/**
+ * Ends an account's ownership of a vehicle — by the owner, or by an administrator when the
+ * owner cannot. A parked vehicle cannot be removed. A vehicle that never parked is deleted; one
+ * with parking history keeps its sessions (they stay with the account that owned it) and the
+ * plate becomes free for another account to register. One plate is never actively owned by
+ * two accounts: the database allows a single owner per plate.
+ */
+export const releaseVehicleOwnership = async (
+  vehicleId: string,
+  context: OperationContext,
+  scope: { ownerUserId?: string } = {},
+): Promise<VehicleReleaseResult> =>
+  withTransaction(async (tx) => {
+    const vehicle = await tx.vehicle.findFirst({
+      where: {
+        id: vehicleId,
+        ownerUserId: scope.ownerUserId ?? { not: null },
+      },
+      include: {
+        _count: { select: { sessions: true } },
+        sessions: { where: { status: 'ACTIVE' }, select: { id: true }, take: 1 },
+      },
+    });
+    if (!vehicle || !vehicle.ownerUserId) throw accountErrors.vehicleNotFound();
+    if (vehicle.sessions.length > 0) throw accountErrors.vehicleParked();
+
+    const ownerId = vehicle.ownerUserId;
+    // A slot held for this vehicle's Park Now offer goes back to the pool.
+    await cancelOffersForVehicle(vehicle.id, tx);
+
+    let outcome: VehicleReleaseResult['outcome'];
+    if (vehicle._count.sessions === 0) {
+      await tx.vehicle.delete({ where: { id: vehicle.id } });
+      outcome = 'DELETED';
+    } else {
+      await tx.vehicle.update({
+        where: { id: vehicle.id },
+        data: { ownerUserId: null, ownerSince: null, isPrimary: false, label: null },
+      });
+      outcome = 'RELEASED';
+    }
+
+    // The account keeps exactly one primary vehicle while it has any.
+    if (vehicle.isPrimary) {
+      const next = await tx.vehicle.findFirst({
+        where: { ownerUserId: ownerId },
+        orderBy: [{ ownerSince: 'asc' }, { vehicleNumber: 'asc' }],
+        select: { id: true },
+      });
+      if (next) await tx.vehicle.update({ where: { id: next.id }, data: { isPrimary: true } });
+    }
+
+    await auditRepository.record(
+      {
+        action: AUDIT_ACTIONS.vehicleReleased,
+        actorId: context.actor.id,
+        entityType: AUDIT_ENTITY_TYPES.vehicle,
+        entityId: vehicle.vehicleNumber,
+        metadata: {
+          outcome,
+          ownerUserId: ownerId,
+          by: context.actor.id === ownerId ? 'OWNER' : 'ADMIN',
+        },
+        request: context.request,
+      },
+      tx,
+    );
+    return { vehicleNumber: vehicle.vehicleNumber, outcome };
+  });
+
 /** A user's own vehicles. Only the owner can see or change them; anyone else gets "not found". */
 export const vehicleService = {
   list: listVehiclesOf,
+
+  /** The owner removes a vehicle from their account. */
+  remove(vehicleId: string, context: OperationContext): Promise<VehicleReleaseResult> {
+    return releaseVehicleOwnership(vehicleId, context, { ownerUserId: context.actor.id });
+  },
 
   async register(
     input: RegisterVehicleRequest,

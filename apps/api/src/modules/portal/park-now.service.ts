@@ -13,22 +13,16 @@ import { withTransaction } from '../../db/transaction.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { campusHour } from '../../lib/campus-time.js';
 import { AppError, conflict } from '../../lib/errors.js';
-import { newOpaqueReference } from '../../lib/identifiers.js';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';
 import { feeScheduleService } from '../fees/fee-schedule.service.js';
-import { notificationService } from '../notifications/notification.service.js';
 import { allocateWithHold, type SlotHoldStore } from '../parking/allocation.js';
 import { loadRankedCandidates } from '../parking/allocation-candidates.js';
-import { uniqueSessionNumber } from '../parking/check-in.service.js';
-import {
-  auditRejection,
-  channelMetadata,
-  type OperationContext,
-} from '../parking/operation-context.js';
+import { auditRejection, type OperationContext } from '../parking/operation-context.js';
 import { parkingErrors } from '../parking/parking.errors.js';
 import { toBlockSummary, toSessionView } from '../parking/parking.mappers.js';
 import { parkingRepository, SESSION_INCLUDE } from '../parking/parking.repository.js';
+import { createActiveSession } from '../parking/session-factory.js';
 import { slotHoldRepository } from '../parking/slot-hold.repository.js';
 import { accountErrors } from '../accounts/accounts.errors.js';
 import { parkNowErrors } from './park-now.errors.js';
@@ -73,6 +67,19 @@ export const cancelOpenOffers = async (
   const open = await db.parkNowOffer.findMany({ where: { userId, status: 'OFFERED' } });
   for (const offer of open) {
     await db.parkNowOffer.update({ where: { id: offer.id }, data: { status } });
+    await slotHoldRepository.release(offer.slotId, offer.holdToken, db);
+  }
+  return open.length;
+};
+
+/**
+ * Closes any open offer for one vehicle and returns its slot to the pool (used when the
+ * vehicle is removed from the account).
+ */
+export const cancelOffersForVehicle = async (vehicleId: string, db: DbClient): Promise<number> => {
+  const open = await db.parkNowOffer.findMany({ where: { vehicleId, status: 'OFFERED' } });
+  for (const offer of open) {
+    await db.parkNowOffer.update({ where: { id: offer.id }, data: { status: 'CANCELLED' } });
     await slotHoldRepository.release(offer.slotId, offer.holdToken, db);
   }
   return open.length;
@@ -234,76 +241,31 @@ export const parkNowService = {
         );
         if (!confirmed) throw parkNowErrors.offerExpired();
 
-        const sessionNumber = await uniqueSessionNumber(
-          async (value) => (await tx.parkingSession.count({ where: { sessionNumber: value } })) > 0,
-        );
-        const entryHour = campusHour();
-        const session = await tx.parkingSession.create({
-          data: {
-            sessionNumber,
-            entryReference: newOpaqueReference(),
-            vehicleId: vehicle.id,
-            slotId: existing.slotId,
-            vehicleType: vehicle.vehicleType,
-            ownerCategory: category,
-            entryHour,
-            entryAt: new Date(),
-            checkedInById: user.id,
-          },
-          select: { id: true, sessionNumber: true },
-        });
-
+        // The same session factory the security desk uses: one session model for both entries.
         const allocation = existing.allocation as unknown as AllocationExplanation;
-        const via = channelMetadata({ ...context, channel: 'SELF_SERVICE' });
-        await auditRepository.record(
-          {
-            action: AUDIT_ACTIONS.vehicleCheckedIn,
-            actorId: user.id,
-            entityType: AUDIT_ENTITY_TYPES.parkingSession,
-            entityId: session.sessionNumber,
-            metadata: {
-              vehicleNumber: vehicle.vehicleNumber,
-              vehicleType: vehicle.vehicleType,
-              ownerCategory: category,
-              categorySource: 'ACCOUNT',
-              entryHour,
-              offerId: existing.id,
-              ...via,
-            },
-            request: context.request,
-          },
-          tx,
-        );
-        await auditRepository.record(
-          {
-            action: AUDIT_ACTIONS.slotAssigned,
-            actorId: user.id,
-            entityType: AUDIT_ENTITY_TYPES.parkingSlot,
-            entityId: existing.slot.code,
-            metadata: {
-              sessionNumber: session.sessionNumber,
-              score: allocation.score,
-              priority: allocation.factors.priority,
-              usesToday: allocation.factors.usesToday,
-              layoutPosition: allocation.factors.layoutPosition,
-              candidates: allocation.candidatesConsidered,
-              ...via,
-            },
-            request: context.request,
-          },
-          tx,
-        );
-        await notificationService.notify(
-          user.id,
-          'PARKING_STARTED',
-          {
-            sessionNumber: session.sessionNumber,
-            slotCode: existing.slot.code,
+        const session = await createActiveSession(tx, {
+          vehicle,
+          vehicleType: vehicle.vehicleType,
+          slot: {
+            id: existing.slotId,
+            code: existing.slot.code,
             blockName: existing.slot.zone.block.name,
-            vehicleNumber: vehicle.vehicleNumber,
           },
-          tx,
-        );
+          ownerCategory: category,
+          categorySource: 'ACCOUNT',
+          entryHour: campusHour(),
+          checkedInById: user.id,
+          channel: 'SELF_SERVICE',
+          allocation: {
+            score: allocation.score,
+            priority: allocation.factors.priority,
+            usesToday: allocation.factors.usesToday,
+            layoutPosition: allocation.factors.layoutPosition,
+            candidates: allocation.candidatesConsidered,
+          },
+          offerId: existing.id,
+          request: context.request,
+        });
         return session.id;
       });
     } catch (error) {
