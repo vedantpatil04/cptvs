@@ -1,0 +1,118 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "close": "Close",
+    "goHome": "Go to dashboard",
+    "reloadPage": "Reload page",
+    "notAvailable": "Not available",
+    "skipToContent": "Skip to main content"
+  },
+  "branding": {
+    "demoNotice": "Independent demonstration prepared for {{institution}}. Not an official institutional system."
+  },
+  "language": {
+    "label": "Language",
+    "select": "Change language"
+  },
+  "roles": {
+    "ADMIN": "Administrator",
+    "SECURITY_STAFF": "Security Staff"
+  },
+  "nav": {
+    "mainNavigation": "Main navigation",
+    "openMenu": "Open navigation menu",
+    "dashboard": "Dashboard",
+    "account": "My account"
+  },
+  "auth": {
+    "signInTitle": "Sign in",
+    "signInDescription": "Use the account provided by your administrator.",
+    "username": "Username",
+    "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "signOut": "Sign out",
+    "signOutConfirmTitle": "Sign out?",
+    "signOutConfirmDescription": "You will need to sign in again to continue.",
+    "sessionExpired": "Your session has ended. Please sign in again.",
+    "signedOut": "You have been signed out.",
+    "restoringSession": "Checking your session…",
+    "sessionCheckFailed": "We could not verify your session."
+  },
+  "userMenu": {
+    "open": "Open account menu",
+    "signedInAs": "Signed in as"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome, {{name}}",
+    "adminDescription": "Overview of system health and administration for this deployment.",
+    "staffDescription": "Your workspace for daily parking operations.",
+    "parkingEmptyTitle": "Parking operations are not set up yet",
+    "parkingEmptyDescription": "Parking zones, live occupancy and vehicle activity will appear here once the parking modules are enabled.",
+    "sessionTitle": "Current session",
+    "sessionDescription": "Details of your signed-in session on this device.",
+    "sessionExpires": "Session expires"
+  },
+  "system": {
+    "title": "System status",
+    "description": "Live status of the server and database.",
+    "environment": "Environment",
+    "version": "Version",
+    "database": "Database",
+    "databaseLatency": "Database response time",
+    "uptime": "Server uptime",
+    "up": "Online",
+    "down": "Offline",
+    "milliseconds": "{{value}} ms",
+    "uptimeValue": "{{hours}} h {{minutes}} min",
+    "refresh": "Refresh"
+  },
+  "account": {
+    "title": "My account",
+    "description": "Your account details.",
+    "fullName": "Full name",
+    "username": "Username",
+    "role": "Role",
+    "lastSignIn": "Last sign-in",
+    "status": "Account status",
+    "active": "Active",
+    "never": "Never"
+  },
+  "states": {
+    "errorTitle": "Something went wrong",
+    "errorDescription": "An unexpected problem occurred. Please try again."
+  },
+  "pages": {
+    "notFoundTitle": "Page not found",
+    "notFoundDescription": "The page you are looking for does not exist or has moved.",
+    "forbiddenTitle": "Access denied",
+    "forbiddenDescription": "Your role does not have access to this page."
+  },
+  "errors": {
+    "network": "Unable to reach the server. Check your connection and try again.",
+    "BAD_REQUEST": "The request could not be processed.",
+    "VALIDATION_ERROR": "Some of the information entered is invalid.",
+    "UNAUTHENTICATED": "Please sign in to continue.",
+    "INVALID_CREDENTIALS": "The username or password is incorrect.",
+    "ACCOUNT_DISABLED": "This account has been disabled. Contact your administrator.",
+    "TOKEN_EXPIRED": "Your session has expired. Please sign in again.",
+    "FORBIDDEN": "You do not have permission to perform this action.",
+    "NOT_FOUND": "The requested item was not found.",
+    "CONFLICT": "This action conflicts with the current state. Refresh and try again.",
+    "PAYLOAD_TOO_LARGE": "The submitted data is too large.",
+    "RATE_LIMITED": "Too many attempts. Please wait a few minutes and try again.",
+    "SERVICE_UNAVAILABLE": "The service is temporarily unavailable. Please try again shortly.",
+    "INTERNAL_ERROR": "An unexpected server error occurred. Please try again."
+  },
+  "validation": {
+    "required": "This field is required.",
+    "tooLong": "This value is too long.",
+    "passwordTooShort": "The password is shorter than the minimum length.",
+    "passwordTooLong": "The password is too long."
+  }
+}
