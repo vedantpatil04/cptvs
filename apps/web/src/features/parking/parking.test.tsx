@@ -57,6 +57,7 @@ describe('vehicle entry', () => {
   it('validates input, checks the vehicle in and explains the allocation', async () => {
     const checkIn: CheckInResponse = {
       session,
+      categorySource: 'OPERATOR',
       allocation: {
         slotCode: 'T-04',
         zoneName: 'Two-Wheeler Zone',

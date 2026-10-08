@@ -36,6 +36,8 @@ export const PATHS = {
 export const ROLE_HOME: Record<UserRole, string> = {
   ADMIN: PATHS.admin.root,
   SECURITY_STAFF: PATHS.staff.root,
+  /** Placeholder until the Student / Campus Staff screens are built on the `/portal` API. */
+  PARKING_USER: '/portal',
 };
 
 /** Links into the signed-in user's own area (pages shared by both roles). */

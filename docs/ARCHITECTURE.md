@@ -1,4 +1,4 @@
-# CPVTS Architecture (Phase 3 — Smart & Management)
+# CPVTS Architecture (Phase 3 + Parking Users)
 
 This document describes the foundation that later CPVTS phases build on. The
 Master Blueprint remains the product reference; this file explains _how_ the
@@ -27,8 +27,9 @@ code is organised to deliver it.
 
 Only contracts that both sides must agree on:
 
-- `USER_ROLES` (`ADMIN`, `SECURITY_STAFF`) — the backend asserts at compile time
-  that the database enum matches.
+- `USER_ROLES` (`ADMIN`, `SECURITY_STAFF`, `PARKING_USER`) — the backend asserts
+  at compile time that the database enum matches. Student / Campus Staff are the
+  one `PARKING_USER` role; their category lives on the server-side profile.
 - `SUPPORTED_LOCALES` (`en`, `kn`, `hi`, `mr`).
 - zod schemas (`loginRequestSchema`, `passwordPolicySchema`) used for server
   validation _and_ client form validation. Their messages are translation keys
@@ -356,6 +357,147 @@ set only from real, entered values (both or neither); removing them disables
 the map link everywhere. Every change writes an audit entry (block reason,
 priority from/to, new coordinates).
 
+## Parking Users: Student, Campus Staff and Visitor
+
+Three kinds of people use CPVTS without being operators. They share the same
+parking sessions, fee engine, finalization, receipts and audit log as the
+security desk — nothing is duplicated — and differ only in **who may start an
+action and how they authenticate**.
+
+| Who                   | Account | Sign-in door                     | Token                                                  |
+| --------------------- | ------- | -------------------------------- | ------------------------------------------------------ |
+| Admin, Security Staff | yes     | `POST /auth/login` (username)    | account token (`aud = cpvts-web`)                      |
+| Student, Campus Staff | yes     | `POST /auth/user-login` (e-mail) | account token, `PARKING_USER` role                     |
+| Visitor               | **no**  | `POST /visitor/access` (slip)    | session token (`aud = cpvts-web:visitor`), one session |
+
+The doors are separate: an account is rejected at the wrong door exactly like
+an unknown one. A visitor token has its own audience, so it is rejected by
+`authenticate` everywhere and an account token is rejected by
+`authenticateVisitor`; the visitor token carries only a session id.
+
+### Registration and verification
+
+`POST /auth/register/student` and `/staff` (the **category comes from the
+endpoint, never the body**) create a `PENDING` account with its identity
+document and sign the user in. A pending or rejected account can read its
+profile and notifications and resubmit, but every parking feature returns
+`VERIFICATION_REQUIRED` (`requireVerified`). An administrator approves, or
+rejects with a mandatory reason, exactly once (a conditional update); the user
+is notified either way. A rejected user resubmits a new document and returns to
+`PENDING`.
+
+Identity documents are stored in the database (JPEG/PNG/PDF, at most 2 MB,
+type recognised from the file signature, not the declared type). They are never
+in a list or detail response and never served statically: the only way out is
+`GET /admin/users/:id/documents/:documentId` — Admin only, one document at a
+time, `Cache-Control: no-store`, sandboxed, audited as `IDENTITY_DOCUMENT_VIEWED`.
+Only the registration/resubmission routes accept the larger (4 MB) JSON body.
+
+The **owner category is authoritative**: a vehicle registered to an active,
+verified account is billed in that account's category at check-in no matter
+what the desk selects (`categorySource: ACCOUNT`). `GET /parking/vehicle-lookup`
+tells the entry desk the category before it chooses one, revealing nothing else
+about the owner. A deactivated account falls back to the desk's category.
+
+### Vehicles
+
+Up to 5 per user. The first is primary (one primary per owner, enforced by a
+partial unique index). A plate the desk has seen before can be claimed once if
+unowned and of the same type; the owner then sees only sessions that began after
+`owner_since`. Label is always editable; number and type only while the vehicle
+has no parking history (`VEHICLE_IDENTITY_LOCKED`). Category, fee, slot,
+session, payment and receipt are not vehicle fields at all.
+
+### Park Now (no advance reservation)
+
+```text
+POST /portal/park-now/offers   validate ownership + account → duplicate check
+                               → same ranking as the desk → HOLD the slot → offer
+POST /portal/park-now/confirm  OFFERED → CONFIRMED (conditional), final check
+                               HELD → OCCUPIED, create the ACTIVE session
+POST /portal/park-now/cancel   HELD → AVAILABLE at once
+```
+
+The user never picks a slot. `loadRankedCandidates` is the single source of
+candidates for the desk and Park Now (active zone, in service, `AVAILABLE`,
+ranked by the deterministic score), so a slot an administrator adds joins
+allocation with no code change. The hold lasts `PARK_NOW_HOLD_SECONDS`; an
+unconfirmed offer lapses (`releaseExpired` frees the slot and marks the offer
+`EXPIRED`, whichever request comes first). The `park_now_offers` table records
+each offer, and a partial unique index allows **one open offer per user**, so
+Park Now cannot hoard slots. Races are settled by conditional updates and unique
+indexes: simultaneous users get different slots, a double confirm creates one
+session, simultaneous starts leave one held slot.
+
+### Self-service checkout and visitor checkout
+
+`/portal/checkout/*` and `/visitor/checkout/*` call the same `checkoutService`
+(quote → payment → process/finalize → receipt → slot release). The exit hour is
+the server's current campus hour — the user cannot choose it — and the fee is
+whatever the fee engine returns. `ActorContext` generalises the audit actor:
+visitors have `actor = null` and the `VISITOR` channel (recorded in audit
+metadata and in `parking_sessions.checked_out_via`; a database constraint allows
+a completed session without `checked_out_by_id` only for that channel). Every
+route resolves the session through `findOwnSession` (portal) or the token
+(visitor); someone else's session, payment or receipt looks exactly like one
+that does not exist. A session that spans midnight cannot be self-checked-out
+in the whole-hour model (`EXIT_BEFORE_ENTRY`); the security desk handles it.
+
+### Notifications
+
+`notifications` stores a `kind` and `params`; the client translates. Kinds:
+verification approved/rejected, parking started, receipt generated (written in
+the same transaction as the event they announce) and administrator notices.
+
+### Slot inventory (Admin)
+
+`modules/management/slot-management.service.ts` and `block-management.service.ts`.
+Capacity is the set of **in-service** slots (`IN_SERVICE`: enabled and not
+archived, in an active zone of an active block); allocation, holds, public
+counts, dashboards, alerts and analytics all use it.
+
+- **Create** `T-11+` / `F-06+` into a zone: vehicle type must equal the zone's,
+  the ID must carry the type's prefix (`T-`/`F-`), IDs are unique forever
+  (archived ones included).
+- **Edit** priority and layout order any time; rename/move only an idle slot
+  with no parking history (`SLOT_HAS_HISTORY`); blocked reason only while blocked.
+- **Block/unblock** (a reason; `AVAILABLE` slots only) and **disable/enable**
+  (out of service: not allocated, not counted) never touch an occupied or held slot.
+- **Delete is safe**: an unused idle slot is removed; one with history is
+  **archived** (soft delete) so sessions, receipts and reports stay intact;
+  occupied/held slots are refused (`SLOT_IN_USE`). Archived slots can be
+  restored. A database CHECK keeps archived slots idle.
+- Blocks and zones: create, rename, reorder, deactivate (refused while a
+  vehicle is parked or a slot held), retype an empty zone, and set the block's
+  real coordinates (never invented).
+
+### Endpoints (Parking Users)
+
+| Method            | Path                                                                                | Access                                       |
+| ----------------- | ----------------------------------------------------------------------------------- | -------------------------------------------- |
+| POST              | `/auth/register/student`, `/auth/register/staff`                                    | Public, rate-limited                         |
+| POST              | `/auth/user-login`                                                                  | Public, rate-limited                         |
+| GET               | `/portal/profile`, `/portal/notifications`                                          | Parking user (any verification state)        |
+| PATCH             | `/portal/profile`                                                                   | Name, phone, language only                   |
+| POST              | `/portal/verification/resubmit`                                                     | Rejected parking user                        |
+| POST              | `/portal/notifications/:id/read`, `/read-all`                                       | Parking user                                 |
+| GET               | `/portal/overview`, `/layout`, `/history`                                           | Verified — own data only                     |
+| GET               | `/portal/receipts`, `/receipts/:receiptNumber`                                      | Verified — own receipts                      |
+| GET               | `/portal/sessions/active`, `/sessions/:n`, `/:n/timeline`                           | Verified — own sessions                      |
+| GET/POST/PATCH    | `/portal/vehicles`, `/vehicles/:id`, `/:id/primary`                                 | Verified — own vehicles                      |
+| GET/POST          | `/portal/park-now/offer`, `/offers`, `/confirm`, `/cancel`                          | Verified                                     |
+| POST              | `/portal/checkout/quote`, `/payments`, `/payments/:id/process`, `/cancel`           | Verified — own session                       |
+| POST              | `/visitor/access`                                                                   | Public, rate-limited (vehicle + session no.) |
+| GET               | `/visitor/session`, `/layout`, `/timeline`, `/receipt`                              | Visitor token                                |
+| POST              | `/visitor/checkout/quote`, `/payments`, `/payments/:id/process`, `/cancel`          | Visitor token                                |
+| GET               | `/parking/vehicle-lookup?vehicleNumber=`                                            | Staff, Admin                                 |
+| GET               | `/admin/users`, `/users/counts`, `/users/:id`, `/:id/history`, `/visitors`          | Admin                                        |
+| PATCH/POST        | `/admin/users/:id`, `/:id/status`, `/:id/verification`                              | Admin                                        |
+| GET               | `/admin/users/:id/documents/:documentId`                                            | Admin — audited, private                     |
+| POST              | `/admin/notices`                                                                    | Admin — notice to one user or an audience    |
+| POST/PATCH/DELETE | `/admin/slots`, `/slots/:code`, `/:code/archive`, `/restore`, `/enable`, `/disable` | Admin                                        |
+| POST/PATCH        | `/admin/blocks`, `/blocks/:code`, `/admin/zones`, `/zones/:code`                    | Admin                                        |
+
 ## Web (`apps/web`)
 
 ### Routing and guards
@@ -439,4 +581,6 @@ Implemented through Phase 3: the parking lifecycle plus the smart and
 management modules described above.
 
 Not implemented (Phase 4): demo-data tools and the Android WebView APK. No
-real payment gateway, ML/AI or student/visitor logins exist, by design.
+real payment gateway, ML/AI, chatbot, advance reservation or turn-by-turn
+navigation exist, by design. Student / Campus Staff accounts and the visitor
+session token are described above; the web screens for them are a separate step.

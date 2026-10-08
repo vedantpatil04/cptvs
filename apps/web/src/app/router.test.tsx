@@ -18,7 +18,14 @@ const loginResponse = (role: 'ADMIN' | 'SECURITY_STAFF'): LoginResponse => ({
   accessToken: 'token',
   tokenType: 'Bearer',
   expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-  user: { id: 'u1', username: 'demo', fullName: 'Demo User', role, lastLoginAt: null },
+  user: {
+    id: 'u1',
+    username: 'demo',
+    fullName: 'Demo User',
+    role,
+    lastLoginAt: null,
+    parkingUser: null,
+  },
 });
 
 const renderAt = (path: string) => {

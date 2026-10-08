@@ -1,6 +1,5 @@
 import type {
   ApiErrorBody,
-  CheckInResponse,
   CheckoutQuote,
   CreatePaymentResponse,
   HistoryItem,
@@ -614,6 +613,46 @@ describe('Park Now', () => {
     expect(confirmed.every((r) => r.status === 201)).toBe(true);
     expect(await prisma.parkingSlot.count({ where: { status: 'OCCUPIED' } })).toBe(10);
     expect(await prisma.parkingSession.count({ where: { status: 'ACTIVE' } })).toBe(10);
+  });
+
+  it('confirms an offer exactly once when confirmation is sent twice at the same moment', async () => {
+    const { token, vehicle } = await createParkingUserWithVehicle(app);
+    const portal = client(app, token);
+    const offer = offerOf(await portal.post('/portal/park-now/offers', { vehicleId: vehicle.id }));
+
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        portal.post('/portal/park-now/confirm', { offerId: offer.offerId }),
+      ),
+    );
+    expect(results.filter((r) => r.status === 201)).toHaveLength(1);
+    for (const refused of results.filter((r) => r.status !== 201)) {
+      expect(['OFFER_NOT_FOUND', 'OFFER_EXPIRED', 'DUPLICATE_ACTIVE_VEHICLE']).toContain(
+        errorCode(refused),
+      );
+    }
+    expect(await prisma.parkingSession.count({ where: { status: 'ACTIVE' } })).toBe(1);
+    expect(await prisma.parkingSlot.count({ where: { status: 'OCCUPIED' } })).toBe(1);
+    expect(await prisma.parkingSlot.count({ where: { status: 'HELD' } })).toBe(0);
+  });
+
+  it('never leaves two slots held when the same user starts twice at the same moment', async () => {
+    const { token, vehicle } = await createParkingUserWithVehicle(app);
+    const portal = client(app, token);
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        portal.post('/portal/park-now/offers', { vehicleId: vehicle.id }),
+      ),
+    );
+    expect(results.some((r) => r.status === 201)).toBe(true);
+    for (const refused of results.filter((r) => r.status !== 201)) expect(refused.status).toBe(409);
+
+    expect(await prisma.parkNowOffer.count({ where: { status: 'OFFERED' } })).toBeLessThanOrEqual(
+      1,
+    );
+    // Every held slot is backed by exactly one open offer: nothing leaks.
+    const held = await prisma.parkingSlot.count({ where: { status: 'HELD' } });
+    expect(held).toBe(await prisma.parkNowOffer.count({ where: { status: 'OFFERED' } }));
   });
 
   it('adds the session to the overview, active list, layout and notifications', async () => {

@@ -15,6 +15,16 @@ Branding and the institution name are configurable per deployment.
 > history, daily analytics, CSV reports, slot management (block / unblock,
 > allocation priority, block coordinates) and audit logs. The Android WebView
 > APK and demo-data tooling (Phase 4) are **not** part of this phase.
+>
+> **Parking Users (backend).** Students and Campus Staff register with an
+> identity document, are verified by an administrator, add their vehicles and
+> use **Park Now** (the server picks and holds the slot with the same
+> deterministic allocation, the user confirms), check out, pay (simulated) and
+> get receipts, history and notifications. Visitors get a token for their one
+> session from the number on their slip. Administrators manage users,
+> verification and the whole slot inventory (create, edit, enable/disable,
+> block, archive, safe delete). See `docs/ARCHITECTURE.md`; the web screens for
+> these flows are a separate step.
 
 The app opens on a **public parking overview** at `/` — free two-wheeler and
 four-wheeler space counts, parking blocks (with Google Maps links once real
@@ -208,6 +218,10 @@ invalid configuration and lists the problems.
 | `ALERT_NEARLY_FULL_PERCENT`                                |           | `90`                      | Zone occupancy % that raises a "nearly full" alert      |
 | `ALERT_LONG_DURATION_HOURS`                                |           | `8`                       | Active-session hours that raise a "long duration" alert |
 | `PUBLIC_RATE_LIMIT_PER_MINUTE`                             |           | `120`                     | Requests per minute per IP on public endpoints          |
+| `PARK_NOW_HOLD_SECONDS`                                    |           | `90`                      | How long a Park Now allocation is held for confirmation |
+| `INSTITUTION_EMAIL_DOMAINS`                                |           | _(any)_                   | Restrict Student / Staff registration e-mail domains    |
+| `REGISTRATION_RATE_LIMIT_PER_HOUR`                         |           | `10`                      | Registrations per IP per hour                           |
+| `VISITOR_ACCESS_HOURS`                                     |           | `12`                      | Lifetime of a visitor's access to their one session     |
 | `SEED_ADMIN_*`, `SEED_STAFF_*`                             | seed only |                           | Initial accounts for `db:seed`                          |
 
 \* In production at least one of `CORS_ORIGINS` or `FRONTEND_URL` is required.

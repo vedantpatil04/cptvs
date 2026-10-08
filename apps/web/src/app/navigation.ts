@@ -52,4 +52,6 @@ export const NAVIGATION: Record<UserRole, NavItem[]> = {
     { to: PATHS.staff.live, labelKey: 'nav.liveParking', icon: MapPinned },
     { to: PATHS.staff.account, labelKey: 'nav.account', icon: UserRound },
   ],
+  /** Added with the Student / Campus Staff screens. */
+  PARKING_USER: [],
 };

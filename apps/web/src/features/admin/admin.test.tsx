@@ -119,6 +119,15 @@ describe('parking history', () => {
 });
 
 describe('slot management', () => {
+  const slotDefaults = {
+    blockedReason: null,
+    isEnabled: true,
+    archivedAt: null,
+    sortOrder: 0,
+    holdExpiresAt: null,
+    hasHistory: false,
+    occupant: null,
+  } as const;
   const layout: ManagedLayout = {
     blocks: [
       {
@@ -126,15 +135,27 @@ describe('slot management', () => {
         name: 'Two-Wheeler Parking Block',
         description: 'Near the main gate',
         coordinates: null,
+        isActive: true,
+        sortOrder: 0,
         zones: [
           {
             code: 'ZONE-2W',
             name: 'Two-Wheeler Zone',
             vehicleType: 'TWO_WHEELER',
+            isActive: true,
+            sortOrder: 0,
+            counts: { total: 3, available: 1, occupied: 1, blocked: 1, held: 0 },
+            disabledSlots: 0,
             slots: [
-              { code: 'T-01', status: 'AVAILABLE', priority: 0, blockedReason: null },
-              { code: 'T-02', status: 'OCCUPIED', priority: 0, blockedReason: null },
-              { code: 'T-03', status: 'BLOCKED', priority: 5, blockedReason: 'Repair' },
+              { ...slotDefaults, code: 'T-01', status: 'AVAILABLE', priority: 0 },
+              { ...slotDefaults, code: 'T-02', status: 'OCCUPIED', priority: 0 },
+              {
+                ...slotDefaults,
+                code: 'T-03',
+                status: 'BLOCKED',
+                priority: 5,
+                blockedReason: 'Repair',
+              },
             ],
           },
         ],
@@ -442,12 +463,14 @@ describe('alerts and session timeline', () => {
           at: new Date().toISOString(),
           action: 'SLOT_ASSIGNED',
           actor: { fullName: 'Gate Guard', role: 'SECURITY_STAFF' },
+          channel: 'SECURITY',
           details: { slotCode: 'T-04', score: -3 },
         },
         {
           at: new Date().toISOString(),
           action: 'PAYMENT_SUCCEEDED',
           actor: { fullName: 'Gate Guard', role: 'SECURITY_STAFF' },
+          channel: 'SECURITY',
           details: { amountPaise: 2000, method: 'UPI', transactionId: 'TXN-8F3K2Q9MZA' },
         },
       ],

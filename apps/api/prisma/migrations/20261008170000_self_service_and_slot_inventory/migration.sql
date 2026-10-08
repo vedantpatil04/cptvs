@@ -75,10 +75,6 @@ ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_fkey" FOREIGN 
 ALTER TABLE "parking_slots" ADD CONSTRAINT "parking_slots_archived_is_idle"
   CHECK ("archived_at" IS NULL OR "status" IN ('AVAILABLE', 'BLOCKED'));
 
--- A Park Now offer outlives its creation.
-ALTER TABLE "park_now_offers" ADD CONSTRAINT "park_now_offers_expires_after_creation"
-  CHECK ("expires_at" > "created_at");
-
 -- A completed session records who checked it out: a staff or owner account, or
 -- (for visitors, who have no account) the VISITOR channel.
 ALTER TABLE "parking_sessions" DROP CONSTRAINT "parking_sessions_completed_has_checkout";

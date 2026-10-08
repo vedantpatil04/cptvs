@@ -10,13 +10,13 @@ import type {
 } from '@cpvts/shared';
 import type { z } from 'zod';
 
-import { config } from '../../config/index.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { prisma } from '../../db/prisma.js';
 import { withTransaction } from '../../db/transaction.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { badRequest } from '../../lib/errors.js';
 import { accountErrors } from '../accounts/accounts.errors.js';
+import { emailDomainAllowed } from '../accounts/email-domain.js';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';
 import { HISTORY_INCLUDE, toHistoryItem } from '../management/history.service.js';
@@ -113,13 +113,6 @@ const listWhere = (query: ListQuery): Prisma.UserWhereInput => {
         }
       : {}),
   };
-};
-
-const emailDomainAllowed = (email: string): boolean => {
-  const domains = config.accounts.emailDomains;
-  if (domains.length === 0) return true;
-  const domain = email.split('@')[1] ?? '';
-  return domains.some((allowed) => domain === allowed || domain.endsWith(`.${allowed}`));
 };
 
 const record = (
@@ -278,7 +271,7 @@ export const adminUserService = {
         if (!profile && (patch.email !== undefined || patch.phone !== undefined)) {
           throw badRequest('E-mail and phone apply to Student / Campus Staff accounts only.');
         }
-        if (patch.email !== undefined && !emailDomainAllowed(patch.email.toLowerCase())) {
+        if (patch.email !== undefined && !emailDomainAllowed(patch.email)) {
           throw accountErrors.emailDomainNotAllowed();
         }
 

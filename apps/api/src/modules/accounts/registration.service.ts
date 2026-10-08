@@ -5,7 +5,6 @@ import type {
   VerificationResubmission,
 } from '@cpvts/shared';
 
-import { config } from '../../config/index.js';
 import type { DbClient } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { withTransaction } from '../../db/transaction.js';
@@ -16,14 +15,8 @@ import type { RequestMeta } from '../auth/auth.types.js';
 import { hashPassword } from '../auth/password.js';
 import type { OperationContext } from '../parking/operation-context.js';
 import { accountErrors } from './accounts.errors.js';
+import { emailDomainAllowed } from './email-domain.js';
 import { decodeIdentityDocument, type DecodedDocument } from './identity-document.js';
-
-const emailDomainAllowed = (email: string): boolean => {
-  const domains = config.accounts.emailDomains;
-  if (domains.length === 0) return true;
-  const domain = email.split('@')[1] ?? '';
-  return domains.some((allowed) => domain === allowed || domain.endsWith(`.${allowed}`));
-};
 
 /** Internal username for a parking user; they sign in with their e-mail address. */
 const usernameFor = (category: ParkingUserCategory, institutionalId: string): string =>

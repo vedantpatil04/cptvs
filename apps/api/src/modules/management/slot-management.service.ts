@@ -13,7 +13,7 @@ import {
 import { isUniqueViolation } from '../../db/errors.js';
 import { prisma } from '../../db/prisma.js';
 import { withTransaction } from '../../db/transaction.js';
-import { Prisma } from '../../generated/prisma/client.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { campusHour } from '../../lib/campus-time.js';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';

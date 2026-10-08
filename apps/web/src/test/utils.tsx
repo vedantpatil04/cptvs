@@ -39,6 +39,7 @@ export const testUser = (role: UserRole): AuthUser => ({
   fullName: 'Demo User',
   role,
   lastLoginAt: null,
+  parkingUser: null,
 });
 
 /** Stores a valid session so the app starts signed in (verified via GET /auth/me). */

@@ -61,6 +61,28 @@ const detailsFor = (action: string, entityId: string | null, meta: Metadata): Ti
   }
 };
 
+/**
+ * Audit rows written within the same millisecond tie on `createdAt`; they are
+ * then ordered by where the step falls in the session lifecycle (never by the
+ * random row ID), so a replay is always in the order things happened.
+ */
+const LIFECYCLE_ORDER: readonly string[] = [
+  AUDIT_ACTIONS.vehicleCheckedIn,
+  AUDIT_ACTIONS.slotAssigned,
+  AUDIT_ACTIONS.checkoutInitiated,
+  AUDIT_ACTIONS.paymentInitiated,
+  AUDIT_ACTIONS.paymentFailed,
+  AUDIT_ACTIONS.paymentCancelled,
+  AUDIT_ACTIONS.paymentSucceeded,
+  AUDIT_ACTIONS.transactionFinalized,
+  AUDIT_ACTIONS.receiptGenerated,
+  AUDIT_ACTIONS.slotReleased,
+];
+const lifecycleRank = (action: string): number => {
+  const index = LIFECYCLE_ORDER.indexOf(action);
+  return index === -1 ? LIFECYCLE_ORDER.length : index;
+};
+
 const channelOf = (actor: { role: UserRole } | null, meta: Metadata): TimelineChannel => {
   if (meta.via === 'VISITOR') return 'VISITOR';
   if (meta.via === 'SELF_SERVICE') return 'SELF_SERVICE';
@@ -101,7 +123,13 @@ export const timelineService = {
 
     return {
       sessionNumber,
-      events: entries
+      events: [...entries]
+        .sort(
+          (a, b) =>
+            a.createdAt.getTime() - b.createdAt.getTime() ||
+            lifecycleRank(a.action) - lifecycleRank(b.action) ||
+            a.id.localeCompare(b.id),
+        )
         .filter((entry) => !(isOwner && entry.action === AUDIT_ACTIONS.integrityRejected))
         .map((entry) => {
           const meta = (entry.metadata as Metadata | null) ?? {};
