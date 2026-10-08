@@ -16,6 +16,10 @@ const buttonVariants = cva(
         secondary: 'bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
+        /** For dark (sidebar-coloured) surfaces. */
+        inverse: 'bg-sidebar-foreground text-sidebar shadow-xs hover:bg-sidebar-foreground/90',
+        inverseOutline:
+          'border border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
       },
       size: {
         default: 'h-10 px-4 py-2 has-[>svg]:px-3',

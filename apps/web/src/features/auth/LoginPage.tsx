@@ -1,10 +1,13 @@
-import { Info } from 'lucide-react';
+import { ArrowLeft, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 
+import { PATHS } from '@/app/paths';
 import { BrandMark } from '@/components/branding/BrandMark';
 import { InstitutionNotice } from '@/components/branding/InstitutionNotice';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { branding } from '@/config/branding';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -32,7 +35,13 @@ export function LoginPage() {
 
       {/* Sign-in panel */}
       <section className="flex flex-1 flex-col px-4 py-4 sm:px-10 sm:py-6">
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-2">
+          <Button asChild variant="ghost" size="sm" className="-ml-2">
+            <Link to={PATHS.home}>
+              <ArrowLeft aria-hidden />
+              {t('common.backToHome')}
+            </Link>
+          </Button>
           <LanguageSwitcher />
         </div>
         <div className="flex flex-1 items-start justify-center py-4 sm:items-center sm:py-8">

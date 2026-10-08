@@ -59,13 +59,6 @@ export function RequireRole({ role }: { role: UserRole }) {
   return state.user.role === role ? <Outlet /> : <ForbiddenPage />;
 }
 
-/** Sends a signed-in user to their role's home page. */
-export function RoleHomeRedirect() {
-  const { state } = useAuth();
-  if (state.status !== 'authenticated') return <Navigate to={PATHS.login} replace />;
-  return <Navigate to={ROLE_HOME[state.user.role]} replace />;
-}
-
 /**
  * For the sign-in page: once the user is signed in (including right after a
  * successful login) redirects to the page they originally requested.

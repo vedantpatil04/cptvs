@@ -52,6 +52,9 @@ export const buildConfig = (env: Env) =>
         windowMs: env.LOGIN_RATE_LIMIT_WINDOW_MINUTES * 60_000,
         max: env.LOGIN_RATE_LIMIT_MAX,
       }),
+      public: Object.freeze({
+        maxPerMinute: env.PUBLIC_RATE_LIMIT_PER_MINUTE,
+      }),
     }),
   });
 

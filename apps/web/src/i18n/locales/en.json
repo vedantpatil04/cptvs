@@ -7,7 +7,8 @@
     "goHome": "Go to dashboard",
     "reloadPage": "Reload page",
     "notAvailable": "Not available",
-    "skipToContent": "Skip to main content"
+    "skipToContent": "Skip to main content",
+    "backToHome": "Back to home"
   },
   "branding": {
     "demoNotice": "Independent demonstration prepared for {{institution}}. Not an official institutional system."
@@ -24,7 +25,9 @@
     "mainNavigation": "Main navigation",
     "openMenu": "Open navigation menu",
     "dashboard": "Dashboard",
-    "account": "My account"
+    "account": "My account",
+    "home": "Home",
+    "help": "Help & FAQ"
   },
   "auth": {
     "signInTitle": "Sign in",
@@ -114,5 +117,84 @@
     "tooLong": "This value is too long.",
     "passwordTooShort": "The password is shorter than the minimum length.",
     "passwordTooLong": "The password is too long."
+  },
+  "public": {
+    "loginButton": "Admin / Staff login",
+    "loginShort": "Login",
+    "dashboardButton": "Go to dashboard",
+    "tagline": "Check parking availability, parking locations and fee rules on campus.",
+    "privacyNote": "For privacy, vehicle numbers, parking records and other operational data are never shown on public pages.",
+    "availability": {
+      "title": "Parking availability",
+      "description": "Free parking spaces right now, by vehicle type.",
+      "ofTotal": "of {{total}} spaces free",
+      "spacesAvailable": "Spaces available",
+      "full": "Full",
+      "notConfigured": "Not configured yet",
+      "lastUpdated": "Updated {{time}}",
+      "refresh": "Refresh"
+    },
+    "locations": {
+      "title": "Parking locations",
+      "description": "Where each parking block is on campus.",
+      "accepts": "Accepts",
+      "openInMaps": "Open in Google Maps",
+      "mapPending": "Map location not configured yet",
+      "empty": "Parking locations have not been configured yet."
+    },
+    "fees": {
+      "title": "Parking fees",
+      "description": "Official parking fee rules by owner category and vehicle type.",
+      "category": "Category",
+      "free": "Free",
+      "hourly": "{{rate}} per hour",
+      "freeThenHourly_one": "First {{count}} hour free, then {{rate}} per hour",
+      "freeThenHourly_other": "First {{count}} hours free, then {{rate}} per hour",
+      "notConfigured": "Fee information has not been configured yet."
+    },
+    "helpCard": {
+      "title": "Need help?",
+      "description": "Answers to common questions about parking and this system.",
+      "action": "Open Help & FAQ"
+    }
+  },
+  "vehicleTypes": {
+    "TWO_WHEELER": "Two-wheeler",
+    "FOUR_WHEELER": "Four-wheeler"
+  },
+  "ownerCategories": {
+    "STAFF": "Staff",
+    "STUDENT": "Student",
+    "VISITOR": "Visitor"
+  },
+  "help": {
+    "title": "Help & FAQ",
+    "description": "Common questions about campus parking and this system.",
+    "questions": {
+      "availability": {
+        "question": "How do I check parking availability?",
+        "answer": "The home page shows how many two-wheeler and four-wheeler spaces are free right now. Use Refresh to update the counts."
+      },
+      "locations": {
+        "question": "Where are the parking areas?",
+        "answer": "The Parking locations section lists each parking block. When map coordinates have been configured, you can open the block's location in Google Maps."
+      },
+      "fees": {
+        "question": "How much does parking cost?",
+        "answer": "The Parking fees section shows the official rules for staff, students and visitors, for two-wheelers and four-wheelers."
+      },
+      "vehicle": {
+        "question": "Can I look up a parked vehicle here?",
+        "answer": "No. To protect privacy, vehicle numbers and parking records are not public. Please contact campus security staff for help."
+      },
+      "login": {
+        "question": "Who can sign in?",
+        "answer": "Only administrators and security staff sign in. Students and visitors do not need an account."
+      },
+      "language": {
+        "question": "How do I change the language?",
+        "answer": "Use the language menu at the top of the page to switch between English, Kannada, Hindi and Marathi."
+      }
+    }
   }
 }

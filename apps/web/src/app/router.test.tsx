@@ -1,4 +1,4 @@
-import type { LoginResponse } from '@cpvts/shared';
+import type { LoginResponse, PublicOverviewResponse } from '@cpvts/shared';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RouterProvider, createMemoryRouter } from 'react-router';
@@ -36,12 +36,95 @@ beforeEach(async () => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('protected routes', () => {
-  it('redirects anonymous visitors to the sign-in page', async () => {
-    const memoryRouter = renderAt('/admin');
-    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
-    expect(memoryRouter.state.location.pathname).toBe('/login');
+const overview: PublicOverviewResponse = {
+  generatedAt: new Date().toISOString(),
+  availability: [
+    { vehicleType: 'TWO_WHEELER', totalSlots: 10, availableSlots: 7 },
+    { vehicleType: 'FOUR_WHEELER', totalSlots: 5, availableSlots: 0 },
+  ],
+  locations: [
+    {
+      code: 'BLOCK-2W',
+      name: 'Two-Wheeler Parking Block',
+      description: null,
+      vehicleTypes: ['TWO_WHEELER'],
+      coordinates: { latitude: 15.85, longitude: 74.5 },
+    },
+    {
+      code: 'BLOCK-4W',
+      name: 'Four-Wheeler Parking Block',
+      description: null,
+      vehicleTypes: ['FOUR_WHEELER'],
+      coordinates: null,
+    },
+  ],
+  feeSchedule: {
+    currency: 'INR',
+    rules: {
+      STAFF: { TWO_WHEELER: { type: 'FREE' }, FOUR_WHEELER: { type: 'FREE' } },
+      STUDENT: {
+        TWO_WHEELER: { type: 'FREE_HOURS_THEN_HOURLY', freeHours: 2, hourlyRatePaise: 1000 },
+        FOUR_WHEELER: { type: 'FREE_HOURS_THEN_HOURLY', freeHours: 2, hourlyRatePaise: 2000 },
+      },
+      VISITOR: {
+        TWO_WHEELER: { type: 'HOURLY', hourlyRatePaise: 2000 },
+        FOUR_WHEELER: { type: 'HOURLY', hourlyRatePaise: 4000 },
+      },
+    },
+  },
+};
+
+describe('public landing page', () => {
+  it('opens at / without signing in and shows only the public overview', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, overview));
+    vi.stubGlobal('fetch', fetchMock);
+    const memoryRouter = renderAt('/');
+
+    expect(await screen.findByText('7')).toBeInTheDocument();
+    expect(screen.getByText('of 10 spaces free')).toBeInTheDocument();
+    expect(screen.getByText('Full')).toBeInTheDocument();
+    expect(screen.getByText('First 2 hours free, then ₹10 per hour')).toBeInTheDocument();
+    expect(screen.getByText('₹40 per hour')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open in Google Maps/ })).toHaveAttribute(
+      'href',
+      'https://www.google.com/maps/search/?api=1&query=15.85%2C74.5',
+    );
+    expect(screen.getByRole('button', { name: /Map location not configured yet/ })).toBeDisabled();
+    expect(screen.getAllByRole('link', { name: /Admin \/ Staff login/ })[0]).toHaveAttribute(
+      'href',
+      '/login',
+    );
+    expect(memoryRouter.state.location.pathname).toBe('/');
+
+    // Only the public endpoint is called, without credentials.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:4000/api/v1/public/overview');
+    expect(new Headers(init.headers).has('Authorization')).toBe(false);
   });
+
+  it('serves the Help & FAQ page publicly', async () => {
+    renderAt('/help');
+    expect(await screen.findByRole('heading', { name: 'Help & FAQ' })).toBeInTheDocument();
+    expect(screen.getByText('Can I look up a parked vehicle here?')).toBeInTheDocument();
+  });
+
+  it('shows a public not-found page for unknown addresses', async () => {
+    const memoryRouter = renderAt('/no-such-page');
+    expect(await screen.findByText('Page not found')).toBeInTheDocument();
+    expect(memoryRouter.state.location.pathname).toBe('/no-such-page');
+  });
+});
+
+describe('protected routes', () => {
+  it.each(['/admin', '/admin/account', '/staff', '/staff/unknown'])(
+    'redirects anonymous visitors from %s to the sign-in page',
+    async (path) => {
+      const memoryRouter = renderAt(path);
+      expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+      expect(memoryRouter.state.location.pathname).toBe('/login');
+    },
+  );
 
   it('signs in security staff and lands on the staff dashboard', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, loginResponse('SECURITY_STAFF')));

@@ -1,6 +1,8 @@
 import type { UserRole } from '@cpvts/shared';
 
 export const PATHS = {
+  home: '/',
+  help: '/help',
   login: '/login',
   admin: {
     root: '/admin',

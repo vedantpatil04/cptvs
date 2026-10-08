@@ -8,8 +8,16 @@ Branding and the institution name are configurable per deployment.
 > **Status: Phase 1 — Foundation.** Project structure, authentication (Admin and
 > Security Staff), database schema and migrations, design system, application
 > shell, multilingual foundation (English, Kannada, Hindi, Marathi) and
-> hosting-ready configuration. Parking workflows (entry/exit, allocation, fees,
-> payments, receipts, tracking, analytics) are **not** implemented yet.
+> hosting-ready configuration, plus a public landing page. Parking workflows
+> (entry/exit, allocation, fee calculation, payments, receipts, tracking,
+> analytics) are **not** implemented yet.
+
+The app opens on a **public parking overview** at `/` — free two-wheeler and
+four-wheeler space counts, parking blocks (with Google Maps links once real
+coordinates are configured), fee rules, Help & FAQ and a language selector. It
+shows aggregate information only: no vehicle numbers, slot assignments,
+sessions, revenue, audit logs or users. Admin and Security Staff sign in at
+`/login`; everything under `/admin` and `/staff` requires sign-in.
 
 ---
 
@@ -54,7 +62,7 @@ npm workspaces monorepo:
 │   │   │   │   ├── system/       Admin-only system status
 │   │   │   │   └── health/       /health and /health/ready probes
 │   │   │   ├── routes/           /api/v1 router composition
-│   │   │   ├── scripts/          CLI scripts (account seed)
+│   │   │   ├── scripts/          CLI scripts (seed)
 │   │   │   ├── app.ts            Express app factory
 │   │   │   └── server.ts         Process entry point, graceful shutdown
 │   │   ├── test/                 Integration tests (Vitest + Supertest + PostgreSQL)
@@ -108,7 +116,7 @@ cp apps/web/.env.example apps/web/.env.local
 # 4. Create the database schema
 npm run db:migrate:deploy
 
-# 5. Create the initial Admin (and optional Security Staff) account
+# 5. Create the initial accounts, the baseline parking layout and the fee schedule
 npm run db:seed
 
 # 6. Run API (http://localhost:4000) and web (http://localhost:5173)
@@ -121,8 +129,15 @@ Generate a JWT secret:
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Sign in at http://localhost:5173 with the seeded username and password. Admins
-land on `/admin`, Security Staff on `/staff`.
+Open http://localhost:5173 for the public overview. Choose **Admin / Staff
+login** (or go to `/login`) and sign in with the seeded username and password.
+Admins land on `/admin`, Security Staff on `/staff`.
+
+The seed is idempotent and never overwrites existing data. Besides the
+accounts it creates, only if absent, the minimum layout from Master Blueprint
+§5 (Two-Wheeler block T-01…T-10, Four-Wheeler block F-01…F-05, all available,
+no GPS coordinates) and the official fee schedule (`settings` key
+`parking.feeSchedule`).
 
 > In `.env` files, quote values containing `#` (e.g. `SEED_ADMIN_PASSWORD="Pa#ss..."`),
 > otherwise everything after `#` is treated as a comment.
@@ -148,6 +163,7 @@ invalid configuration and lists the problems.
 | `CORS_ORIGINS`                                             | prod*     |                           | Comma-separated allowed origins                  |
 | `TRUST_PROXY`                                              |           | `0`                       | Reverse-proxy hops to trust (Render: `1`)        |
 | `LOGIN_RATE_LIMIT_WINDOW_MINUTES` / `LOGIN_RATE_LIMIT_MAX` |           | `15` / `10`               | Failed sign-ins allowed per IP per window        |
+| `PUBLIC_RATE_LIMIT_PER_MINUTE`                             |           | `120`                     | Requests per minute per IP on public endpoints   |
 | `SEED_ADMIN_*`, `SEED_STAFF_*`                             | seed only |                           | Initial accounts for `db:seed`                   |
 
 \* In production at least one of `CORS_ORIGINS` or `FRONTEND_URL` is required.
@@ -221,8 +237,8 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#supabase-postgresql) for details.
 | Apply pending migrations (CI/production)                  | `npm run db:migrate:deploy`               |
 | Show migration status                                     | `npm run db:migrate:status -w @cpvts/api` |
 | Regenerate the client                                     | `npm run db:generate`                     |
-| Seed initial accounts (development, TypeScript)           | `npm run db:seed`                         |
-| Seed initial accounts (production, compiled)              | `npm run db:seed:deploy -w @cpvts/api`    |
+| Seed accounts, baseline layout, fees (development)        | `npm run db:seed`                         |
+| Seed accounts, baseline layout, fees (production)         | `npm run db:seed:deploy -w @cpvts/api`    |
 | Browse data                                               | `npm run db:studio`                       |
 
 Never edit an applied migration; create a new one. Constraints that the Prisma

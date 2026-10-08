@@ -4,11 +4,17 @@ import { Link } from 'react-router';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/features/auth/use-auth';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+
+import { PATHS, ROLE_HOME } from '../paths';
 
 export function ForbiddenPage() {
   const { t } = useTranslation();
+  const { state } = useAuth();
   useDocumentTitle(t('pages.forbiddenTitle'));
+  const home = state.status === 'authenticated' ? ROLE_HOME[state.user.role] : PATHS.home;
+
   return (
     <EmptyState
       icon={ShieldX}
@@ -16,7 +22,7 @@ export function ForbiddenPage() {
       description={t('pages.forbiddenDescription')}
       action={
         <Button asChild>
-          <Link to="/">{t('common.goHome')}</Link>
+          <Link to={home}>{t('common.goHome')}</Link>
         </Button>
       }
     />

@@ -2,15 +2,13 @@ import { createBrowserRouter } from 'react-router';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { AccountPage } from '@/features/account/AccountPage';
-import {
-  PublicOnlyRoute,
-  RequireAuth,
-  RequireRole,
-  RoleHomeRedirect,
-} from '@/features/auth/guards';
+import { PublicOnlyRoute, RequireAuth, RequireRole } from '@/features/auth/guards';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { AdminDashboardPage } from '@/features/dashboard/AdminDashboardPage';
 import { StaffDashboardPage } from '@/features/dashboard/StaffDashboardPage';
+import { HelpPage } from '@/features/public/HelpPage';
+import { PublicHomePage } from '@/features/public/PublicHomePage';
+import { PublicLayout } from '@/features/public/PublicLayout';
 
 import { NotFoundPage } from './pages/NotFoundPage';
 import { RouteErrorPage } from './pages/RouteErrorPage';
@@ -18,16 +16,25 @@ import { PATHS } from './paths';
 
 /**
  * Route tree:
- *   /login                public (redirects signed-in users)
- *   /                     → role home
- *   /admin/*              ADMIN only
- *   /staff/*              SECURITY_STAFF only
- * Every authenticated route renders inside the AppShell.
+ *   /            public landing page (aggregate parking overview, no sign-in)
+ *   /help        public Help & FAQ
+ *   /login       sign-in (redirects signed-in users)
+ *   /admin/*     ADMIN only        ┐ require sign-in; unauthenticated
+ *   /staff/*     SECURITY_STAFF    ┘ visitors are redirected to /login
+ *   *            public "not found"
  */
 export const router = createBrowserRouter([
   {
     errorElement: <RouteErrorPage />,
     children: [
+      {
+        element: <PublicLayout />,
+        children: [
+          { path: PATHS.home, element: <PublicHomePage /> },
+          { path: PATHS.help, element: <HelpPage /> },
+          { path: '*', element: <NotFoundPage area="public" /> },
+        ],
+      },
       {
         path: PATHS.login,
         element: (
@@ -39,7 +46,6 @@ export const router = createBrowserRouter([
       {
         element: <RequireAuth />,
         children: [
-          { index: true, element: <RoleHomeRedirect /> },
           {
             element: <AppShell />,
             children: [
@@ -49,6 +55,7 @@ export const router = createBrowserRouter([
                 children: [
                   { index: true, element: <AdminDashboardPage /> },
                   { path: PATHS.admin.account, element: <AccountPage /> },
+                  { path: '*', element: <NotFoundPage area="app" /> },
                 ],
               },
               {
@@ -57,9 +64,9 @@ export const router = createBrowserRouter([
                 children: [
                   { index: true, element: <StaffDashboardPage /> },
                   { path: PATHS.staff.account, element: <AccountPage /> },
+                  { path: '*', element: <NotFoundPage area="app" /> },
                 ],
               },
-              { path: '*', element: <NotFoundPage /> },
             ],
           },
         ],

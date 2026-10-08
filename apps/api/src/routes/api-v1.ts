@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { authRouter } from '../modules/auth/auth.routes.js';
+import { publicRouter } from '../modules/public/public.routes.js';
 import { systemRouter } from '../modules/system/system.routes.js';
 
 /**
@@ -9,5 +10,6 @@ import { systemRouter } from '../modules/system/system.routes.js';
  */
 export const apiV1Router = Router();
 
+apiV1Router.use('/public', publicRouter);
 apiV1Router.use('/auth', authRouter);
 apiV1Router.use('/system', systemRouter);

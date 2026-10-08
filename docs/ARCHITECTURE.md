@@ -124,28 +124,50 @@ caches, but the database constraints above prevent double allocation.
   The client keeps the token in `localStorage`; the risk is mitigated by short
   token lifetime, server-side revocation and React's output escaping.
 
+### Public overview (no authentication)
+
+`GET /api/v1/public/overview` powers the public landing page. It returns:
+
+- free and total slot **counts** per vehicle type (active zones of active blocks);
+- active parking **blocks**: name, description, accepted vehicle types and GPS
+  coordinates when configured (null otherwise);
+- the **fee schedule** from the `settings` table (`parking.feeSchedule`),
+  validated against the shared `feeScheduleSchema`; withheld if invalid.
+
+It never returns slot codes, vehicles, sessions, payments, receipts, revenue,
+audit logs or users — an integration test inserts such records and asserts
+that none of their identifiers appear in the response. Responses are
+rate-limited per IP and cacheable for 15 seconds. The fee schedule is
+configuration that the Phase 2 fee engine will read; nothing calculates a fee yet.
+
 ### Endpoints (Phase 1)
 
-| Method | Path                    | Access                                      |
-| ------ | ----------------------- | ------------------------------------------- |
-| GET    | `/health`               | Public — liveness                           |
-| GET    | `/health/ready`         | Public — database readiness (503 when down) |
-| POST   | `/api/v1/auth/login`    | Public, rate-limited                        |
-| POST   | `/api/v1/auth/logout`   | Authenticated                               |
-| GET    | `/api/v1/auth/me`       | Authenticated                               |
-| GET    | `/api/v1/system/status` | Admin                                       |
+| Method | Path                      | Access                                      |
+| ------ | ------------------------- | ------------------------------------------- |
+| GET    | `/health`                 | Public — liveness                           |
+| GET    | `/health/ready`           | Public — database readiness (503 when down) |
+| GET    | `/api/v1/public/overview` | Public, rate-limited — aggregate overview   |
+| POST   | `/api/v1/auth/login`      | Public, rate-limited                        |
+| POST   | `/api/v1/auth/logout`     | Authenticated                               |
+| GET    | `/api/v1/auth/me`         | Authenticated                               |
+| GET    | `/api/v1/system/status`   | Admin                                       |
 
 ## Web (`apps/web`)
 
 ### Routing and guards
 
 ```text
-/login        PublicOnlyRoute   (signed-in users are sent to their requested page or role home)
-/             RequireAuth → RoleHomeRedirect
+/             PublicLayout → PublicHomePage   (no sign-in; aggregate overview only)
+/help         PublicLayout → HelpPage         (static Help & FAQ)
+/login        PublicOnlyRoute                 (signed-in users are sent to their requested page or role home)
 /admin/*      RequireAuth → AppShell → RequireRole(ADMIN)
 /staff/*      RequireAuth → AppShell → RequireRole(SECURITY_STAFF)
-*             NotFound inside the shell
+*             PublicLayout → NotFound
 ```
+
+Unauthenticated requests for anything under `/admin` or `/staff` redirect to
+`/login` and return to the requested page after sign-in. The public pages
+call only `GET /api/v1/public/overview`, without credentials.
 
 `AuthProvider` restores a stored session by calling `GET /auth/me`; a 401
 anywhere ends the session locally and the sign-in page explains why. Network
@@ -196,5 +218,6 @@ that the deployment is an independent demonstration unless
 
 Phase 1 intentionally contains **no** parking workflows: no vehicle entry/exit,
 allocation, tracking, parking map, duration or fee logic, slot holds, payments,
-receipts, QR codes, history, analytics, alerts, CSV export, Google Maps or
-Android packaging. The schema and module structure are ready for them.
+receipts, QR codes, history, analytics, alerts, CSV export, Google Maps
+integration (beyond a plain link to a configured block location) or Android
+packaging. The schema and module structure are ready for them.

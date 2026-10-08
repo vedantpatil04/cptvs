@@ -1,5 +1,6 @@
 export * from './api.js';
 export * from './auth.js';
 export * from './locales.js';
+export * from './parking.js';
 export * from './roles.js';
 export * from './validation.js';

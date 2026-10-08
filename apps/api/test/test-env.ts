@@ -13,4 +13,5 @@ export const testEnv = {
   JWT_SECRET: 'test-only-secret-that-is-at-least-32-characters-long',
   CORS_ORIGINS: 'http://localhost:5173',
   LOGIN_RATE_LIMIT_MAX: '1000',
+  PUBLIC_RATE_LIMIT_PER_MINUTE: '1000',
 } as const;

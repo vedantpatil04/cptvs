@@ -22,3 +22,21 @@ export const loginRateLimiter = rateLimit({
     res.status(429).json(body);
   },
 });
+
+/** Protects the unauthenticated public endpoints from excessive polling (per client IP). */
+export const publicRateLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: config.rateLimit.public.maxPerMinute,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const body: ApiErrorBody = {
+      error: {
+        code: 'RATE_LIMITED',
+        message: 'Too many requests. Please wait and try again.',
+        requestId: req.id,
+      },
+    };
+    res.status(429).json(body);
+  },
+});
