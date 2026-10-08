@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { useCurrentUser } from '@/features/auth/use-auth';
+import { AlertsPanel } from '@/features/operations/AlertsPanel';
 import { useFormatters } from '@/hooks/use-formatters';
 import type { TranslationCatalogue } from '@/i18n/resources';
 
@@ -70,6 +71,7 @@ export function StaffDashboardPage() {
             </CardContent>
           </Card>
         </div>
+        <AlertsPanel />
       </div>
     </>
   );

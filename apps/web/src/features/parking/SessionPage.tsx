@@ -14,6 +14,7 @@ import { errorMessage } from '@/lib/error-message';
 
 import { ActiveVehicleCard } from './ActiveVehicleCard';
 import { parkingApi } from './parking-api';
+import { SessionTimeline } from './SessionTimeline';
 
 /** One parking session: details, actions, entry QR (active) or final fee (completed). */
 export function SessionPage() {
@@ -61,6 +62,7 @@ export function SessionPage() {
               </Card>
             )}
           </div>
+          <SessionTimeline sessionNumber={query.data.sessionNumber} />
         </div>
       )}
     </>

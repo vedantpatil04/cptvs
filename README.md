@@ -5,16 +5,16 @@ repository is prepared for **Bharatesh Institute of Technology, Belagavi** as an
 independent demonstration — it is not an official institutional deployment.
 Branding and the institution name are configurable per deployment.
 
-> **Status: Phase 2 — Core CPVTS.** On top of the Phase 1 foundation
-> (authentication, schema, design system, four languages, hosting setup), the
-> complete Two-Wheeler / Four-Wheeler parking lifecycle works end to end:
-> vehicle entry → validation → explainable automatic slot allocation (with a
-> temporary slot hold) → active session → vehicle tracking and parking map →
-> checkout → official fee calculation → simulated (test) payment →
-> transaction finalization → receipt with verification QR → slot release, plus
-> live dashboard data. Phase 3 management features (integrity engine module,
-> session timeline, analytics, alerts, history/reports UI, CSV export, slot
-> management UI) are **not** implemented yet.
+> **Status: Phase 3 — Smart & Management.** On top of the Phase 1 foundation
+> (authentication, schema, design system, four languages, hosting setup) and
+> the Phase 2 parking lifecycle (vehicle entry → explainable automatic slot
+> allocation with a temporary hold → tracking and parking map → checkout →
+> official fee → simulated payment → finalization → receipt with verification
+> QR → slot release), administrators now have the Parking Integrity Engine,
+> session timelines (audit replay), rule-based alerts, searchable parking
+> history, daily analytics, CSV reports, slot management (block / unblock,
+> allocation priority, block coordinates) and audit logs. The Android WebView
+> APK and demo-data tooling (Phase 4) are **not** part of this phase.
 
 The app opens on a **public parking overview** at `/` — free two-wheeler and
 four-wheeler space counts, parking blocks (with Google Maps links once real
@@ -54,6 +54,14 @@ sessions, revenue, audit logs or users. Admin and Security Staff sign in at
 | **Receipt** (both)                         | Branded receipt with fee breakdown, payment status, transaction ID and verification QR. Print or download as PNG.                                                                                                                                                               |
 | **Verify** (public, `/verify/<reference>`) | Opened by scanning the receipt QR. Validates the receipt against the database and shows a safe summary.                                                                                                                                                                         |
 | **Dashboards**                             | Total / occupied / available / blocked slots, occupancy % (overall, 2W, 4W), currently parked, vehicles today; admins also see today's fees.                                                                                                                                    |
+| **Alerts** (both)                          | Rule-based: zone full, zone nearly full (`ALERT_NEARLY_FULL_PERCENT`), vehicles parked longer than `ALERT_LONG_DURATION_HOURS`, blocked slots. Shown on dashboards and Live parking; refreshes every 30 s.                                                                      |
+| **Session timeline** (both)                | On every session page: each recorded step (check-in, slot assigned with its score, checkout, payment, finalization, receipt, slot release) with time and operator, replayed from the audit log.                                                                                 |
+| **Slot management** (Admin)                | Block an available slot with a reason (excluded from allocation) and unblock it, set allocation priority 0–100, and record or remove real block coordinates. Every change is audited.                                                                                           |
+| **History** (Admin)                        | Every session, filterable by vehicle number, slot, vehicle type, owner category, status and date range; fees come from finalized transactions. Filters live in the URL.                                                                                                         |
+| **Analytics** (Admin)                      | One campus day: vehicles entered and completed, average duration, busiest entry hour, revenue (by vehicle type and owner category), hourly occupancy and entries charts (each with a table view), zone usage and most-used slots.                                               |
+| **Reports** (Admin)                        | CSV downloads (UTF-8 with BOM, spreadsheet-safe) of parking history, transactions, daily revenue and vehicles for a date range (default: last 30 days, at most 366).                                                                                                            |
+| **Integrity** (Admin)                      | Read-only Parking Integrity Engine report: occupied slots ↔ active sessions, one active session per vehicle, no expired holds, completed sessions and paid payments have receipts, receipts match transactions, no stuck payments; plus recently rejected operations.           |
+| **Audit logs** (Admin)                     | Filter by action, record type, record ID, username and date range; each entry shows actor, record and details.                                                                                                                                                                  |
 
 Official fees (configurable in the `settings` table, seeded by `db:seed`):
 Staff free; Student first 2 hours free then ₹10/h (2W) or ₹20/h (4W); Visitor
@@ -108,7 +116,7 @@ npm workspaces monorepo:
 │       │   │   ├── feedback/     Loading, error, empty states, status badges
 │       │   │   └── branding/     Brand mark, institution notice
 │       │   ├── config/           Runtime config and branding (from VITE_* env)
-│       │   ├── features/         auth, dashboard, parking, public, account
+│       │   ├── features/         auth, dashboard, parking, operations, admin, public, account
 │       │   ├── hooks/            Shared hooks
 │       │   ├── i18n/             i18next setup and en/kn/hi/mr catalogues
 │       │   ├── lib/              API client, utilities

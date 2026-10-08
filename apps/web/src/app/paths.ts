@@ -13,6 +13,12 @@ export const PATHS = {
     finder: '/admin/finder',
     session: '/admin/sessions/:sessionNumber',
     receipt: '/admin/receipts/:receiptNumber',
+    slots: '/admin/slots',
+    history: '/admin/history',
+    analytics: '/admin/analytics',
+    reports: '/admin/reports',
+    integrity: '/admin/integrity',
+    auditLogs: '/admin/audit-logs',
   },
   staff: {
     root: '/staff',

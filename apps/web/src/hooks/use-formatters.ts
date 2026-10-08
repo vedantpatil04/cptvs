@@ -16,6 +16,7 @@ export const useFormatters = () => {
       dateStyle: 'medium',
       timeStyle: 'short',
     });
+    const date = new Intl.DateTimeFormat(intlLocale, { dateStyle: 'medium' });
     const time = new Intl.DateTimeFormat(intlLocale, { timeStyle: 'short' });
     const number = new Intl.NumberFormat(intlLocale);
     const rupees = new Intl.NumberFormat(intlLocale, {
@@ -26,6 +27,7 @@ export const useFormatters = () => {
     });
     return {
       dateTime: (value: string | Date) => dateTime.format(toDate(value)),
+      date: (value: string | Date) => date.format(toDate(value)),
       time: (value: string | Date) => time.format(toDate(value)),
       number: (value: number) => number.format(value),
       /** Formats an integer amount in paise as rupees, e.g. 1000 → "₹10". */

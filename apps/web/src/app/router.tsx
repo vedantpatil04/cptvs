@@ -2,6 +2,12 @@ import { createBrowserRouter } from 'react-router';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { AccountPage } from '@/features/account/AccountPage';
+import { AnalyticsPage } from '@/features/admin/AnalyticsPage';
+import { AuditLogPage } from '@/features/admin/AuditLogPage';
+import { HistoryPage } from '@/features/admin/HistoryPage';
+import { IntegrityPage } from '@/features/admin/IntegrityPage';
+import { ReportsPage } from '@/features/admin/ReportsPage';
+import { SlotManagementPage } from '@/features/admin/SlotManagementPage';
 import { PublicOnlyRoute, RequireAuth, RequireRole } from '@/features/auth/guards';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { AdminDashboardPage } from '@/features/dashboard/AdminDashboardPage';
@@ -67,6 +73,12 @@ export const router = createBrowserRouter([
                   { path: PATHS.admin.finder, element: <VehicleFinderPage /> },
                   { path: PATHS.admin.session, element: <SessionPage /> },
                   { path: PATHS.admin.receipt, element: <ReceiptPage /> },
+                  { path: PATHS.admin.slots, element: <SlotManagementPage /> },
+                  { path: PATHS.admin.history, element: <HistoryPage /> },
+                  { path: PATHS.admin.analytics, element: <AnalyticsPage /> },
+                  { path: PATHS.admin.reports, element: <ReportsPage /> },
+                  { path: PATHS.admin.integrity, element: <IntegrityPage /> },
+                  { path: PATHS.admin.auditLogs, element: <AuditLogPage /> },
                   { path: PATHS.admin.account, element: <AccountPage /> },
                   { path: '*', element: <NotFoundPage area="app" /> },
                 ],

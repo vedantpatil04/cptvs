@@ -31,7 +31,13 @@
     "liveParking": "लाइव पार्किंग",
     "vehicleEntry": "वाहन प्रवेश",
     "vehicleExit": "वाहन निकास",
-    "vehicleFinder": "वाहन खोज"
+    "vehicleFinder": "वाहन खोज",
+    "slotManagement": "स्थान प्रबंधन",
+    "history": "इतिहास",
+    "analytics": "विश्लेषण",
+    "reports": "रिपोर्ट",
+    "integrity": "अखंडता जाँच",
+    "auditLogs": "ऑडिट लॉग"
   },
   "auth": {
     "signInTitle": "साइन इन",
@@ -416,6 +422,224 @@
         "VALID": "सत्यापित",
         "INVALID": "सत्यापित नहीं"
       }
+    }
+  },
+  "charts": {
+    "total": "कुल",
+    "showTable": "तालिका के रूप में दिखाएँ"
+  },
+  "filters": {
+    "title": "फ़िल्टर",
+    "all": "सभी",
+    "apply": "फ़िल्टर लागू करें",
+    "reset": "रीसेट करें",
+    "from": "प्रारंभ तारीख",
+    "to": "अंतिम तारीख"
+  },
+  "pager": {
+    "label": "पृष्ठ क्रमांकन",
+    "showing": "{{total}} में से {{first}}–{{last}} दिखाए जा रहे हैं",
+    "previous": "पिछला",
+    "next": "अगला",
+    "page": "पृष्ठ {{page}} / {{pages}}"
+  },
+  "alerts": {
+    "title": "अलर्ट",
+    "rules": "नियम: ज़ोन {{percent}}% या अधिक भरा, {{hours}} घंटे या अधिक से खड़ा वाहन, अवरुद्ध स्थान",
+    "none": "कोई अलर्ट नहीं। हर ज़ोन में जगह है और कोई वाहन समय सीमा से अधिक नहीं खड़ा है।",
+    "zoneFull": "{{zone}} पूरा भर गया है (उपयोग योग्य {{usable}} में से {{occupied}} स्थान)।",
+    "zoneNearlyFull": "{{zone}} {{percent}}% भरा है (उपयोग योग्य {{usable}} में से {{occupied}} स्थान)।",
+    "availableSlots": "अभी खाली: {{slots}}",
+    "longDuration_one": "स्थान {{slot}} पर {{vehicle}} {{count}} घंटे से खड़ा है।",
+    "longDuration_other": "स्थान {{slot}} पर {{vehicle}} {{count}} घंटे से खड़ा है।",
+    "slotBlocked": "स्थान {{slot}} ({{zone}}) अवरुद्ध है और आवंटन से बाहर है।",
+    "reason": "कारण: {{reason}}",
+    "severity": {
+      "critical": "गंभीर",
+      "warning": "चेतावनी",
+      "info": "सूचना"
+    }
+  },
+  "timeline": {
+    "title": "सत्र समयरेखा",
+    "description": "ऑडिट लॉग से इस सत्र का हर दर्ज चरण।",
+    "empty": "इस सत्र के लिए कोई घटना दर्ज नहीं है।",
+    "score": "स्कोर {{score}}"
+  },
+  "audit": {
+    "title": "ऑडिट लॉग",
+    "description": "साइन-इन, पार्किंग संचालन और प्रशासनिक बदलावों का केवल-पढ़ने योग्य रिकॉर्ड।",
+    "empty": "इन फ़िल्टर से मेल खाती कोई ऑडिट प्रविष्टि नहीं है।",
+    "time": "समय",
+    "action": "क्रिया",
+    "actor": "द्वारा किया गया",
+    "actorUsername": "उपयोगकर्ता नाम",
+    "entity": "रिकॉर्ड",
+    "entityType": "रिकॉर्ड प्रकार",
+    "entityId": "रिकॉर्ड ID",
+    "details": "विवरण",
+    "showDetails": "विवरण दिखाएँ",
+    "system": "सिस्टम",
+    "actions": {
+      "AUTH_LOGIN_SUCCEEDED": "साइन इन किया",
+      "AUTH_LOGIN_FAILED": "साइन-इन विफल",
+      "AUTH_LOGOUT": "साइन आउट किया",
+      "VEHICLE_CHECKED_IN": "वाहन प्रवेश दर्ज",
+      "SLOT_ASSIGNED": "स्थान आवंटित",
+      "CHECKOUT_INITIATED": "चेकआउट शुरू",
+      "PAYMENT_INITIATED": "भुगतान शुरू",
+      "PAYMENT_SUCCEEDED": "भुगतान सफल",
+      "PAYMENT_FAILED": "भुगतान विफल",
+      "PAYMENT_CANCELLED": "भुगतान रद्द",
+      "TRANSACTION_FINALIZED": "लेन-देन अंतिम",
+      "RECEIPT_GENERATED": "रसीद बनाई गई",
+      "SLOT_RELEASED": "स्थान मुक्त",
+      "SLOT_BLOCKED": "स्थान अवरुद्ध",
+      "SLOT_UNBLOCKED": "स्थान अवरोध हटाया",
+      "SLOT_PRIORITY_CHANGED": "स्थान प्राथमिकता बदली",
+      "BLOCK_LOCATION_UPDATED": "ब्लॉक स्थान अपडेट",
+      "REPORT_EXPORTED": "रिपोर्ट निर्यात",
+      "INTEGRITY_REJECTED": "अखंडता नियम द्वारा अस्वीकृत"
+    },
+    "entityTypes": {
+      "USER": "उपयोगकर्ता",
+      "PARKING_SESSION": "पार्किंग सत्र",
+      "PARKING_SLOT": "पार्किंग स्थान",
+      "PARKING_BLOCK": "पार्किंग ब्लॉक",
+      "PAYMENT": "भुगतान",
+      "RECEIPT": "रसीद",
+      "VEHICLE": "वाहन",
+      "REPORT": "रिपोर्ट"
+    }
+  },
+  "history": {
+    "title": "पार्किंग इतिहास",
+    "description": "वाहन, स्थान, श्रेणी, स्थिति या तारीख से हर पार्किंग सत्र खोजें।",
+    "empty": "इन फ़िल्टर से मेल खाता कोई पार्किंग सत्र नहीं है।",
+    "fee": "शुल्क",
+    "receipt": "रसीद"
+  },
+  "analytics": {
+    "title": "विश्लेषण",
+    "description": "कैंपस के एक दिन की उपस्थिति, प्रवेश, राजस्व और ज़ोन उपयोग।",
+    "date": "तारीख",
+    "show": "दिखाएँ",
+    "today": "आज",
+    "previousDay": "पिछला दिन",
+    "nextDay": "अगला दिन",
+    "summary": "दिन का सारांश",
+    "entered": "प्रवेश किए वाहन",
+    "completed": "पूर्ण सत्र",
+    "averageDuration": "औसत अवधि",
+    "hoursShort": "{{value}} घं",
+    "peakEntryHour": "सबसे व्यस्त प्रवेश घंटा",
+    "revenue": "राजस्व",
+    "transactions_one": "{{count}} अंतिम लेन-देन",
+    "transactions_other": "{{count}} अंतिम लेन-देन",
+    "occupancyTitle": "घंटेवार उपस्थिति",
+    "occupancyDescription": "हर घंटे खड़े वाहन, वाहन प्रकार के अनुसार।",
+    "hour": "घंटा",
+    "entriesTitle": "घंटेवार प्रवेश",
+    "entriesDescription": "हर घंटे दर्ज हुए वाहन प्रवेश।",
+    "entriesSeries": "प्रवेश",
+    "revenueByVehicleType": "वाहन प्रकार अनुसार राजस्व",
+    "revenueByOwnerCategory": "मालिक श्रेणी अनुसार राजस्व",
+    "zonesTitle": "ज़ोन उपयोग",
+    "zonesDescription": "अधिकतम उपस्थिति किसी भी घंटे में खड़े वाहनों की सबसे बड़ी संख्या है।",
+    "topSlotsTitle": "सबसे अधिक उपयोग किए गए स्थान",
+    "topSlotsDescription": "इस दिन हर स्थान पर शुरू हुए सत्र।",
+    "noSessions": "इस दिन कोई सत्र नहीं।",
+    "sessionsColumn": "सत्र",
+    "peakOccupancy": "अधिकतम उपस्थिति",
+    "currentOccupancy": "अभी",
+    "usableSlots": "उपयोग योग्य स्थान"
+  },
+  "reports": {
+    "title": "रिपोर्ट",
+    "description": "स्प्रेडशीट के लिए CSV फ़ाइलें डाउनलोड करें। राशियाँ केवल अंतिम लेन-देन से आती हैं।",
+    "rangeTitle": "तारीख सीमा",
+    "rangeHint": "पिछले 30 दिनों के लिए दोनों तारीखें खाली छोड़ें। अधिकतम सीमा 366 दिन है।",
+    "download": "CSV डाउनलोड करें",
+    "downloaded": "{{file}} डाउनलोड हो गई।",
+    "kinds": {
+      "history": {
+        "title": "पार्किंग इतिहास",
+        "description": "सीमा में प्रवेश किए हर सत्र का स्थान, अवधि, शुल्क और रसीद।"
+      },
+      "transactions": {
+        "title": "लेन-देन",
+        "description": "सीमा में हर सिम्युलेटेड भुगतान प्रयास, विफल और रद्द सहित।"
+      },
+      "revenue": {
+        "title": "दैनिक राजस्व",
+        "description": "वाहन प्रकार और मालिक श्रेणी के योग सहित प्रतिदिन राजस्व।"
+      },
+      "vehicles": {
+        "title": "वाहन",
+        "description": "सभी दर्ज वाहन और उनकी यात्राओं की संख्या। तारीख सीमा लागू नहीं।"
+      }
+    }
+  },
+  "slots": {
+    "title": "स्थान प्रबंधन",
+    "description": "रखरखाव के लिए स्थान अवरुद्ध करें, आवंटन प्राथमिकता तय करें और ब्लॉक का स्थान दर्ज करें।",
+    "noLocation": "स्थान निर्धारित नहीं",
+    "editLocation": "स्थान संपादित करें",
+    "priority": "प्राथमिकता",
+    "blockedReason": "अवरोध का कारण",
+    "actions": "क्रियाएँ",
+    "block": "अवरुद्ध करें",
+    "unblock": "अवरोध हटाएँ",
+    "blockOnlyAvailable": "केवल उपलब्ध स्थान ही अवरुद्ध किए जा सकते हैं।",
+    "setPriority": "प्राथमिकता",
+    "blockTitle": "स्थान {{slot}} अवरुद्ध करें",
+    "blockHint": "अवरुद्ध स्थान अवरोध हटने तक स्वचालित आवंटन से बाहर रहता है।",
+    "unblockTitle": "स्थान {{slot}} का अवरोध हटाएँ",
+    "unblockHint": "स्थान फिर से आवंटन के लिए उपलब्ध हो जाएगा।",
+    "priorityTitle": "स्थान {{slot}} की प्राथमिकता",
+    "priorityHint": "0–100. अधिक प्राथमिकता वाले स्थान पहले दिए जाते हैं; बराबरी पर दैनिक उपयोग और लेआउट क्रम देखा जाता है।",
+    "locationTitle": "{{block}} का स्थान",
+    "locationHint": "केवल वास्तविक, मापे गए निर्देशांक दर्ज करें। स्थान हटाने के लिए दोनों खाली छोड़ें।",
+    "reason": "कारण",
+    "reasonPlaceholder": "उदा. सतह की मरम्मत",
+    "latitude": "अक्षांश",
+    "longitude": "देशांतर",
+    "removeLocation": "स्थान हटाएँ",
+    "confirm": {
+      "block": "स्थान अवरुद्ध करें",
+      "unblock": "अवरोध हटाएँ",
+      "priority": "प्राथमिकता सहेजें",
+      "location": "स्थान सहेजें"
+    },
+    "blocked": "स्थान {{slot}} अब अवरुद्ध है।",
+    "unblocked": "स्थान {{slot}} फिर से उपलब्ध है।",
+    "prioritySaved": "स्थान {{slot}} की प्राथमिकता अब {{priority}} है।",
+    "locationSaved": "{{block}} का स्थान सहेजा गया।",
+    "locationRemoved": "{{block}} का स्थान हटाया गया।"
+  },
+  "integrity": {
+    "title": "पार्किंग अखंडता",
+    "description": "केवल-पढ़ने वाली जाँचें कि स्थान, सत्र, भुगतान और रसीदें आपस में मेल खाते हैं।",
+    "runAgain": "जाँच फिर से चलाएँ",
+    "healthy": "सभी अखंडता जाँचें सफल रहीं",
+    "unhealthy": "कुछ अखंडता जाँचें विफल रहीं",
+    "checkedAt": "{{time}} पर जाँचा गया।",
+    "checksTitle": "जाँचें",
+    "passed": "सफल",
+    "failed": "विफल",
+    "rule": "नियम",
+    "rejectionsTitle": "हाल में अस्वीकृत संचालन",
+    "rejectionsDescription": "किसी संगति या सुरक्षा नियम द्वारा अस्वीकार किए गए अनुरोध।",
+    "noRejections": "कोई संचालन अस्वीकृत नहीं हुआ है।",
+    "checks": {
+      "OCCUPIED_SLOT_HAS_ACTIVE_SESSION": "हर भरे स्थान का एक सक्रिय सत्र है",
+      "ACTIVE_SESSION_SLOT_OCCUPIED": "हर सक्रिय सत्र का स्थान भरा हुआ दर्ज है",
+      "ONE_ACTIVE_SESSION_PER_VEHICLE": "किसी वाहन के एक से अधिक सक्रिय सत्र नहीं हैं",
+      "NO_EXPIRED_SLOT_HOLDS": "कोई समाप्त अस्थायी स्थान होल्ड शेष नहीं है",
+      "COMPLETED_SESSION_HAS_RECEIPT": "हर पूर्ण सत्र की रसीद है",
+      "PAID_PAYMENT_HAS_RECEIPT": "हर सफल भुगतान की रसीद है",
+      "RECEIPT_MATCHES_TRANSACTION": "हर रसीद अपने अंतिम लेन-देन से मेल खाती है",
+      "NO_STUCK_PAYMENTS": "कोई भुगतान प्रोसेसिंग में अटका नहीं है"
     }
   }
 }

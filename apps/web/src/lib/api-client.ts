@@ -59,11 +59,12 @@ const parseJson = async (response: Response): Promise<unknown> => {
   }
 };
 
-/** Performs a JSON request against the CPVTS REST API (`/api/v1`). */
-export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal, authenticated = true } = options;
-
-  const headers = new Headers({ Accept: 'application/json', 'Accept-Language': i18n.language });
+const send = async (
+  path: string,
+  { method = 'GET', body, signal, authenticated = true }: RequestOptions,
+  accept: string,
+): Promise<Response> => {
+  const headers = new Headers({ Accept: accept, 'Accept-Language': i18n.language });
   if (body !== undefined) headers.set('Content-Type', 'application/json');
 
   const token = authenticated ? getAccessToken() : null;
@@ -83,10 +84,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     throw new ApiError(0, 'NETWORK_ERROR', 'The server could not be reached.');
   }
 
-  const payload = await parseJson(response);
-
   if (!response.ok) {
     if (response.status === 401 && token) onUnauthorized();
+    const payload = await parseJson(response);
     if (isApiErrorBody(payload)) {
       const { code, message, details } = payload.error;
       throw new ApiError(response.status, code, message, details);
@@ -97,6 +97,26 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       `Request failed with status ${response.status}.`,
     );
   }
+  return response;
+};
 
-  return payload as T;
+/** Performs a JSON request against the CPVTS REST API (`/api/v1`). */
+export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await send(path, options, 'application/json');
+  return (await parseJson(response)) as T;
+}
+
+const filenameFrom = (disposition: string | null): string | null =>
+  disposition?.match(/filename="?([^";]+)"?/)?.[1] ?? null;
+
+/** Downloads a file (e.g. a CSV report) with the caller's credentials. */
+export async function apiDownload(
+  path: string,
+  options: RequestOptions = {},
+): Promise<{ blob: Blob; filename: string | null }> {
+  const response = await send(path, options, '*/*');
+  return {
+    blob: await response.blob(),
+    filename: filenameFrom(response.headers.get('Content-Disposition')),
+  };
 }

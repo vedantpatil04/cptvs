@@ -1,4 +1,4 @@
-# CPVTS Architecture (Phase 2 — Core CPVTS)
+# CPVTS Architecture (Phase 3 — Smart & Management)
 
 This document describes the foundation that later CPVTS phases build on. The
 Master Blueprint remains the product reference; this file explains _how_ the
@@ -242,7 +242,9 @@ possible, by database constraints). Refusals are written to the audit log as
 Audit actions: `VEHICLE_CHECKED_IN`, `SLOT_ASSIGNED`, `CHECKOUT_INITIATED`,
 `PAYMENT_INITIATED`, `PAYMENT_SUCCEEDED`, `PAYMENT_FAILED`, `PAYMENT_CANCELLED`,
 `TRANSACTION_FINALIZED`, `RECEIPT_GENERATED`, `SLOT_RELEASED`,
-`INTEGRITY_REJECTED`.
+`INTEGRITY_REJECTED`; Phase 3 adds `SLOT_BLOCKED`, `SLOT_UNBLOCKED`,
+`SLOT_PRIORITY_CHANGED`, `BLOCK_LOCATION_UPDATED` and `REPORT_EXPORTED`. The
+codes live in `@cpvts/shared` (`audit.ts`) so the web app can translate them.
 
 ### Time
 
@@ -273,6 +275,86 @@ estimates of active sessions; "today" on dashboards is the campus day.
 | POST   | `/api/v1/parking/payments/:id/cancel`     | Security Staff                                 |
 | GET    | `/api/v1/parking/receipts/:receiptNumber` | Staff, Admin                                   |
 | GET    | `/api/v1/dashboard/summary`               | Staff, Admin (revenue for Admin only)          |
+| GET    | `/api/v1/parking/alerts`                  | Staff, Admin — rule-based alerts               |
+| GET    | `/api/v1/parking/sessions/:n/timeline`    | Staff, Admin — session audit replay            |
+| GET    | `/api/v1/admin/layout`                    | Admin — blocks, zones, slots with priority     |
+| POST   | `/api/v1/admin/slots/:code/block`         | Admin — `{ reason }`; AVAILABLE slots only     |
+| POST   | `/api/v1/admin/slots/:code/unblock`       | Admin — BLOCKED slots only                     |
+| PATCH  | `/api/v1/admin/slots/:code/priority`      | Admin — `{ priority }` 0–100                   |
+| PATCH  | `/api/v1/admin/blocks/:code/location`     | Admin — `{ latitude, longitude }` or both null |
+| GET    | `/api/v1/admin/history`                   | Admin — filters + `page`, `pageSize`           |
+| GET    | `/api/v1/admin/reports/:kind`             | Admin — CSV; `from`, `to`                      |
+| GET    | `/api/v1/admin/analytics?date=`           | Admin — one campus day (default today)         |
+| GET    | `/api/v1/admin/integrity`                 | Admin — integrity report                       |
+| GET    | `/api/v1/admin/audit-logs`                | Admin — filters + pagination                   |
+
+## Management (Phase 3)
+
+Admin-only endpoints live in `modules/management` behind one router
+(`admin.routes.ts`: `authenticate` + `authorize('ADMIN')`). Alerts and session
+timelines are operational, so they sit in `modules/parking` and are open to
+both roles. Request schemas and response types are shared with the web app
+(`packages/shared/src/management.ts`).
+
+### Parking Integrity Engine (`integrity.service.ts`)
+
+Read-only consistency checks, each returning `passed` and up to 50 findings:
+
+| Check                              | Rule                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| `OCCUPIED_SLOT_HAS_ACTIVE_SESSION` | An OCCUPIED slot has an ACTIVE session                                    |
+| `ACTIVE_SESSION_SLOT_OCCUPIED`     | An ACTIVE session's slot is OCCUPIED                                      |
+| `ONE_ACTIVE_SESSION_PER_VEHICLE`   | No vehicle has two ACTIVE sessions                                        |
+| `NO_EXPIRED_SLOT_HOLDS`            | No HELD slot is past its hold expiry                                      |
+| `COMPLETED_SESSION_HAS_RECEIPT`    | Every COMPLETED session has a receipt                                     |
+| `PAID_PAYMENT_HAS_RECEIPT`         | Every PAID payment (including ₹0 no-charge) has a receipt                 |
+| `RECEIPT_MATCHES_TRANSACTION`      | Receipt, PAID payment and COMPLETED session agree on amount and exit hour |
+| `NO_STUCK_PAYMENTS`                | No payment has been PROCESSING for more than 5 minutes                    |
+
+The report also lists the 20 most recent `INTEGRITY_REJECTED` audit entries —
+operations refused by a validation or security rule. Prevention stays where it
+was (transactions, CAS updates, database constraints); this module observes.
+
+### Session timeline (`timeline.service.ts`)
+
+Audit entries whose entity is the session, or whose metadata carries its
+session number (slot assignment, payment, receipt, slot release), ordered by
+time and mapped to a fixed set of display details (slot and score, hours,
+amount, method, transaction ID, receipt number, reason).
+
+### Alerts (`alerts.service.ts`)
+
+Recomputed on each request from live state — no stored alerts:
+
+- **Zone full** (critical): occupied (including HELD) ≥ usable (non-blocked) slots.
+- **Zone nearly full** (warning): occupancy ≥ `ALERT_NEARLY_FULL_PERCENT` (default 90); lists the free slots.
+- **Long duration** (warning): active session ≥ `ALERT_LONG_DURATION_HOURS` (default 8) at the current campus hour.
+- **Slot blocked** (info): with its reason.
+
+### History, analytics and reports
+
+- **History** filters sessions by normalised partial vehicle number, slot,
+  type, owner category, status and campus-date range of entry, newest first,
+  paginated (≤ 100 per page). Fees come from the finalized transaction only.
+- **Analytics** covers one campus day. A session occupies hour _h_ when
+  entry ≤ _h_ < exit (active sessions through the current hour today, or the
+  end of a past day). Revenue counts receipts issued that day.
+- **Reports** produce CSV (UTF-8 BOM, CRLF, at most 50 000 rows): history and
+  transactions by date, daily revenue with per-type/category totals, and all
+  vehicles. Cells starting with `= + - @` are prefixed with `'` to prevent
+  spreadsheet formula injection. Ranges default to the last 30 days and are
+  limited to 366 days (`DATE_RANGE_TOO_LARGE`). Each export is audited.
+  `Content-Disposition` is exposed through CORS so the web app can keep the
+  server's file name.
+
+### Slot management
+
+Blocking uses a compare-and-set on `status = AVAILABLE` (an occupied or held
+slot cannot be blocked: `SLOT_NOT_AVAILABLE`); unblocking requires BLOCKED.
+Priority (0–100) feeds the allocation score directly. Block coordinates are
+set only from real, entered values (both or neither); removing them disables
+the map link everywhere. Every change writes an audit entry (block reason,
+priority from/to, new coordinates).
 
 ## Web (`apps/web`)
 
@@ -284,7 +366,8 @@ estimates of active sessions; "today" on dashboards is the campus day.
 /verify/:ref  PublicLayout → ReceiptVerificationPage (receipt QR target)
 /login        PublicOnlyRoute                 (signed-in users are sent to their requested page or role home)
 /admin/*      RequireAuth → AppShell → RequireRole(ADMIN)
-              dashboard, live, finder, sessions/:n, receipts/:n, account
+              dashboard, live, finder, sessions/:n, receipts/:n, account,
+              slots, history, analytics, reports, integrity, audit-logs
 /staff/*      RequireAuth → AppShell → RequireRole(SECURITY_STAFF)
               dashboard, entry, exit, finder, live, sessions/:n, receipts/:n, account
 *             PublicLayout → NotFound
@@ -340,12 +423,20 @@ variables with defaults in `branding-defaults.ts`. The institution notice states
 that the deployment is an independent demonstration unless
 `VITE_BRAND_SHOW_DEMO_NOTICE=false` (only when officially authorised).
 
+### Charts
+
+Analytics charts are hand-built SVG (`src/components/charts`) — no chart
+library. Series colours are the `--chart-1` / `--chart-2` tokens, a
+categorical pair validated for colour-vision deficiency on light surfaces.
+Columns are thin with a rounded data end and a 2 px gap between stacked
+segments; only the peak is labelled. Every chart has a legend (two or more
+series), a tooltip on hover and on keyboard focus (arrow keys, Home, End) and
+a "Show as table" view, so no value depends on colour or hovering.
+
 ## Scope boundary
 
-Implemented through Phase 2: the complete parking lifecycle described above.
+Implemented through Phase 3: the parking lifecycle plus the smart and
+management modules described above.
 
-Not implemented yet (Phase 3+): the Parking Integrity Engine as a separate
-management module, session timeline / audit replay UI, analytics, alerts,
-history and reporting UI, CSV export, admin slot-management UI, demo-data
-tools and the Android WebView APK. No real payment gateway, ML/AI or
-student/visitor logins exist, by design.
+Not implemented (Phase 4): demo-data tools and the Android WebView APK. No
+real payment gateway, ML/AI or student/visitor logins exist, by design.

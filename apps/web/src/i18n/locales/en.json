@@ -31,7 +31,13 @@
     "liveParking": "Live parking",
     "vehicleEntry": "Vehicle entry",
     "vehicleExit": "Vehicle exit",
-    "vehicleFinder": "Vehicle finder"
+    "vehicleFinder": "Vehicle finder",
+    "slotManagement": "Slot management",
+    "history": "History",
+    "analytics": "Analytics",
+    "reports": "Reports",
+    "integrity": "Integrity",
+    "auditLogs": "Audit logs"
   },
   "auth": {
     "signInTitle": "Sign in",
@@ -416,6 +422,224 @@
         "VALID": "Verified",
         "INVALID": "Not verified"
       }
+    }
+  },
+  "charts": {
+    "total": "Total",
+    "showTable": "Show as table"
+  },
+  "filters": {
+    "title": "Filters",
+    "all": "All",
+    "apply": "Apply filters",
+    "reset": "Reset",
+    "from": "From date",
+    "to": "To date"
+  },
+  "pager": {
+    "label": "Pagination",
+    "showing": "Showing {{first}}–{{last}} of {{total}}",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {{page}} of {{pages}}"
+  },
+  "alerts": {
+    "title": "Alerts",
+    "rules": "Rules: zone at {{percent}}% or more, parked {{hours}} hours or more, blocked slots",
+    "none": "No alerts. Every zone has space and no vehicle is over the time limit.",
+    "zoneFull": "{{zone}} is FULL ({{occupied}} of {{usable}} usable slots).",
+    "zoneNearlyFull": "{{zone}} is {{percent}}% occupied ({{occupied}} of {{usable}} usable slots).",
+    "availableSlots": "Still free: {{slots}}",
+    "longDuration_one": "{{vehicle}} in slot {{slot}} has been parked for {{count}} hour.",
+    "longDuration_other": "{{vehicle}} in slot {{slot}} has been parked for {{count}} hours.",
+    "slotBlocked": "Slot {{slot}} ({{zone}}) is blocked and excluded from allocation.",
+    "reason": "Reason: {{reason}}",
+    "severity": {
+      "critical": "Critical",
+      "warning": "Warning",
+      "info": "Info"
+    }
+  },
+  "timeline": {
+    "title": "Session timeline",
+    "description": "Every recorded step of this session, from the audit log.",
+    "empty": "No events have been recorded for this session.",
+    "score": "score {{score}}"
+  },
+  "audit": {
+    "title": "Audit logs",
+    "description": "A read-only record of sign-ins, parking operations and administrative changes.",
+    "empty": "No audit entries match these filters.",
+    "time": "Time",
+    "action": "Action",
+    "actor": "Performed by",
+    "actorUsername": "Username",
+    "entity": "Record",
+    "entityType": "Record type",
+    "entityId": "Record ID",
+    "details": "Details",
+    "showDetails": "Show details",
+    "system": "System",
+    "actions": {
+      "AUTH_LOGIN_SUCCEEDED": "Signed in",
+      "AUTH_LOGIN_FAILED": "Sign-in failed",
+      "AUTH_LOGOUT": "Signed out",
+      "VEHICLE_CHECKED_IN": "Vehicle checked in",
+      "SLOT_ASSIGNED": "Slot assigned",
+      "CHECKOUT_INITIATED": "Checkout started",
+      "PAYMENT_INITIATED": "Payment started",
+      "PAYMENT_SUCCEEDED": "Payment succeeded",
+      "PAYMENT_FAILED": "Payment failed",
+      "PAYMENT_CANCELLED": "Payment cancelled",
+      "TRANSACTION_FINALIZED": "Transaction finalized",
+      "RECEIPT_GENERATED": "Receipt generated",
+      "SLOT_RELEASED": "Slot released",
+      "SLOT_BLOCKED": "Slot blocked",
+      "SLOT_UNBLOCKED": "Slot unblocked",
+      "SLOT_PRIORITY_CHANGED": "Slot priority changed",
+      "BLOCK_LOCATION_UPDATED": "Block location updated",
+      "REPORT_EXPORTED": "Report exported",
+      "INTEGRITY_REJECTED": "Rejected by integrity rule"
+    },
+    "entityTypes": {
+      "USER": "User",
+      "PARKING_SESSION": "Parking session",
+      "PARKING_SLOT": "Parking slot",
+      "PARKING_BLOCK": "Parking block",
+      "PAYMENT": "Payment",
+      "RECEIPT": "Receipt",
+      "VEHICLE": "Vehicle",
+      "REPORT": "Report"
+    }
+  },
+  "history": {
+    "title": "Parking history",
+    "description": "Search every parking session by vehicle, slot, category, status or date.",
+    "empty": "No parking sessions match these filters.",
+    "fee": "Fee",
+    "receipt": "Receipt"
+  },
+  "analytics": {
+    "title": "Analytics",
+    "description": "Occupancy, entries, revenue and zone usage for one campus day.",
+    "date": "Date",
+    "show": "Show",
+    "today": "Today",
+    "previousDay": "Previous day",
+    "nextDay": "Next day",
+    "summary": "Summary for the day",
+    "entered": "Vehicles entered",
+    "completed": "Sessions completed",
+    "averageDuration": "Average duration",
+    "hoursShort": "{{value}} h",
+    "peakEntryHour": "Busiest entry hour",
+    "revenue": "Revenue",
+    "transactions_one": "{{count}} finalized transaction",
+    "transactions_other": "{{count}} finalized transactions",
+    "occupancyTitle": "Occupancy by hour",
+    "occupancyDescription": "Vehicles parked during each hour, by vehicle type.",
+    "hour": "Hour",
+    "entriesTitle": "Entries by hour",
+    "entriesDescription": "Vehicles checked in during each hour.",
+    "entriesSeries": "Entries",
+    "revenueByVehicleType": "Revenue by vehicle type",
+    "revenueByOwnerCategory": "Revenue by owner category",
+    "zonesTitle": "Zone usage",
+    "zonesDescription": "Peak occupancy is the highest number of vehicles parked in any hour.",
+    "topSlotsTitle": "Most used slots",
+    "topSlotsDescription": "Sessions started in each slot on this day.",
+    "noSessions": "No sessions on this day.",
+    "sessionsColumn": "Sessions",
+    "peakOccupancy": "Peak occupancy",
+    "currentOccupancy": "Now",
+    "usableSlots": "Usable slots"
+  },
+  "reports": {
+    "title": "Reports",
+    "description": "Download CSV files for spreadsheets. Amounts come only from finalized transactions.",
+    "rangeTitle": "Date range",
+    "rangeHint": "Leave both dates empty for the last 30 days. The longest range is 366 days.",
+    "download": "Download CSV",
+    "downloaded": "Downloaded {{file}}.",
+    "kinds": {
+      "history": {
+        "title": "Parking history",
+        "description": "Every session that entered in the range, with slot, duration, fee and receipt."
+      },
+      "transactions": {
+        "title": "Transactions",
+        "description": "Every simulated payment attempt in the range, including failed and cancelled ones."
+      },
+      "revenue": {
+        "title": "Daily revenue",
+        "description": "Revenue per day with totals by vehicle type and owner category."
+      },
+      "vehicles": {
+        "title": "Vehicles",
+        "description": "All recorded vehicles with visit counts. Not limited by the date range."
+      }
+    }
+  },
+  "slots": {
+    "title": "Slot management",
+    "description": "Block slots for maintenance, set allocation priority and record block locations.",
+    "noLocation": "Location not set",
+    "editLocation": "Edit location",
+    "priority": "Priority",
+    "blockedReason": "Blocked reason",
+    "actions": "Actions",
+    "block": "Block",
+    "unblock": "Unblock",
+    "blockOnlyAvailable": "Only available slots can be blocked.",
+    "setPriority": "Priority",
+    "blockTitle": "Block slot {{slot}}",
+    "blockHint": "A blocked slot is excluded from automatic allocation until it is unblocked.",
+    "unblockTitle": "Unblock slot {{slot}}",
+    "unblockHint": "The slot becomes available for allocation again.",
+    "priorityTitle": "Priority of slot {{slot}}",
+    "priorityHint": "0–100. Higher priority slots are offered first; ties use daily use and layout order.",
+    "locationTitle": "Location of {{block}}",
+    "locationHint": "Enter real, surveyed coordinates only. Leave both empty to remove the location.",
+    "reason": "Reason",
+    "reasonPlaceholder": "e.g. Surface repair",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "removeLocation": "Remove location",
+    "confirm": {
+      "block": "Block slot",
+      "unblock": "Unblock slot",
+      "priority": "Save priority",
+      "location": "Save location"
+    },
+    "blocked": "Slot {{slot}} is now blocked.",
+    "unblocked": "Slot {{slot}} is available again.",
+    "prioritySaved": "Priority of slot {{slot}} is now {{priority}}.",
+    "locationSaved": "Location of {{block}} saved.",
+    "locationRemoved": "Location of {{block}} removed."
+  },
+  "integrity": {
+    "title": "Parking integrity",
+    "description": "Read-only checks that slots, sessions, payments and receipts agree with each other.",
+    "runAgain": "Run checks again",
+    "healthy": "All integrity checks passed",
+    "unhealthy": "Some integrity checks failed",
+    "checkedAt": "Checked at {{time}}.",
+    "checksTitle": "Checks",
+    "passed": "Passed",
+    "failed": "Failed",
+    "rule": "Rule",
+    "rejectionsTitle": "Recently rejected operations",
+    "rejectionsDescription": "Requests refused by a consistency or security rule.",
+    "noRejections": "No operations have been rejected.",
+    "checks": {
+      "OCCUPIED_SLOT_HAS_ACTIVE_SESSION": "Every occupied slot has an active session",
+      "ACTIVE_SESSION_SLOT_OCCUPIED": "Every active session's slot is marked occupied",
+      "ONE_ACTIVE_SESSION_PER_VEHICLE": "No vehicle has more than one active session",
+      "NO_EXPIRED_SLOT_HOLDS": "No expired temporary slot holds remain",
+      "COMPLETED_SESSION_HAS_RECEIPT": "Every completed session has a receipt",
+      "PAID_PAYMENT_HAS_RECEIPT": "Every paid payment has a receipt",
+      "RECEIPT_MATCHES_TRANSACTION": "Every receipt matches its finalized transaction",
+      "NO_STUCK_PAYMENTS": "No payment is stuck in processing"
     }
   }
 }

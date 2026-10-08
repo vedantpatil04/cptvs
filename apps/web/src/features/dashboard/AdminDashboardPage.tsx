@@ -6,6 +6,7 @@ import { PATHS } from '@/app/paths';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/features/auth/use-auth';
+import { AlertsPanel } from '@/features/operations/AlertsPanel';
 
 import { ParkingKpis } from './ParkingKpis';
 import { SystemStatusCard } from './SystemStatusCard';
@@ -36,9 +37,12 @@ export function AdminDashboardPage() {
           </>
         }
       />
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
-        <ParkingKpis />
-        <SystemStatusCard />
+      <div className="space-y-6">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+          <ParkingKpis />
+          <SystemStatusCard />
+        </div>
+        <AlertsPanel />
       </div>
     </>
   );

@@ -1,10 +1,16 @@
 import type { UserRole } from '@cpvts/shared';
 import {
+  ChartColumn,
+  FileSpreadsheet,
+  History,
   LayoutDashboard,
   LogIn,
   LogOut,
   MapPinned,
+  ScrollText,
   Search,
+  ShieldCheck,
+  SquareParking,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -30,6 +36,12 @@ export const NAVIGATION: Record<UserRole, NavItem[]> = {
     { to: PATHS.admin.root, labelKey: 'nav.dashboard', icon: LayoutDashboard, end: true },
     { to: PATHS.admin.live, labelKey: 'nav.liveParking', icon: MapPinned },
     { to: PATHS.admin.finder, labelKey: 'nav.vehicleFinder', icon: Search },
+    { to: PATHS.admin.slots, labelKey: 'nav.slotManagement', icon: SquareParking },
+    { to: PATHS.admin.history, labelKey: 'nav.history', icon: History },
+    { to: PATHS.admin.analytics, labelKey: 'nav.analytics', icon: ChartColumn },
+    { to: PATHS.admin.reports, labelKey: 'nav.reports', icon: FileSpreadsheet },
+    { to: PATHS.admin.integrity, labelKey: 'nav.integrity', icon: ShieldCheck },
+    { to: PATHS.admin.auditLogs, labelKey: 'nav.auditLogs', icon: ScrollText },
     { to: PATHS.admin.account, labelKey: 'nav.account', icon: UserRound },
   ],
   SECURITY_STAFF: [

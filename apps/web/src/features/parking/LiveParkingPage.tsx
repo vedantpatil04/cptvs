@@ -23,6 +23,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useCurrentUser } from '@/features/auth/use-auth';
+import { AlertsPanel } from '@/features/operations/AlertsPanel';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useFormatters } from '@/hooks/use-formatters';
 import { errorMessage } from '@/lib/error-message';
@@ -102,6 +103,8 @@ export function LiveParkingPage() {
             )}
           </CardContent>
         </Card>
+
+        <AlertsPanel />
 
         {map.status === 'loading' && <LoadingState />}
         {map.status === 'error' && (

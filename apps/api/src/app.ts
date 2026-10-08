@@ -23,7 +23,7 @@ export const createApp = (config: AppConfig): Express => {
       origin: [...config.cors.origins],
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
       allowedHeaders: ['Authorization', 'Content-Type', 'Accept-Language', 'X-Request-Id'],
-      exposedHeaders: ['X-Request-Id'],
+      exposedHeaders: ['X-Request-Id', 'Content-Disposition'],
       maxAge: 600,
     }),
   );
