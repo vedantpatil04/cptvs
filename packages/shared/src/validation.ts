@@ -8,6 +8,11 @@ export const VALIDATION_MESSAGES = {
   tooLong: 'validation.tooLong',
   passwordTooShort: 'validation.passwordTooShort',
   passwordTooLong: 'validation.passwordTooLong',
+  selectOption: 'validation.selectOption',
+  invalidVehicleNumber: 'validation.invalidVehicleNumber',
+  invalidHour: 'validation.invalidHour',
+  invalidSessionNumber: 'validation.invalidSessionNumber',
+  invalidSlotCode: 'validation.invalidSlotCode',
 } as const;
 
 export type ValidationMessageKey = (typeof VALIDATION_MESSAGES)[keyof typeof VALIDATION_MESSAGES];

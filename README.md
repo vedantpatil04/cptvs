@@ -5,12 +5,16 @@ repository is prepared for **Bharatesh Institute of Technology, Belagavi** as an
 independent demonstration — it is not an official institutional deployment.
 Branding and the institution name are configurable per deployment.
 
-> **Status: Phase 1 — Foundation.** Project structure, authentication (Admin and
-> Security Staff), database schema and migrations, design system, application
-> shell, multilingual foundation (English, Kannada, Hindi, Marathi) and
-> hosting-ready configuration, plus a public landing page. Parking workflows
-> (entry/exit, allocation, fee calculation, payments, receipts, tracking,
-> analytics) are **not** implemented yet.
+> **Status: Phase 2 — Core CPVTS.** On top of the Phase 1 foundation
+> (authentication, schema, design system, four languages, hosting setup), the
+> complete Two-Wheeler / Four-Wheeler parking lifecycle works end to end:
+> vehicle entry → validation → explainable automatic slot allocation (with a
+> temporary slot hold) → active session → vehicle tracking and parking map →
+> checkout → official fee calculation → simulated (test) payment →
+> transaction finalization → receipt with verification QR → slot release, plus
+> live dashboard data. Phase 3 management features (integrity engine module,
+> session timeline, analytics, alerts, history/reports UI, CSV export, slot
+> management UI) are **not** implemented yet.
 
 The app opens on a **public parking overview** at `/` — free two-wheeler and
 four-wheeler space counts, parking blocks (with Google Maps links once real
@@ -23,6 +27,7 @@ sessions, revenue, audit logs or users. Admin and Security Staff sign in at
 
 ## Contents
 
+- [Parking workflow](#parking-workflow)
 - [Project structure](#project-structure)
 - [Requirements](#requirements)
 - [Local setup](#local-setup)
@@ -37,6 +42,27 @@ sessions, revenue, audit logs or users. Admin and Security Staff sign in at
 - [Further documentation](#further-documentation)
 
 ---
+
+## Parking workflow
+
+| Screen (role)                              | What it does                                                                                                                                                                                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vehicle entry** (Security Staff)         | Vehicle number, type, owner category and entry hour. The server validates, rejects duplicates and full zones, and assigns the best slot, explaining why (correct zone, available, not blocked, best score, final availability verified). Shows the session number and entry QR. |
+| **Vehicle finder** (both)                  | Search by vehicle number, slot ID, session number or scanned entry QR. Shows block, exact slot, entry time, live duration and estimated fee, with _Locate on map_, _Open in Google Maps_ (when coordinates are configured), _View session_ and _Check out_.                     |
+| **Live parking** (both)                    | Logical map of every zone (available / occupied / blocked), slot details, search-to-highlight, and the parked-vehicle board. Refreshes every 30 s.                                                                                                                              |
+| **Vehicle exit** (Security Staff)          | Find the vehicle, choose the exit hour, see the fee breakdown, pay with simulated UPI / Card / Cash (or _No charge_ for ₹0), then view the receipt.                                                                                                                             |
+| **Receipt** (both)                         | Branded receipt with fee breakdown, payment status, transaction ID and verification QR. Print or download as PNG.                                                                                                                                                               |
+| **Verify** (public, `/verify/<reference>`) | Opened by scanning the receipt QR. Validates the receipt against the database and shows a safe summary.                                                                                                                                                                         |
+| **Dashboards**                             | Total / occupied / available / blocked slots, occupancy % (overall, 2W, 4W), currently parked, vehicles today; admins also see today's fees.                                                                                                                                    |
+
+Official fees (configurable in the `settings` table, seeded by `db:seed`):
+Staff free; Student first 2 hours free then ₹10/h (2W) or ₹20/h (4W); Visitor
+₹20/h (2W) or ₹40/h (4W). Duration = exit hour − entry hour (whole hours).
+Example: Student 2W 09:00 → 13:00 = ₹20.
+
+Payments are **simulated** (test/demo): no gateway is called and no money
+moves. This is stated in the UI, on receipts and in the database
+(`payments.is_simulated`).
 
 ## Project structure
 
@@ -59,6 +85,12 @@ npm workspaces monorepo:
 │   │   │   │   ├── auth/         Login, logout, current user, JWT, password hashing
 │   │   │   │   ├── users/        User repository and public mappers
 │   │   │   │   ├── audit/        Audit-log repository and action names
+│   │   │   │   ├── parking/      Check-in, allocation, slot holds, tracking, map,
+│   │   │   │   │                 checkout, mock payment, finalization, receipts
+│   │   │   │   ├── fees/         The single authoritative fee engine + fee schedule
+│   │   │   │   ├── dashboard/    Live operational summary
+│   │   │   │   ├── public/       Public overview and receipt verification
+│   │   │   │   ├── settings/     Settings repository (fee schedule)
 │   │   │   │   ├── system/       Admin-only system status
 │   │   │   │   └── health/       /health and /health/ready probes
 │   │   │   ├── routes/           /api/v1 router composition
@@ -76,7 +108,7 @@ npm workspaces monorepo:
 │       │   │   ├── feedback/     Loading, error, empty states, status badges
 │       │   │   └── branding/     Brand mark, institution notice
 │       │   ├── config/           Runtime config and branding (from VITE_* env)
-│       │   ├── features/         auth, dashboard, account
+│       │   ├── features/         auth, dashboard, parking, public, account
 │       │   ├── hooks/            Shared hooks
 │       │   ├── i18n/             i18next setup and en/kn/hi/mr catalogues
 │       │   ├── lib/              API client, utilities
@@ -149,22 +181,24 @@ invalid configuration and lists the problems.
 
 ### API — `apps/api/.env` (see `apps/api/.env.example`)
 
-| Variable                                                   | Required  | Default                   | Purpose                                          |
-| ---------------------------------------------------------- | --------- | ------------------------- | ------------------------------------------------ |
-| `NODE_ENV`                                                 |           | `development`             | `development`, `test` or `production`            |
-| `APP_ENV`                                                  |           | `NODE_ENV`                | Display name of the environment (e.g. `staging`) |
-| `PORT` / `HOST`                                            |           | `4000` / `0.0.0.0`        | Listen address                                   |
-| `DATABASE_URL`                                             | ✔         |                           | PostgreSQL connection used by the running API    |
-| `DIRECT_URL`                                               |           | `DATABASE_URL`            | Connection used by Prisma CLI for migrations     |
-| `JWT_SECRET`                                               | ✔         |                           | ≥ 32 random characters; signs access tokens      |
-| `JWT_EXPIRES_IN_SECONDS`                                   |           | `28800`                   | Access-token lifetime (8 h, one shift)           |
-| `JWT_ISSUER` / `JWT_AUDIENCE`                              |           | `cpvts-api` / `cpvts-web` | Token claims checked on every request            |
-| `FRONTEND_URL`                                             | prod*     |                           | Web app URL; default CORS origin                 |
-| `CORS_ORIGINS`                                             | prod*     |                           | Comma-separated allowed origins                  |
-| `TRUST_PROXY`                                              |           | `0`                       | Reverse-proxy hops to trust (Render: `1`)        |
-| `LOGIN_RATE_LIMIT_WINDOW_MINUTES` / `LOGIN_RATE_LIMIT_MAX` |           | `15` / `10`               | Failed sign-ins allowed per IP per window        |
-| `PUBLIC_RATE_LIMIT_PER_MINUTE`                             |           | `120`                     | Requests per minute per IP on public endpoints   |
-| `SEED_ADMIN_*`, `SEED_STAFF_*`                             | seed only |                           | Initial accounts for `db:seed`                   |
+| Variable                                                   | Required  | Default                   | Purpose                                               |
+| ---------------------------------------------------------- | --------- | ------------------------- | ----------------------------------------------------- |
+| `NODE_ENV`                                                 |           | `development`             | `development`, `test` or `production`                 |
+| `APP_ENV`                                                  |           | `NODE_ENV`                | Display name of the environment (e.g. `staging`)      |
+| `PORT` / `HOST`                                            |           | `4000` / `0.0.0.0`        | Listen address                                        |
+| `DATABASE_URL`                                             | ✔         |                           | PostgreSQL connection used by the running API         |
+| `DIRECT_URL`                                               |           | `DATABASE_URL`            | Connection used by Prisma CLI for migrations          |
+| `JWT_SECRET`                                               | ✔         |                           | ≥ 32 random characters; signs access tokens           |
+| `JWT_EXPIRES_IN_SECONDS`                                   |           | `28800`                   | Access-token lifetime (8 h, one shift)                |
+| `JWT_ISSUER` / `JWT_AUDIENCE`                              |           | `cpvts-api` / `cpvts-web` | Token claims checked on every request                 |
+| `FRONTEND_URL`                                             | prod*     |                           | Web app URL; default CORS origin                      |
+| `CORS_ORIGINS`                                             | prod*     |                           | Comma-separated allowed origins                       |
+| `TRUST_PROXY`                                              |           | `0`                       | Reverse-proxy hops to trust (Render: `1`)             |
+| `LOGIN_RATE_LIMIT_WINDOW_MINUTES` / `LOGIN_RATE_LIMIT_MAX` |           | `15` / `10`               | Failed sign-ins allowed per IP per window             |
+| `CAMPUS_TIMEZONE`                                          |           | `Asia/Kolkata`            | Campus time zone: "today" and the current hour        |
+| `SLOT_HOLD_SECONDS`                                        |           | `15`                      | Lifetime of the temporary slot hold during allocation |
+| `PUBLIC_RATE_LIMIT_PER_MINUTE`                             |           | `120`                     | Requests per minute per IP on public endpoints        |
+| `SEED_ADMIN_*`, `SEED_STAFF_*`                             | seed only |                           | Initial accounts for `db:seed`                        |
 
 \* In production at least one of `CORS_ORIGINS` or `FRONTEND_URL` is required.
 

@@ -44,6 +44,10 @@ export const buildConfig = (env: Env) =>
       issuer: env.JWT_ISSUER,
       audience: env.JWT_AUDIENCE,
     }),
+    parking: Object.freeze({
+      timeZone: env.CAMPUS_TIMEZONE,
+      slotHoldMs: env.SLOT_HOLD_SECONDS * 1000,
+    }),
     cors: Object.freeze({
       origins: Object.freeze(resolveCorsOrigins(env)),
     }),

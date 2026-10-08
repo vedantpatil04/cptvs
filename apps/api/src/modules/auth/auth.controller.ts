@@ -1,20 +1,9 @@
 import type { CurrentUserResponse, LoginRequest } from '@cpvts/shared';
-import type { Request, RequestHandler } from 'express';
+import type { RequestHandler } from 'express';
 
-import { unauthenticated } from '../../lib/errors.js';
+import { requestMeta, requireAuth } from '../../lib/request-context.js';
 import { toAuthUser } from '../users/user.mapper.js';
 import { authService } from './auth.service.js';
-import type { AuthContext, RequestMeta } from './auth.types.js';
-
-const requestMeta = (req: Request): RequestMeta => ({
-  ipAddress: req.ip ?? null,
-  userAgent: req.get('User-Agent') ?? null,
-});
-
-const requireAuth = (req: Request): AuthContext => {
-  if (!req.auth) throw unauthenticated();
-  return req.auth;
-};
 
 export const authController = {
   login: (async (req, res) => {

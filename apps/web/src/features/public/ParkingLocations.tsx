@@ -1,12 +1,11 @@
 import type { PublicParkingLocation } from '@cpvts/shared';
-import { ExternalLink, MapPin, MapPinOff } from 'lucide-react';
+import { MapPin, MapPinOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { BlockMapLink } from '@/components/parking/BlockMapLink';
 import { StatusBadge } from '@/components/feedback/StatusBadge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { googleMapsUrl } from '@/lib/maps';
 
 /** Parking blocks and their real-world location (block level only, never slots). */
 export function ParkingLocations({ locations }: { locations: PublicParkingLocation[] }) {
@@ -39,23 +38,7 @@ export function ParkingLocations({ locations }: { locations: PublicParkingLocati
                   ))}
                 </div>
               )}
-              {location.coordinates ? (
-                <Button asChild variant="outline" size="sm">
-                  <a
-                    href={googleMapsUrl(location.coordinates)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <ExternalLink aria-hidden />
-                    {t('public.locations.openInMaps')}
-                  </a>
-                </Button>
-              ) : (
-                <Button variant="outline" size="sm" disabled>
-                  <MapPinOff aria-hidden />
-                  {t('public.locations.mapPending')}
-                </Button>
-              )}
+              <BlockMapLink coordinates={location.coordinates} />
             </CardContent>
           </Card>
         </li>

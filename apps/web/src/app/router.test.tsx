@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import i18n from '@/i18n';
 
+import { mockApi } from '@/test/utils';
+
 import { router } from './router';
 
 const jsonResponse = (status: number, body: unknown) =>
@@ -127,8 +129,12 @@ describe('protected routes', () => {
   );
 
   it('signs in security staff and lands on the staff dashboard', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, loginResponse('SECURITY_STAFF')));
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = mockApi({
+      'POST /auth/login': loginResponse('SECURITY_STAFF'),
+      'GET /dashboard/summary': jsonResponse(503, {
+        error: { code: 'SERVICE_UNAVAILABLE', message: 'x' },
+      }),
+    });
     const memoryRouter = renderAt('/login');
 
     await userEvent.type(await screen.findByLabelText('Username'), 'demo');
@@ -144,7 +150,7 @@ describe('protected routes', () => {
   });
 
   it('returns to the originally requested page after signing in', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, loginResponse('ADMIN'))));
+    mockApi({ 'POST /auth/login': loginResponse('ADMIN') });
     const memoryRouter = renderAt('/admin/account');
 
     await userEvent.type(await screen.findByLabelText('Username'), 'demo');

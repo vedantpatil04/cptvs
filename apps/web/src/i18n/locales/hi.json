@@ -27,7 +27,11 @@
     "dashboard": "डैशबोर्ड",
     "account": "मेरा खाता",
     "home": "होम",
-    "help": "सहायता और सामान्य प्रश्न"
+    "help": "सहायता और सामान्य प्रश्न",
+    "liveParking": "लाइव पार्किंग",
+    "vehicleEntry": "वाहन प्रवेश",
+    "vehicleExit": "वाहन निकास",
+    "vehicleFinder": "वाहन खोज"
   },
   "auth": {
     "signInTitle": "साइन इन",
@@ -55,11 +59,25 @@
     "welcome": "स्वागत है, {{name}}",
     "adminDescription": "इस परिनियोजन के सिस्टम स्वास्थ्य और प्रशासन का अवलोकन।",
     "staffDescription": "दैनिक पार्किंग संचालन के लिए आपका कार्यक्षेत्र।",
-    "parkingEmptyTitle": "पार्किंग संचालन अभी सेट नहीं किया गया है",
-    "parkingEmptyDescription": "पार्किंग मॉड्यूल सक्रिय होने के बाद पार्किंग ज़ोन, लाइव अधिभोग और वाहन गतिविधि यहाँ दिखाई देगी।",
     "sessionTitle": "वर्तमान सत्र",
     "sessionDescription": "इस डिवाइस पर आपके साइन-इन सत्र का विवरण।",
-    "sessionExpires": "सत्र समाप्ति"
+    "sessionExpires": "सत्र समाप्ति",
+    "quickActions": "त्वरित कार्य",
+    "kpi": {
+      "title": "लाइव पार्किंग",
+      "totalSlots": "कुल स्थान",
+      "occupied": "भरे हुए",
+      "available": "उपलब्ध",
+      "blocked": "अवरुद्ध",
+      "occupancy": "अधिभोग",
+      "vehicleTypeOccupancy": "{{type}} अधिभोग",
+      "occupiedOfTotal": "{{total}} में से {{occupied}} भरे",
+      "currentlyParked": "अभी खड़े वाहन",
+      "todayVehicles": "आज के वाहन",
+      "todayFees": "आज एकत्रित शुल्क",
+      "todayFeesHint": "अंतिम रूप दिए गए परीक्षण/डेमो लेनदेन",
+      "percent": "{{value}}%"
+    }
   },
   "system": {
     "title": "सिस्टम स्थिति",
@@ -110,13 +128,37 @@
     "PAYLOAD_TOO_LARGE": "भेजा गया डेटा बहुत बड़ा है।",
     "RATE_LIMITED": "बहुत अधिक प्रयास हुए। कृपया कुछ मिनट प्रतीक्षा करके फिर से प्रयास करें।",
     "SERVICE_UNAVAILABLE": "सेवा अस्थायी रूप से उपलब्ध नहीं है। कृपया थोड़ी देर बाद फिर से प्रयास करें।",
-    "INTERNAL_ERROR": "सर्वर में एक अप्रत्याशित त्रुटि हुई। कृपया फिर से प्रयास करें।"
+    "INTERNAL_ERROR": "सर्वर में एक अप्रत्याशित त्रुटि हुई। कृपया फिर से प्रयास करें।",
+    "DUPLICATE_ACTIVE_VEHICLE": "यह वाहन पहले से खड़ा है। दोबारा चेक इन करने से पहले इसे चेक आउट करें।",
+    "VEHICLE_TYPE_MISMATCH": "यह वाहन नंबर किसी अन्य वाहन प्रकार के साथ पंजीकृत है।",
+    "ZONE_NOT_CONFIGURED": "इस वाहन प्रकार के लिए कोई पार्किंग ज़ोन सेट नहीं है।",
+    "ZONE_FULL": "इस वाहन प्रकार का ज़ोन भरा हुआ है। कोई उपयुक्त स्थान उपलब्ध नहीं है।",
+    "ALLOCATION_FAILED": "सभी खाली स्थान अभी-अभी दूसरे टर्मिनलों ने ले लिए। कृपया फिर से प्रयास करें।",
+    "SESSION_NOT_FOUND": "कोई मेल खाता खड़ा वाहन या सत्र नहीं मिला।",
+    "SESSION_NOT_ACTIVE": "यह पार्किंग सत्र पहले ही पूरा हो चुका है।",
+    "EXIT_BEFORE_ENTRY": "निकास का घंटा प्रवेश के घंटे से पहले नहीं हो सकता।",
+    "VEHICLE_SESSION_MISMATCH": "वाहन नंबर इस पार्किंग सत्र से मेल नहीं खाता।",
+    "SESSION_SLOT_MISMATCH": "स्थान इस पार्किंग सत्र से मेल नहीं खाता।",
+    "INVALID_QR_REFERENCE": "यह QR कोड मान्य प्रवेश कोड नहीं है।",
+    "FEE_SCHEDULE_NOT_CONFIGURED": "पार्किंग शुल्क सेट नहीं है। प्रशासक से संपर्क करें।",
+    "INVALID_PAYMENT_METHOD": "इस राशि के लिए यह भुगतान तरीका उपयोग नहीं किया जा सकता।",
+    "PAYMENT_NOT_FOUND": "भुगतान नहीं मिला।",
+    "PAYMENT_SESSION_MISMATCH": "यह भुगतान किसी दूसरे पार्किंग सत्र का है।",
+    "PAYMENT_NOT_PENDING": "यह भुगतान पहले ही संसाधित या रद्द हो चुका है।",
+    "PAYMENT_IN_PROGRESS": "इस सत्र का एक भुगतान पहले से संसाधित हो रहा है।",
+    "PAYMENT_AMOUNT_MISMATCH": "चेक आउट के दौरान शुल्क बदल गया। कृपया शुल्क की फिर से गणना करें।",
+    "RECEIPT_NOT_FOUND": "रसीद नहीं मिली।"
   },
   "validation": {
     "required": "यह फ़ील्ड आवश्यक है।",
     "tooLong": "यह मान बहुत लंबा है।",
     "passwordTooShort": "पासवर्ड न्यूनतम लंबाई से छोटा है।",
-    "passwordTooLong": "पासवर्ड बहुत लंबा है।"
+    "passwordTooLong": "पासवर्ड बहुत लंबा है।",
+    "selectOption": "कृपया एक विकल्प चुनें।",
+    "invalidVehicleNumber": "मान्य वाहन नंबर दर्ज करें, उदाहरण: KA22AB1234।",
+    "invalidHour": "0 से 23 के बीच का घंटा दर्ज करें।",
+    "invalidSessionNumber": "मान्य सत्र संख्या दर्ज करें, उदाहरण: CPVTS-P-7K4M92QX।",
+    "invalidSlotCode": "मान्य स्थान ID दर्ज करें, उदाहरण: T-04।"
   },
   "public": {
     "loginButton": "प्रशासक / कर्मचारी लॉगिन",
@@ -194,6 +236,176 @@
       "language": {
         "question": "भाषा कैसे बदलें?",
         "answer": "अंग्रेज़ी, कन्नड़, हिंदी और मराठी के बीच बदलने के लिए पेज के ऊपर दिए गए भाषा मेनू का उपयोग करें।"
+      }
+    }
+  },
+  "parking": {
+    "common": {
+      "vehicleNumber": "वाहन नंबर",
+      "vehicleType": "वाहन प्रकार",
+      "ownerCategory": "मालिक की श्रेणी",
+      "block": "पार्किंग ब्लॉक",
+      "zone": "ज़ोन",
+      "slot": "स्थान",
+      "sessionNumber": "सत्र संख्या",
+      "entry": "प्रवेश",
+      "exit": "निकास",
+      "entryHour": "प्रवेश का घंटा",
+      "exitHour": "निकास का घंटा",
+      "duration": "अवधि",
+      "currentDuration": "वर्तमान अवधि",
+      "status": "स्थिति",
+      "estimatedFee": "अनुमानित शुल्क",
+      "estimatedFeeHint": "यदि वाहन वर्तमान घंटे में निकलता है।",
+      "hours_one": "{{count}} घंटा",
+      "hours_other": "{{count}} घंटे",
+      "viewSession": "सत्र देखें",
+      "viewReceipt": "रसीद देखें",
+      "checkout": "चेक आउट",
+      "locateOnMap": "पार्किंग मानचित्र पर दिखाएँ"
+    },
+    "sessionStatus": {
+      "ACTIVE": "खड़ा है",
+      "COMPLETED": "पूर्ण"
+    },
+    "slotStatus": {
+      "AVAILABLE": "उपलब्ध",
+      "OCCUPIED": "भरा हुआ",
+      "BLOCKED": "अवरुद्ध",
+      "HELD": "आवंटित किया जा रहा है"
+    },
+    "fee": {
+      "title": "शुल्क विवरण",
+      "free_one": "{{count}} घंटा निःशुल्क",
+      "free_other": "{{count}} घंटे निःशुल्क",
+      "charged_one": "{{count}} घंटा × {{rate}}",
+      "charged_other": "{{count}} घंटे × {{rate}}",
+      "total": "कुल"
+    },
+    "search": {
+      "label": "वाहन नंबर, स्थान ID, सत्र संख्या या प्रवेश QR",
+      "placeholder": "KA22AB1234 · T-04 · CPVTS-P-…",
+      "submit": "खोजें",
+      "hint": "आप बारकोड स्कैनर से प्रवेश QR भी स्कैन कर सकते हैं।"
+    },
+    "entry": {
+      "title": "वाहन प्रवेश",
+      "description": "वाहन चेक इन करें। सही ज़ोन में सबसे उपयुक्त उपलब्ध स्थान स्वचालित रूप से आवंटित किया जाता है।",
+      "vehicleNumberPlaceholder": "उदा. KA22AB1234",
+      "submit": "चेक इन करें और स्थान आवंटित करें",
+      "submitting": "स्थान आवंटित किया जा रहा है…",
+      "successTitle": "वाहन चेक इन हो गया",
+      "assignedSlot": "आवंटित स्थान",
+      "checkInAnother": "दूसरा वाहन चेक इन करें",
+      "entryQrTitle": "प्रवेश QR",
+      "entryQrHint": "निकास पर यह कोड स्कैन करने से सत्र तुरंत मिल जाता है।"
+    },
+    "allocation": {
+      "title": "स्मार्ट आवंटन",
+      "checks": {
+        "CORRECT_ZONE": "वाहन प्रकार के लिए सही ज़ोन",
+        "AVAILABLE": "स्थान उपलब्ध था",
+        "NOT_BLOCKED": "स्थान अवरुद्ध नहीं है",
+        "BEST_SCORE": "सर्वोत्तम मान्य आवंटन स्कोर ({{score}})",
+        "FINAL_AVAILABILITY_VERIFIED": "आवंटन से पहले अंतिम उपलब्धता सत्यापित की गई"
+      },
+      "candidates_one": "{{count}} उपलब्ध स्थान की तुलना की गई",
+      "candidates_other": "{{count}} उपलब्ध स्थानों की तुलना की गई",
+      "fallbacks_one": "{{count}} स्थान दूसरे टर्मिनल ने ले लिया, इसलिए छोड़ दिया गया",
+      "fallbacks_other": "{{count}} स्थान दूसरे टर्मिनलों ने ले लिए, इसलिए छोड़ दिए गए"
+    },
+    "exit": {
+      "title": "वाहन निकास",
+      "description": "खड़े वाहन को खोजें, निकास का घंटा पुष्ट करें, शुल्क देखें और भुगतान पूरा करें।",
+      "find": "वाहन खोजें",
+      "vehicleTitle": "खड़ा वाहन",
+      "calculate": "शुल्क की गणना करें",
+      "feePreviewTitle": "शुल्क पूर्वावलोकन",
+      "changeVehicle": "दूसरा वाहन चुनें",
+      "nextVehicle": "दूसरा वाहन चेक आउट करें"
+    },
+    "payment": {
+      "methodLabel": "भुगतान का तरीका",
+      "statusLabel": "भुगतान की स्थिति",
+      "transactionId": "लेनदेन ID",
+      "demoNotice": "यह एक परीक्षण/डेमो भुगतान है। कोई वास्तविक पैसा नहीं लिया जाता।",
+      "noChargeNotice": "इस पार्किंग के लिए कोई भुगतान देय नहीं है।",
+      "pay": "{{amount}} का भुगतान करें",
+      "completeNoCharge": "चेक आउट पूरा करें",
+      "simulateDecline": "अस्वीकृत भुगतान का अनुकरण करें (परीक्षण)",
+      "testBadge": "परीक्षण भुगतान",
+      "inProgressTitle": "परीक्षण भुगतान संसाधित हो रहा है",
+      "stages": {
+        "creating": "भुगतान अनुरोध बनाया जा रहा है",
+        "processing": "भुगतान संसाधित हो रहा है…",
+        "verifying": "लेनदेन सत्यापित किया जा रहा है…"
+      },
+      "successTitle": "भुगतान सफल",
+      "noChargeSuccessTitle": "चेक आउट पूरा हुआ",
+      "successDescription": "सत्र बंद हो गया है और स्थान {{slot}} फिर से उपलब्ध है।",
+      "failedTitle": "भुगतान विफल",
+      "failedDescription": "परीक्षण भुगतान अस्वीकृत हो गया। कोई राशि नहीं ली गई और वाहन अभी भी चेक इन है।"
+    },
+    "paymentMethods": {
+      "UPI": "UPI",
+      "CARD": "कार्ड",
+      "CASH": "नकद",
+      "NO_CHARGE": "कोई शुल्क नहीं"
+    },
+    "paymentStatus": {
+      "PENDING": "लंबित",
+      "PROCESSING": "संसाधित हो रहा है",
+      "PAID": "भुगतान हो गया",
+      "FAILED": "विफल",
+      "CANCELLED": "रद्द"
+    },
+    "finder": {
+      "title": "वाहन खोज",
+      "description": "वाहन नंबर, स्थान ID, सत्र संख्या या प्रवेश QR से खड़े वाहन का पता लगाएँ।",
+      "foundTitle": "वाहन मिल गया",
+      "completedTitle": "सत्र पूर्ण"
+    },
+    "live": {
+      "title": "लाइव पार्किंग",
+      "description": "हर स्थान की लाइव स्थिति। विवरण के लिए कोई स्थान चुनें।",
+      "legend": "संकेत",
+      "highlight": "हाइलाइट करें",
+      "highlighted": "स्थान {{slot}} हाइलाइट किया गया",
+      "clearHighlight": "हटाएँ",
+      "zoneCounts": "{{total}} में से {{available}} उपलब्ध",
+      "activeVehicles": "खड़े वाहन",
+      "noActive": "अभी कोई वाहन खड़ा नहीं है।",
+      "slotTitle": "स्थान {{slot}}",
+      "emptySlot": "यह स्थान खाली है।",
+      "blockedReason": "कारण"
+    },
+    "session": {
+      "title": "पार्किंग सत्र"
+    },
+    "receipt": {
+      "title": "रसीद",
+      "heading": "पार्किंग रसीद",
+      "receiptNumber": "रसीद संख्या",
+      "issuedAt": "दिनांक और समय",
+      "print": "प्रिंट करें",
+      "download": "डाउनलोड करें",
+      "demoNote": "परीक्षण/डेमो भुगतान — कोई वास्तविक पैसा संसाधित नहीं हुआ।",
+      "verifyHint": "इस रसीद को सत्यापित करने के लिए स्कैन करें",
+      "thanks": "{{product}} का उपयोग करने के लिए धन्यवाद"
+    },
+    "verify": {
+      "title": "रसीद सत्यापन",
+      "checking": "रसीद सत्यापित की जा रही है…",
+      "validTitle": "मान्य रसीद",
+      "validDescription": "यह रसीद {{product}} के रिकॉर्ड से मेल खाती है।",
+      "invalidTitle": "रसीद सत्यापित नहीं हो सकी",
+      "invalidDescription": "इस रसीद के रिकॉर्ड मेल नहीं खाते। कृपया कैंपस सुरक्षा से संपर्क करें।",
+      "notFoundTitle": "रसीद नहीं मिली",
+      "notFoundDescription": "यह सत्यापन कोड किसी भी रसीद से मेल नहीं खाता।",
+      "statusLabel": "सत्यापन की स्थिति",
+      "status": {
+        "VALID": "सत्यापित",
+        "INVALID": "सत्यापित नहीं"
       }
     }
   }

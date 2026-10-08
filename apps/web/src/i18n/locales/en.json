@@ -27,7 +27,11 @@
     "dashboard": "Dashboard",
     "account": "My account",
     "home": "Home",
-    "help": "Help & FAQ"
+    "help": "Help & FAQ",
+    "liveParking": "Live parking",
+    "vehicleEntry": "Vehicle entry",
+    "vehicleExit": "Vehicle exit",
+    "vehicleFinder": "Vehicle finder"
   },
   "auth": {
     "signInTitle": "Sign in",
@@ -55,11 +59,25 @@
     "welcome": "Welcome, {{name}}",
     "adminDescription": "Overview of system health and administration for this deployment.",
     "staffDescription": "Your workspace for daily parking operations.",
-    "parkingEmptyTitle": "Parking operations are not set up yet",
-    "parkingEmptyDescription": "Parking zones, live occupancy and vehicle activity will appear here once the parking modules are enabled.",
     "sessionTitle": "Current session",
     "sessionDescription": "Details of your signed-in session on this device.",
-    "sessionExpires": "Session expires"
+    "sessionExpires": "Session expires",
+    "quickActions": "Quick actions",
+    "kpi": {
+      "title": "Live parking",
+      "totalSlots": "Total slots",
+      "occupied": "Occupied",
+      "available": "Available",
+      "blocked": "Blocked",
+      "occupancy": "Occupancy",
+      "vehicleTypeOccupancy": "{{type}} occupancy",
+      "occupiedOfTotal": "{{occupied}} of {{total}} occupied",
+      "currentlyParked": "Currently parked",
+      "todayVehicles": "Vehicles today",
+      "todayFees": "Fees collected today",
+      "todayFeesHint": "Finalized test/demo transactions",
+      "percent": "{{value}}%"
+    }
   },
   "system": {
     "title": "System status",
@@ -110,13 +128,37 @@
     "PAYLOAD_TOO_LARGE": "The submitted data is too large.",
     "RATE_LIMITED": "Too many attempts. Please wait a few minutes and try again.",
     "SERVICE_UNAVAILABLE": "The service is temporarily unavailable. Please try again shortly.",
-    "INTERNAL_ERROR": "An unexpected server error occurred. Please try again."
+    "INTERNAL_ERROR": "An unexpected server error occurred. Please try again.",
+    "DUPLICATE_ACTIVE_VEHICLE": "This vehicle is already parked. Check it out before checking it in again.",
+    "VEHICLE_TYPE_MISMATCH": "This vehicle number is registered with a different vehicle type.",
+    "ZONE_NOT_CONFIGURED": "No parking zone is configured for this vehicle type.",
+    "ZONE_FULL": "The zone for this vehicle type is full. No compatible slot is available.",
+    "ALLOCATION_FAILED": "All free slots were just taken by other terminals. Please try again.",
+    "SESSION_NOT_FOUND": "No matching parked vehicle or session was found.",
+    "SESSION_NOT_ACTIVE": "This parking session is already completed.",
+    "EXIT_BEFORE_ENTRY": "The exit hour cannot be earlier than the entry hour.",
+    "VEHICLE_SESSION_MISMATCH": "The vehicle number does not match this parking session.",
+    "SESSION_SLOT_MISMATCH": "The slot does not match this parking session.",
+    "INVALID_QR_REFERENCE": "This QR code is not a valid entry code.",
+    "FEE_SCHEDULE_NOT_CONFIGURED": "Parking fees are not configured. Contact an administrator.",
+    "INVALID_PAYMENT_METHOD": "This payment method cannot be used for this amount.",
+    "PAYMENT_NOT_FOUND": "The payment could not be found.",
+    "PAYMENT_SESSION_MISMATCH": "This payment belongs to a different parking session.",
+    "PAYMENT_NOT_PENDING": "This payment has already been processed or cancelled.",
+    "PAYMENT_IN_PROGRESS": "A payment for this session is already being processed.",
+    "PAYMENT_AMOUNT_MISMATCH": "The fee changed during checkout. Please calculate the fee again.",
+    "RECEIPT_NOT_FOUND": "The receipt could not be found."
   },
   "validation": {
     "required": "This field is required.",
     "tooLong": "This value is too long.",
     "passwordTooShort": "The password is shorter than the minimum length.",
-    "passwordTooLong": "The password is too long."
+    "passwordTooLong": "The password is too long.",
+    "selectOption": "Please choose an option.",
+    "invalidVehicleNumber": "Enter a valid vehicle number, for example KA22AB1234.",
+    "invalidHour": "Enter an hour between 0 and 23.",
+    "invalidSessionNumber": "Enter a valid session number, for example CPVTS-P-7K4M92QX.",
+    "invalidSlotCode": "Enter a valid slot ID, for example T-04."
   },
   "public": {
     "loginButton": "Admin / Staff login",
@@ -194,6 +236,176 @@
       "language": {
         "question": "How do I change the language?",
         "answer": "Use the language menu at the top of the page to switch between English, Kannada, Hindi and Marathi."
+      }
+    }
+  },
+  "parking": {
+    "common": {
+      "vehicleNumber": "Vehicle number",
+      "vehicleType": "Vehicle type",
+      "ownerCategory": "Owner category",
+      "block": "Parking block",
+      "zone": "Zone",
+      "slot": "Slot",
+      "sessionNumber": "Session number",
+      "entry": "Entry",
+      "exit": "Exit",
+      "entryHour": "Entry hour",
+      "exitHour": "Exit hour",
+      "duration": "Duration",
+      "currentDuration": "Current duration",
+      "status": "Status",
+      "estimatedFee": "Estimated fee",
+      "estimatedFeeHint": "If the vehicle leaves at the current hour.",
+      "hours_one": "{{count}} hour",
+      "hours_other": "{{count}} hours",
+      "viewSession": "View session",
+      "viewReceipt": "View receipt",
+      "checkout": "Check out",
+      "locateOnMap": "Locate on parking map"
+    },
+    "sessionStatus": {
+      "ACTIVE": "Parked",
+      "COMPLETED": "Completed"
+    },
+    "slotStatus": {
+      "AVAILABLE": "Available",
+      "OCCUPIED": "Occupied",
+      "BLOCKED": "Blocked",
+      "HELD": "Being assigned"
+    },
+    "fee": {
+      "title": "Fee breakdown",
+      "free_one": "{{count}} hour free",
+      "free_other": "{{count}} hours free",
+      "charged_one": "{{count}} hour × {{rate}}",
+      "charged_other": "{{count}} hours × {{rate}}",
+      "total": "Total"
+    },
+    "search": {
+      "label": "Vehicle number, slot ID, session number or entry QR",
+      "placeholder": "KA22AB1234 · T-04 · CPVTS-P-…",
+      "submit": "Search",
+      "hint": "You can also scan the entry QR with a barcode scanner."
+    },
+    "entry": {
+      "title": "Vehicle entry",
+      "description": "Check in a vehicle. The best available slot in the correct zone is assigned automatically.",
+      "vehicleNumberPlaceholder": "e.g. KA22AB1234",
+      "submit": "Check in and assign slot",
+      "submitting": "Assigning slot…",
+      "successTitle": "Vehicle checked in",
+      "assignedSlot": "Assigned slot",
+      "checkInAnother": "Check in another vehicle",
+      "entryQrTitle": "Entry QR",
+      "entryQrHint": "Scan this code at exit to find the session instantly."
+    },
+    "allocation": {
+      "title": "Smart allocation",
+      "checks": {
+        "CORRECT_ZONE": "Correct zone for the vehicle type",
+        "AVAILABLE": "Slot was available",
+        "NOT_BLOCKED": "Slot is not blocked",
+        "BEST_SCORE": "Best valid allocation score ({{score}})",
+        "FINAL_AVAILABILITY_VERIFIED": "Final availability verified before assignment"
+      },
+      "candidates_one": "{{count}} available slot compared",
+      "candidates_other": "{{count}} available slots compared",
+      "fallbacks_one": "{{count}} slot was taken by another terminal and skipped",
+      "fallbacks_other": "{{count}} slots were taken by other terminals and skipped"
+    },
+    "exit": {
+      "title": "Vehicle exit",
+      "description": "Find the parked vehicle, confirm the exit hour, review the fee and complete payment.",
+      "find": "Find vehicle",
+      "vehicleTitle": "Parked vehicle",
+      "calculate": "Calculate fee",
+      "feePreviewTitle": "Fee preview",
+      "changeVehicle": "Choose another vehicle",
+      "nextVehicle": "Check out another vehicle"
+    },
+    "payment": {
+      "methodLabel": "Payment method",
+      "statusLabel": "Payment status",
+      "transactionId": "Transaction ID",
+      "demoNotice": "This is a test/demo payment. No real money is charged.",
+      "noChargeNotice": "No payment is due for this stay.",
+      "pay": "Pay {{amount}}",
+      "completeNoCharge": "Complete checkout",
+      "simulateDecline": "Simulate a declined payment (test)",
+      "testBadge": "Test payment",
+      "inProgressTitle": "Processing test payment",
+      "stages": {
+        "creating": "Creating payment request",
+        "processing": "Processing payment…",
+        "verifying": "Verifying transaction…"
+      },
+      "successTitle": "Payment successful",
+      "noChargeSuccessTitle": "Checkout complete",
+      "successDescription": "The session is closed and slot {{slot}} is available again.",
+      "failedTitle": "Payment failed",
+      "failedDescription": "The test payment was declined. Nothing was charged and the vehicle is still checked in."
+    },
+    "paymentMethods": {
+      "UPI": "UPI",
+      "CARD": "Card",
+      "CASH": "Cash",
+      "NO_CHARGE": "No charge"
+    },
+    "paymentStatus": {
+      "PENDING": "Pending",
+      "PROCESSING": "Processing",
+      "PAID": "Paid",
+      "FAILED": "Failed",
+      "CANCELLED": "Cancelled"
+    },
+    "finder": {
+      "title": "Vehicle finder",
+      "description": "Locate a parked vehicle by vehicle number, slot ID, session number or entry QR.",
+      "foundTitle": "Vehicle found",
+      "completedTitle": "Session completed"
+    },
+    "live": {
+      "title": "Live parking",
+      "description": "Live status of every slot. Select a slot for details.",
+      "legend": "Legend",
+      "highlight": "Highlight",
+      "highlighted": "Highlighting slot {{slot}}",
+      "clearHighlight": "Clear",
+      "zoneCounts": "{{available}} of {{total}} available",
+      "activeVehicles": "Parked vehicles",
+      "noActive": "No vehicles are parked right now.",
+      "slotTitle": "Slot {{slot}}",
+      "emptySlot": "This slot is free.",
+      "blockedReason": "Reason"
+    },
+    "session": {
+      "title": "Parking session"
+    },
+    "receipt": {
+      "title": "Receipt",
+      "heading": "Parking receipt",
+      "receiptNumber": "Receipt number",
+      "issuedAt": "Date and time",
+      "print": "Print",
+      "download": "Download",
+      "demoNote": "Test/demo payment — no real money was processed.",
+      "verifyHint": "Scan to verify this receipt",
+      "thanks": "Thank you for using {{product}}"
+    },
+    "verify": {
+      "title": "Receipt verification",
+      "checking": "Verifying receipt…",
+      "validTitle": "Valid receipt",
+      "validDescription": "This receipt matches the {{product}} records.",
+      "invalidTitle": "Receipt could not be verified",
+      "invalidDescription": "The records for this receipt do not match. Please contact campus security.",
+      "notFoundTitle": "Receipt not found",
+      "notFoundDescription": "This verification code does not match any receipt.",
+      "statusLabel": "Verification status",
+      "status": {
+        "VALID": "Verified",
+        "INVALID": "Not verified"
       }
     }
   }

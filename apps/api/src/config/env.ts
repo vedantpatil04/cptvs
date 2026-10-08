@@ -2,6 +2,15 @@ import { z } from 'zod';
 
 const NODE_ENVS = ['development', 'test', 'production'] as const;
 
+const isValidTimeZone = (timeZone: string): boolean => {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /** Parses a comma-separated list of origins into a de-duplicated array. */
 const originList = z
   .string()
@@ -37,6 +46,14 @@ const envSchema = z
     TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(0),
     LOGIN_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
     LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(1000).default(10),
+    /** IANA time zone of the campus; defines "today" and the current hour. */
+    CAMPUS_TIMEZONE: z
+      .string()
+      .trim()
+      .default('Asia/Kolkata')
+      .refine(isValidTimeZone, 'CAMPUS_TIMEZONE must be a valid IANA time zone'),
+    /** Lifetime of a temporary slot hold during allocation, in seconds. */
+    SLOT_HOLD_SECONDS: z.coerce.number().int().min(2).max(120).default(15),
     /** Requests per minute per IP allowed on unauthenticated public endpoints. */
     PUBLIC_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10_000).default(120),
   })

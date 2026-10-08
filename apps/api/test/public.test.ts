@@ -134,6 +134,7 @@ describe('GET /api/v1/public/overview', () => {
         transactionId: 'TXN-SECRET01',
         method: 'UPI',
         amountPaise: 2000,
+        exitHour: 13,
       },
     });
 

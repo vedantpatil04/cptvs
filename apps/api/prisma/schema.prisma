@@ -73,6 +73,8 @@ enum PaymentMethod {
   UPI
   CARD
   CASH
+  /// Used only when the authoritative fee is ₹0 (e.g. staff parking).
+  NO_CHARGE
 
   @@map("payment_method")
 }
@@ -204,6 +206,8 @@ model ParkingSlot {
   blockedReason String?    @map("blocked_reason") @db.VarChar(255)
   /// Expiry of a temporary allocation hold; only meaningful while status = HELD.
   holdExpiresAt DateTime?  @map("hold_expires_at") @db.Timestamptz(3)
+  /// Secret identifying the allocation attempt that holds the slot; only it may confirm or release.
+  holdToken     String?    @map("hold_token") @db.VarChar(64)
   createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -253,6 +257,8 @@ model ParkingSession {
   durationHours  Int?                 @map("duration_hours")
   /// Authoritative fee from the single backend fee engine, in paise.
   feeAmountPaise Int?                 @map("fee_amount_paise")
+  /// Fee breakdown (`FeeBreakdown` in @cpvts/shared) frozen at finalization.
+  feeBreakdown   Json?                @map("fee_breakdown")
   checkedInById  String               @map("checked_in_by_id") @db.Uuid
   checkedOutById String?              @map("checked_out_by_id") @db.Uuid
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -284,6 +290,11 @@ model Payment {
   method        PaymentMethod
   status        PaymentStatus @default(PENDING)
   amountPaise   Int           @map("amount_paise")
+  /// Exit hour the amount was calculated for; finalization uses the same value.
+  exitHour      Int           @map("exit_hour") @db.SmallInt
+  /// Always true: payments are processed by the simulated (test/demo) provider.
+  isSimulated   Boolean       @default(true) @map("is_simulated")
+  failureReason String?       @map("failure_reason") @db.VarChar(64)
   paidAt        DateTime?     @map("paid_at") @db.Timestamptz(3)
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -293,6 +304,8 @@ model Payment {
 
   /// Database-level guarantee: a session can be paid at most once.
   @@unique([sessionId], map: "payments_one_paid_per_session", where: { status: "PAID" })
+  /// Database-level guarantee: at most one open (pending/processing) payment per session.
+  @@unique([sessionId], map: "payments_one_open_per_session", where: raw("status = ANY (ARRAY['PENDING'::payment_status, 'PROCESSING'::payment_status])"))
   @@index([sessionId, createdAt])
   @@index([status, paidAt])
   @@map("payments")

@@ -1,7 +1,5 @@
 import {
-  feeScheduleSchema,
   VEHICLE_TYPES,
-  type FeeSchedule,
   type PublicAvailability,
   type PublicOverviewResponse,
   type PublicParkingLocation,
@@ -9,9 +7,7 @@ import {
 } from '@cpvts/shared';
 
 import type { VehicleType as DbVehicleType } from '../../generated/prisma/client.js';
-import { logger } from '../../lib/logger.js';
-import { SETTING_KEYS } from '../settings/setting-keys.js';
-import { settingRepository } from '../settings/setting.repository.js';
+import { feeScheduleService } from '../fees/fee-schedule.service.js';
 import { publicRepository } from './public.repository.js';
 
 // Compile-time guarantee that the database enum and the shared contract agree.
@@ -47,25 +43,12 @@ const getLocations = async (): Promise<PublicParkingLocation[]> => {
   }));
 };
 
-const getFeeSchedule = async (): Promise<FeeSchedule | null> => {
-  const value = await settingRepository.getValue(SETTING_KEYS.feeSchedule);
-  if (value === null) return null;
-  const parsed = feeScheduleSchema.safeParse(value);
-  if (!parsed.success) {
-    logger.warn('stored fee schedule is invalid and will not be published', {
-      key: SETTING_KEYS.feeSchedule,
-    });
-    return null;
-  }
-  return parsed.data;
-};
-
 export const publicService = {
   async getOverview(): Promise<PublicOverviewResponse> {
     const [availability, locations, feeSchedule] = await Promise.all([
       getAvailability(),
       getLocations(),
-      getFeeSchedule(),
+      feeScheduleService.find(),
     ]);
     return { generatedAt: new Date().toISOString(), availability, locations, feeSchedule };
   },

@@ -27,7 +27,11 @@
     "dashboard": "डॅशबोर्ड",
     "account": "माझे खाते",
     "home": "मुख्यपृष्ठ",
-    "help": "मदत आणि प्रश्नोत्तरे"
+    "help": "मदत आणि प्रश्नोत्तरे",
+    "liveParking": "थेट पार्किंग",
+    "vehicleEntry": "वाहन प्रवेश",
+    "vehicleExit": "वाहन निर्गमन",
+    "vehicleFinder": "वाहन शोध"
   },
   "auth": {
     "signInTitle": "साइन इन",
@@ -55,11 +59,25 @@
     "welcome": "स्वागत आहे, {{name}}",
     "adminDescription": "या उपयोजनाच्या प्रणाली स्थितीचा आणि प्रशासनाचा आढावा.",
     "staffDescription": "दैनंदिन पार्किंग कामकाजासाठी तुमचे कार्यक्षेत्र.",
-    "parkingEmptyTitle": "पार्किंग कामकाज अद्याप सेट केलेले नाही",
-    "parkingEmptyDescription": "पार्किंग मॉड्यूल सक्रिय झाल्यानंतर पार्किंग झोन, थेट व्याप्ती आणि वाहन हालचाली येथे दिसतील.",
     "sessionTitle": "सध्याचे सत्र",
     "sessionDescription": "या डिव्हाइसवरील तुमच्या साइन-इन सत्राचा तपशील.",
-    "sessionExpires": "सत्र समाप्ती"
+    "sessionExpires": "सत्र समाप्ती",
+    "quickActions": "जलद कृती",
+    "kpi": {
+      "title": "थेट पार्किंग",
+      "totalSlots": "एकूण जागा",
+      "occupied": "व्यापलेल्या",
+      "available": "उपलब्ध",
+      "blocked": "अवरोधित",
+      "occupancy": "व्याप्ती",
+      "vehicleTypeOccupancy": "{{type}} व्याप्ती",
+      "occupiedOfTotal": "{{total}} पैकी {{occupied}} व्यापलेल्या",
+      "currentlyParked": "सध्या उभी वाहने",
+      "todayVehicles": "आजची वाहने",
+      "todayFees": "आज जमा झालेले शुल्क",
+      "todayFeesHint": "अंतिम झालेले चाचणी/डेमो व्यवहार",
+      "percent": "{{value}}%"
+    }
   },
   "system": {
     "title": "प्रणाली स्थिती",
@@ -110,13 +128,37 @@
     "PAYLOAD_TOO_LARGE": "पाठवलेली माहिती खूप मोठी आहे.",
     "RATE_LIMITED": "खूप जास्त प्रयत्न झाले. कृपया काही मिनिटे थांबून पुन्हा प्रयत्न करा.",
     "SERVICE_UNAVAILABLE": "सेवा तात्पुरती उपलब्ध नाही. कृपया थोड्या वेळाने पुन्हा प्रयत्न करा.",
-    "INTERNAL_ERROR": "सर्व्हरमध्ये अनपेक्षित त्रुटी आली. कृपया पुन्हा प्रयत्न करा."
+    "INTERNAL_ERROR": "सर्व्हरमध्ये अनपेक्षित त्रुटी आली. कृपया पुन्हा प्रयत्न करा.",
+    "DUPLICATE_ACTIVE_VEHICLE": "हे वाहन आधीच उभे आहे. पुन्हा चेक इन करण्यापूर्वी त्याचे चेक आउट करा.",
+    "VEHICLE_TYPE_MISMATCH": "हा वाहन क्रमांक दुसऱ्या वाहन प्रकारासह नोंदणीकृत आहे.",
+    "ZONE_NOT_CONFIGURED": "या वाहन प्रकारासाठी कोणताही पार्किंग झोन सेट केलेला नाही.",
+    "ZONE_FULL": "या वाहन प्रकाराचा झोन भरलेला आहे. कोणतीही योग्य जागा उपलब्ध नाही.",
+    "ALLOCATION_FAILED": "सर्व रिकाम्या जागा आत्ताच इतर टर्मिनलनी घेतल्या. कृपया पुन्हा प्रयत्न करा.",
+    "SESSION_NOT_FOUND": "जुळणारे उभे वाहन किंवा सत्र सापडले नाही.",
+    "SESSION_NOT_ACTIVE": "हे पार्किंग सत्र आधीच पूर्ण झाले आहे.",
+    "EXIT_BEFORE_ENTRY": "निर्गमनाचा तास प्रवेशाच्या तासापूर्वी असू शकत नाही.",
+    "VEHICLE_SESSION_MISMATCH": "वाहन क्रमांक या पार्किंग सत्राशी जुळत नाही.",
+    "SESSION_SLOT_MISMATCH": "जागा या पार्किंग सत्राशी जुळत नाही.",
+    "INVALID_QR_REFERENCE": "हा QR कोड वैध प्रवेश कोड नाही.",
+    "FEE_SCHEDULE_NOT_CONFIGURED": "पार्किंग शुल्क सेट केलेले नाही. प्रशासकाशी संपर्क साधा.",
+    "INVALID_PAYMENT_METHOD": "या रकमेसाठी ही पेमेंट पद्धत वापरता येत नाही.",
+    "PAYMENT_NOT_FOUND": "पेमेंट सापडले नाही.",
+    "PAYMENT_SESSION_MISMATCH": "हे पेमेंट दुसऱ्या पार्किंग सत्राचे आहे.",
+    "PAYMENT_NOT_PENDING": "या पेमेंटवर आधीच प्रक्रिया झाली आहे किंवा ते रद्द झाले आहे.",
+    "PAYMENT_IN_PROGRESS": "या सत्राच्या पेमेंटवर आधीच प्रक्रिया सुरू आहे.",
+    "PAYMENT_AMOUNT_MISMATCH": "चेक आउट दरम्यान शुल्क बदलले. कृपया शुल्क पुन्हा मोजा.",
+    "RECEIPT_NOT_FOUND": "पावती सापडली नाही."
   },
   "validation": {
     "required": "हे क्षेत्र आवश्यक आहे.",
     "tooLong": "हे मूल्य खूप मोठे आहे.",
     "passwordTooShort": "पासवर्ड किमान लांबीपेक्षा लहान आहे.",
-    "passwordTooLong": "पासवर्ड खूप मोठा आहे."
+    "passwordTooLong": "पासवर्ड खूप मोठा आहे.",
+    "selectOption": "कृपया एक पर्याय निवडा.",
+    "invalidVehicleNumber": "वैध वाहन क्रमांक प्रविष्ट करा, उदा. KA22AB1234.",
+    "invalidHour": "0 ते 23 मधील तास प्रविष्ट करा.",
+    "invalidSessionNumber": "वैध सत्र क्रमांक प्रविष्ट करा, उदा. CPVTS-P-7K4M92QX.",
+    "invalidSlotCode": "वैध जागा ID प्रविष्ट करा, उदा. T-04."
   },
   "public": {
     "loginButton": "प्रशासक / कर्मचारी लॉगिन",
@@ -194,6 +236,176 @@
       "language": {
         "question": "भाषा कशी बदलावी?",
         "answer": "इंग्रजी, कन्नड, हिंदी आणि मराठी यांमध्ये बदलण्यासाठी पृष्ठाच्या वरच्या भागातील भाषा मेनू वापरा."
+      }
+    }
+  },
+  "parking": {
+    "common": {
+      "vehicleNumber": "वाहन क्रमांक",
+      "vehicleType": "वाहन प्रकार",
+      "ownerCategory": "मालक श्रेणी",
+      "block": "पार्किंग ब्लॉक",
+      "zone": "झोन",
+      "slot": "जागा",
+      "sessionNumber": "सत्र क्रमांक",
+      "entry": "प्रवेश",
+      "exit": "निर्गमन",
+      "entryHour": "प्रवेशाचा तास",
+      "exitHour": "निर्गमनाचा तास",
+      "duration": "कालावधी",
+      "currentDuration": "सध्याचा कालावधी",
+      "status": "स्थिती",
+      "estimatedFee": "अंदाजे शुल्क",
+      "estimatedFeeHint": "वाहन सध्याच्या तासाला बाहेर पडल्यास.",
+      "hours_one": "{{count}} तास",
+      "hours_other": "{{count}} तास",
+      "viewSession": "सत्र पाहा",
+      "viewReceipt": "पावती पाहा",
+      "checkout": "चेक आउट",
+      "locateOnMap": "पार्किंग नकाशावर दाखवा"
+    },
+    "sessionStatus": {
+      "ACTIVE": "उभे आहे",
+      "COMPLETED": "पूर्ण"
+    },
+    "slotStatus": {
+      "AVAILABLE": "उपलब्ध",
+      "OCCUPIED": "व्यापलेली",
+      "BLOCKED": "अवरोधित",
+      "HELD": "वाटप होत आहे"
+    },
+    "fee": {
+      "title": "शुल्क तपशील",
+      "free_one": "{{count}} तास मोफत",
+      "free_other": "{{count}} तास मोफत",
+      "charged_one": "{{count}} तास × {{rate}}",
+      "charged_other": "{{count}} तास × {{rate}}",
+      "total": "एकूण"
+    },
+    "search": {
+      "label": "वाहन क्रमांक, जागा ID, सत्र क्रमांक किंवा प्रवेश QR",
+      "placeholder": "KA22AB1234 · T-04 · CPVTS-P-…",
+      "submit": "शोधा",
+      "hint": "बारकोड स्कॅनरने प्रवेश QR देखील स्कॅन करता येतो."
+    },
+    "entry": {
+      "title": "वाहन प्रवेश",
+      "description": "वाहनाचे चेक इन करा. योग्य झोनमधील सर्वोत्तम उपलब्ध जागा आपोआप दिली जाते.",
+      "vehicleNumberPlaceholder": "उदा. KA22AB1234",
+      "submit": "चेक इन करा आणि जागा द्या",
+      "submitting": "जागा दिली जात आहे…",
+      "successTitle": "वाहनाचे चेक इन झाले",
+      "assignedSlot": "दिलेली जागा",
+      "checkInAnother": "दुसऱ्या वाहनाचे चेक इन करा",
+      "entryQrTitle": "प्रवेश QR",
+      "entryQrHint": "निर्गमनाच्या वेळी हा कोड स्कॅन केल्यास सत्र लगेच सापडते."
+    },
+    "allocation": {
+      "title": "स्मार्ट वाटप",
+      "checks": {
+        "CORRECT_ZONE": "वाहन प्रकारासाठी योग्य झोन",
+        "AVAILABLE": "जागा उपलब्ध होती",
+        "NOT_BLOCKED": "जागा अवरोधित नाही",
+        "BEST_SCORE": "सर्वोत्तम वैध वाटप गुण ({{score}})",
+        "FINAL_AVAILABILITY_VERIFIED": "वाटपापूर्वी अंतिम उपलब्धता पडताळली"
+      },
+      "candidates_one": "{{count}} उपलब्ध जागेची तुलना केली",
+      "candidates_other": "{{count}} उपलब्ध जागांची तुलना केली",
+      "fallbacks_one": "{{count}} जागा दुसऱ्या टर्मिनलने घेतल्यामुळे वगळली",
+      "fallbacks_other": "{{count}} जागा इतर टर्मिनलनी घेतल्यामुळे वगळल्या"
+    },
+    "exit": {
+      "title": "वाहन निर्गमन",
+      "description": "उभे वाहन शोधा, निर्गमनाचा तास निश्चित करा, शुल्क तपासा आणि पेमेंट पूर्ण करा.",
+      "find": "वाहन शोधा",
+      "vehicleTitle": "उभे वाहन",
+      "calculate": "शुल्क मोजा",
+      "feePreviewTitle": "शुल्क पूर्वावलोकन",
+      "changeVehicle": "दुसरे वाहन निवडा",
+      "nextVehicle": "दुसऱ्या वाहनाचे चेक आउट करा"
+    },
+    "payment": {
+      "methodLabel": "पेमेंट पद्धत",
+      "statusLabel": "पेमेंट स्थिती",
+      "transactionId": "व्यवहार ID",
+      "demoNotice": "हे चाचणी/डेमो पेमेंट आहे. कोणतेही खरे पैसे आकारले जात नाहीत.",
+      "noChargeNotice": "या पार्किंगसाठी कोणतेही पेमेंट देय नाही.",
+      "pay": "{{amount}} भरा",
+      "completeNoCharge": "चेक आउट पूर्ण करा",
+      "simulateDecline": "नाकारलेल्या पेमेंटचे अनुकरण करा (चाचणी)",
+      "testBadge": "चाचणी पेमेंट",
+      "inProgressTitle": "चाचणी पेमेंट प्रक्रियेत आहे",
+      "stages": {
+        "creating": "पेमेंट विनंती तयार होत आहे",
+        "processing": "पेमेंटवर प्रक्रिया होत आहे…",
+        "verifying": "व्यवहाराची पडताळणी होत आहे…"
+      },
+      "successTitle": "पेमेंट यशस्वी",
+      "noChargeSuccessTitle": "चेक आउट पूर्ण",
+      "successDescription": "सत्र बंद झाले असून जागा {{slot}} पुन्हा उपलब्ध आहे.",
+      "failedTitle": "पेमेंट अयशस्वी",
+      "failedDescription": "चाचणी पेमेंट नाकारले गेले. कोणतीही रक्कम आकारली नाही आणि वाहन अजूनही चेक इन आहे."
+    },
+    "paymentMethods": {
+      "UPI": "UPI",
+      "CARD": "कार्ड",
+      "CASH": "रोख",
+      "NO_CHARGE": "शुल्क नाही"
+    },
+    "paymentStatus": {
+      "PENDING": "प्रलंबित",
+      "PROCESSING": "प्रक्रियेत",
+      "PAID": "भरले",
+      "FAILED": "अयशस्वी",
+      "CANCELLED": "रद्द"
+    },
+    "finder": {
+      "title": "वाहन शोध",
+      "description": "वाहन क्रमांक, जागा ID, सत्र क्रमांक किंवा प्रवेश QR वापरून उभे वाहन शोधा.",
+      "foundTitle": "वाहन सापडले",
+      "completedTitle": "सत्र पूर्ण"
+    },
+    "live": {
+      "title": "थेट पार्किंग",
+      "description": "प्रत्येक जागेची थेट स्थिती. तपशीलासाठी जागा निवडा.",
+      "legend": "सूची",
+      "highlight": "ठळक करा",
+      "highlighted": "जागा {{slot}} ठळक केली आहे",
+      "clearHighlight": "काढा",
+      "zoneCounts": "{{total}} पैकी {{available}} उपलब्ध",
+      "activeVehicles": "उभी वाहने",
+      "noActive": "सध्या कोणतेही वाहन उभे नाही.",
+      "slotTitle": "जागा {{slot}}",
+      "emptySlot": "ही जागा रिकामी आहे.",
+      "blockedReason": "कारण"
+    },
+    "session": {
+      "title": "पार्किंग सत्र"
+    },
+    "receipt": {
+      "title": "पावती",
+      "heading": "पार्किंग पावती",
+      "receiptNumber": "पावती क्रमांक",
+      "issuedAt": "दिनांक आणि वेळ",
+      "print": "प्रिंट करा",
+      "download": "डाउनलोड करा",
+      "demoNote": "चाचणी/डेमो पेमेंट — कोणत्याही खऱ्या पैशांवर प्रक्रिया झाली नाही.",
+      "verifyHint": "ही पावती पडताळण्यासाठी स्कॅन करा",
+      "thanks": "{{product}} वापरल्याबद्दल धन्यवाद"
+    },
+    "verify": {
+      "title": "पावती पडताळणी",
+      "checking": "पावतीची पडताळणी होत आहे…",
+      "validTitle": "वैध पावती",
+      "validDescription": "ही पावती {{product}} नोंदींशी जुळते.",
+      "invalidTitle": "पावतीची पडताळणी होऊ शकली नाही",
+      "invalidDescription": "या पावतीच्या नोंदी जुळत नाहीत. कृपया कॅम्पस सुरक्षेशी संपर्क साधा.",
+      "notFoundTitle": "पावती सापडली नाही",
+      "notFoundDescription": "हा पडताळणी कोड कोणत्याही पावतीशी जुळत नाही.",
+      "statusLabel": "पडताळणी स्थिती",
+      "status": {
+        "VALID": "पडताळलेली",
+        "INVALID": "पडताळणी अयशस्वी"
       }
     }
   }

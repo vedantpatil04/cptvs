@@ -14,10 +14,8 @@
  * No vehicles, sessions, payments or other demo data are created.
  */
 import {
-  feeScheduleSchema,
   normalizeUsername,
   passwordPolicySchema,
-  type FeeSchedule,
   type UserRole,
   type VehicleType,
 } from '@cpvts/shared';
@@ -25,6 +23,7 @@ import {
 import { disconnectDatabase, prisma } from '../db/prisma.js';
 import { withTransaction } from '../db/transaction.js';
 import { hashPassword } from '../modules/auth/password.js';
+import { OFFICIAL_FEE_SCHEDULE } from '../modules/fees/official-fee-schedule.js';
 import { SETTING_KEYS } from '../modules/settings/setting-keys.js';
 import { settingRepository } from '../modules/settings/setting.repository.js';
 import { userRepository } from '../modules/users/user.repository.js';
@@ -109,22 +108,6 @@ const BASELINE_LAYOUT: BaselineBlock[] = [
     slotCount: 5,
   },
 ];
-
-/** Official fee rules (Master Blueprint §16). Amounts in paise. */
-const OFFICIAL_FEE_SCHEDULE: FeeSchedule = feeScheduleSchema.parse({
-  currency: 'INR',
-  rules: {
-    STAFF: { TWO_WHEELER: { type: 'FREE' }, FOUR_WHEELER: { type: 'FREE' } },
-    STUDENT: {
-      TWO_WHEELER: { type: 'FREE_HOURS_THEN_HOURLY', freeHours: 2, hourlyRatePaise: 1_000 },
-      FOUR_WHEELER: { type: 'FREE_HOURS_THEN_HOURLY', freeHours: 2, hourlyRatePaise: 2_000 },
-    },
-    VISITOR: {
-      TWO_WHEELER: { type: 'HOURLY', hourlyRatePaise: 2_000 },
-      FOUR_WHEELER: { type: 'HOURLY', hourlyRatePaise: 4_000 },
-    },
-  },
-});
 
 const seedParkingLayout = async (): Promise<void> => {
   if ((await prisma.parkingBlock.count()) > 0) {
