@@ -1,0 +1,48 @@
+{
+  "name": "cpvts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CPVTS — Campus Parking & Vehicle Tracking System",
+  "license": "UNLICENSED",
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "apps/api",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build:shared": "npm run build -w @cpvts/shared",
+    "build:api": "npm run build:shared && npm run build -w @cpvts/api",
+    "build:web": "npm run build:shared && npm run build -w @cpvts/web",
+    "build": "npm run build:shared && npm run build -w @cpvts/api && npm run build -w @cpvts/web",
+    "dev": "npm run build:shared && concurrently -n shared,api,web -c gray,blue,magenta \"npm run dev -w @cpvts/shared\" \"npm run dev -w @cpvts/api\" \"npm run dev -w @cpvts/web\"",
+    "dev:api": "npm run build:shared && npm run dev -w @cpvts/api",
+    "dev:web": "npm run build:shared && npm run dev -w @cpvts/web",
+    "start:api": "npm run start -w @cpvts/api",
+    "db:generate": "npm run db:generate -w @cpvts/api",
+    "db:migrate": "npm run db:migrate -w @cpvts/api",
+    "db:migrate:deploy": "npm run db:migrate:deploy -w @cpvts/api",
+    "db:seed": "npm run db:seed -w @cpvts/api",
+    "db:studio": "npm run db:studio -w @cpvts/api",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
+    "test": "npm run build:shared && npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^10.0.5",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.71.1"
+  }
+}

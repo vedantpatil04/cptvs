@@ -1,0 +1,1013 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "close": "Close",
+    "goHome": "Go to dashboard",
+    "reloadPage": "Reload page",
+    "notAvailable": "Not available",
+    "skipToContent": "Skip to main content",
+    "backToHome": "Back to home"
+  },
+  "branding": {
+    "demoNotice": "Independent demonstration prepared for {{institution}}. Not an official institutional system."
+  },
+  "language": {
+    "label": "Language",
+    "select": "Change language"
+  },
+  "roles": {
+    "ADMIN": "Administrator",
+    "SECURITY_STAFF": "Security Staff",
+    "PARKING_USER": "Student / Campus Staff"
+  },
+  "nav": {
+    "mainNavigation": "Main navigation",
+    "openMenu": "Open navigation menu",
+    "dashboard": "Dashboard",
+    "account": "My account",
+    "home": "Home",
+    "help": "Help & FAQ",
+    "liveParking": "Live parking",
+    "vehicleEntry": "Vehicle entry",
+    "vehicleExit": "Vehicle exit",
+    "vehicleFinder": "Vehicle finder",
+    "slotManagement": "Slot management",
+    "history": "History",
+    "analytics": "Analytics",
+    "reports": "Reports",
+    "integrity": "Integrity",
+    "auditLogs": "Audit logs",
+    "users": "Users",
+    "myParking": "My Parking",
+    "myVehicles": "My Vehicles",
+    "parking": "Parking",
+    "receipts": "Receipts",
+    "profile": "Profile",
+    "more": "More"
+  },
+  "auth": {
+    "signInTitle": "Sign in",
+    "signInDescription": "Use the account provided by your administrator.",
+    "username": "Username",
+    "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "signOut": "Sign out",
+    "signOutConfirmTitle": "Sign out?",
+    "signOutConfirmDescription": "You will need to sign in again to continue.",
+    "sessionExpired": "Your session has ended. Please sign in again.",
+    "signedOut": "You have been signed out.",
+    "restoringSession": "Checking your session…",
+    "sessionCheckFailed": "We could not verify your session."
+  },
+  "userMenu": {
+    "open": "Open account menu",
+    "signedInAs": "Signed in as"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome, {{name}}",
+    "adminDescription": "Overview of system health and administration for this deployment.",
+    "staffDescription": "Your workspace for daily parking operations.",
+    "sessionTitle": "Current session",
+    "sessionDescription": "Details of your signed-in session on this device.",
+    "sessionExpires": "Session expires",
+    "quickActions": "Quick actions",
+    "kpi": {
+      "title": "Live parking",
+      "totalSlots": "Total slots",
+      "occupied": "Occupied",
+      "available": "Available",
+      "blocked": "Blocked",
+      "occupancy": "Occupancy",
+      "vehicleTypeOccupancy": "{{type}} occupancy",
+      "occupiedOfTotal": "{{occupied}} of {{total}} occupied",
+      "currentlyParked": "Currently parked",
+      "todayVehicles": "Vehicles today",
+      "todayFees": "Fees collected today",
+      "todayFeesHint": "Finalized test/demo transactions",
+      "percent": "{{value}}%"
+    }
+  },
+  "system": {
+    "title": "System status",
+    "description": "Live status of the server and database.",
+    "environment": "Environment",
+    "version": "Version",
+    "database": "Database",
+    "databaseLatency": "Database response time",
+    "uptime": "Server uptime",
+    "up": "Online",
+    "down": "Offline",
+    "milliseconds": "{{value}} ms",
+    "uptimeValue": "{{hours}} h {{minutes}} min",
+    "refresh": "Refresh"
+  },
+  "account": {
+    "title": "My account",
+    "description": "Your account details.",
+    "fullName": "Full name",
+    "username": "Username",
+    "role": "Role",
+    "lastSignIn": "Last sign-in",
+    "status": "Account status",
+    "active": "Active",
+    "never": "Never"
+  },
+  "states": {
+    "errorTitle": "Something went wrong",
+    "errorDescription": "An unexpected problem occurred. Please try again."
+  },
+  "pages": {
+    "notFoundTitle": "Page not found",
+    "notFoundDescription": "The page you are looking for does not exist or has moved.",
+    "forbiddenTitle": "Access denied",
+    "forbiddenDescription": "Your role does not have access to this page."
+  },
+  "errors": {
+    "network": "Unable to reach the server. Check your connection and try again.",
+    "BAD_REQUEST": "The request could not be processed.",
+    "VALIDATION_ERROR": "Some of the information entered is invalid.",
+    "UNAUTHENTICATED": "Please sign in to continue.",
+    "INVALID_CREDENTIALS": "The sign-in details are incorrect.",
+    "ACCOUNT_DISABLED": "This account has been disabled. Contact your administrator.",
+    "TOKEN_EXPIRED": "Your session has expired. Please sign in again.",
+    "FORBIDDEN": "You do not have permission to perform this action.",
+    "NOT_FOUND": "The requested item was not found.",
+    "CONFLICT": "This action conflicts with the current state. Refresh and try again.",
+    "PAYLOAD_TOO_LARGE": "The submitted data is too large.",
+    "RATE_LIMITED": "Too many attempts. Please wait a few minutes and try again.",
+    "SERVICE_UNAVAILABLE": "The service is temporarily unavailable. Please try again shortly.",
+    "INTERNAL_ERROR": "An unexpected server error occurred. Please try again.",
+    "DUPLICATE_ACTIVE_VEHICLE": "This vehicle is already parked. Check it out before checking it in again.",
+    "VEHICLE_TYPE_MISMATCH": "This vehicle number is registered with a different vehicle type.",
+    "ZONE_NOT_CONFIGURED": "No parking zone is configured for this vehicle type.",
+    "ZONE_FULL": "The zone for this vehicle type is full. No compatible slot is available.",
+    "ALLOCATION_FAILED": "All free slots were just taken by other terminals. Please try again.",
+    "SESSION_NOT_FOUND": "No matching parked vehicle or session was found.",
+    "SESSION_NOT_ACTIVE": "This parking session is already completed.",
+    "EXIT_BEFORE_ENTRY": "The exit hour cannot be earlier than the entry hour.",
+    "VEHICLE_SESSION_MISMATCH": "The vehicle number does not match this parking session.",
+    "SESSION_SLOT_MISMATCH": "The slot does not match this parking session.",
+    "INVALID_QR_REFERENCE": "This QR code is not a valid entry code.",
+    "FEE_SCHEDULE_NOT_CONFIGURED": "Parking fees are not configured. Contact an administrator.",
+    "INVALID_PAYMENT_METHOD": "This payment method cannot be used for this amount.",
+    "PAYMENT_NOT_FOUND": "The payment could not be found.",
+    "PAYMENT_SESSION_MISMATCH": "This payment belongs to a different parking session.",
+    "PAYMENT_NOT_PENDING": "This payment has already been processed or cancelled.",
+    "PAYMENT_IN_PROGRESS": "A payment for this session is already being processed.",
+    "PAYMENT_AMOUNT_MISMATCH": "The fee changed during checkout. Please calculate the fee again.",
+    "RECEIPT_NOT_FOUND": "The receipt could not be found.",
+    "SLOT_NOT_FOUND": "The parking slot was not found.",
+    "SLOT_NOT_AVAILABLE": "Only an available slot can be blocked. Check the vehicle out first.",
+    "SLOT_NOT_BLOCKED": "This slot is not blocked.",
+    "BLOCK_NOT_FOUND": "The parking block was not found.",
+    "DATE_RANGE_TOO_LARGE": "The date range is too long. Choose at most one year.",
+    "EMAIL_TAKEN": "An account with this e-mail address already exists.",
+    "INSTITUTIONAL_ID_TAKEN": "An account with this ID already exists.",
+    "EMAIL_DOMAIN_NOT_ALLOWED": "Use your institutional e-mail address to register.",
+    "INVALID_DOCUMENT": "The identity document must be a JPEG, PNG or PDF file of at most 2 MB.",
+    "VERIFICATION_REQUIRED": "Your identity verification must be approved before you can use this feature.",
+    "VERIFICATION_NOT_REJECTED": "A new document can be submitted only after a rejected verification.",
+    "VERIFICATION_NOT_PENDING": "This verification has already been decided.",
+    "VEHICLE_ALREADY_REGISTERED": "This vehicle is already registered to an account.",
+    "VEHICLE_NOT_FOUND": "Vehicle not found.",
+    "VEHICLE_IDENTITY_LOCKED": "The number and type of a vehicle with parking history cannot be changed.",
+    "USER_NOT_FOUND": "User not found.",
+    "DOCUMENT_NOT_FOUND": "Document not found.",
+    "CANNOT_CHANGE_OWN_STATUS": "You cannot deactivate your own account.",
+    "VISITOR_ACCESS_DENIED": "No visitor parking matches this vehicle number and session number.",
+    "SLOT_CODE_TAKEN": "A slot with this ID already exists.",
+    "SLOT_VEHICLE_MISMATCH": "The vehicle type does not match this parking zone or the slot ID.",
+    "SLOT_DISABLED": "This slot is out of service. Enable it first.",
+    "SLOT_IN_USE": "A vehicle is parked in, or being assigned to, this slot. Check it out first.",
+    "ZONE_NOT_FOUND": "The parking zone was not found.",
+    "ZONE_IN_USE": "Vehicles are parked in this zone. Check them out before taking it out of service.",
+    "BLOCK_IN_USE": "Vehicles are parked in this block. Check them out before taking it out of service.",
+    "PARK_PROPOSAL_EXPIRED": "The parking space offered to you is no longer held. Please start again.",
+    "NOTIFICATION_NOT_FOUND": "The notification was not found."
+  },
+  "validation": {
+    "required": "This field is required.",
+    "tooLong": "This value is too long.",
+    "passwordTooShort": "The password is shorter than the minimum length.",
+    "passwordTooLong": "The password is too long.",
+    "selectOption": "Please choose an option.",
+    "invalidVehicleNumber": "Enter a valid vehicle number, for example KA22AB1234.",
+    "invalidHour": "Enter an hour between 0 and 23.",
+    "invalidSessionNumber": "Enter a valid session number, for example CPVTS-P-7K4M92QX.",
+    "invalidSlotCode": "Enter a valid slot ID, for example T-04.",
+    "invalidDate": "Enter a valid date.",
+    "invalidDateRange": "The end date must be on or after the start date.",
+    "outOfRange": "This value is out of the allowed range.",
+    "coordinatesPaired": "Enter both latitude and longitude, or clear both.",
+    "invalidEmail": "Enter a valid e-mail address.",
+    "emailDomain": "Use your institutional e-mail address.",
+    "invalidPhone": "Enter a valid phone number (10 to 15 digits).",
+    "invalidInstitutionalId": "Enter a valid ID, for example 2BT22CS001 or EMP-1042.",
+    "institutionalIdMismatch": "The two IDs do not match.",
+    "documentRequired": "Choose your ID document.",
+    "documentTooLarge": "The file is too large. The limit is 2 MB.",
+    "documentType": "Use a JPEG, PNG or PDF file.",
+    "passwordsDoNotMatch": "The passwords do not match.",
+    "rejectionNoteRequired": "Write the reason for rejecting.",
+    "invalidNewSlotCode": "Use T- or F- followed by two or three digits, for example T-11 or F-06.",
+    "slotCodeVehicleMismatch": "T- slots are for two-wheelers and F- slots are for four-wheelers.",
+    "nothingToUpdate": "Change at least one field before saving."
+  },
+  "public": {
+    "loginButton": "Sign in",
+    "loginShort": "Sign in",
+    "dashboardButton": "Go to dashboard",
+    "tagline": "Check live parking availability, find where your vehicle is parked and see parking fees on campus.",
+    "privacyNote": "For privacy, vehicle numbers, parking records and other operational data are never shown on public pages.",
+    "availability": {
+      "title": "Parking availability",
+      "description": "Free parking spaces right now, by vehicle type.",
+      "ofTotal": "of {{total}} spaces free",
+      "spacesAvailable": "Spaces available",
+      "full": "Full",
+      "notConfigured": "Not configured yet",
+      "lastUpdated": "Updated {{time}}",
+      "refresh": "Refresh"
+    },
+    "locations": {
+      "title": "Parking locations",
+      "description": "Where each parking block is on campus.",
+      "accepts": "Accepts",
+      "openInMaps": "Open in Google Maps",
+      "mapPending": "Map location not configured yet",
+      "empty": "Parking locations have not been configured yet."
+    },
+    "fees": {
+      "title": "Parking fees",
+      "description": "Official parking fee rules by owner category and vehicle type.",
+      "category": "Category",
+      "free": "Free",
+      "hourly": "{{rate}} per hour",
+      "freeThenHourly_one": "First {{count}} hour free, then {{rate}} per hour",
+      "freeThenHourly_other": "First {{count}} hours free, then {{rate}} per hour",
+      "notConfigured": "Fee information has not been configured yet."
+    },
+    "helpCard": {
+      "title": "Need help?",
+      "description": "Answers to common questions about parking and this system.",
+      "action": "Open Help & FAQ"
+    },
+    "hero": {
+      "title": "Find parking. Find your vehicle.",
+      "imageAlt": "Campus parking"
+    },
+    "register": "Create account",
+    "visitorButton": "Visitor parking",
+    "operationalLogin": "Admin / Security sign-in",
+    "how": {
+      "title": "How CPVTS works",
+      "description": "From arrival to receipt in four steps.",
+      "steps": {
+        "register": {
+          "title": "Register once",
+          "text": "Students and staff create an account and upload an ID for a one-time check. Visitors need no account."
+        },
+        "park": {
+          "title": "Park",
+          "text": "Security checks your vehicle in and CPVTS assigns a slot automatically."
+        },
+        "find": {
+          "title": "Find your vehicle",
+          "text": "See the parking block on Google Maps and your exact slot on the CPVTS layout."
+        },
+        "leave": {
+          "title": "Leave and get a receipt",
+          "text": "The fee is calculated by the system. You get a receipt with a QR code to verify it."
+        }
+      }
+    },
+    "visitor": {
+      "title": "Visiting campus?",
+      "text": "You do not need an account. Use the vehicle number and session number on your parking slip to find your vehicle and see your fee and receipt."
+    }
+  },
+  "vehicleTypes": {
+    "TWO_WHEELER": "Two-wheeler",
+    "FOUR_WHEELER": "Four-wheeler"
+  },
+  "ownerCategories": {
+    "STAFF": "Staff",
+    "STUDENT": "Student",
+    "VISITOR": "Visitor"
+  },
+  "help": {
+    "title": "Help & FAQ",
+    "description": "Common questions about campus parking and this system.",
+    "questions": {
+      "availability": {
+        "question": "How do I check parking availability?",
+        "answer": "The home page shows how many two-wheeler and four-wheeler spaces are free right now. Use Refresh to update the counts."
+      },
+      "locations": {
+        "question": "Where are the parking areas?",
+        "answer": "The Parking locations section lists each parking block. When map coordinates have been configured, you can open the block's location in Google Maps."
+      },
+      "fees": {
+        "question": "How much does parking cost?",
+        "answer": "The Parking fees section shows the official rules for staff, students and visitors, for two-wheelers and four-wheelers."
+      },
+      "vehicle": {
+        "question": "Can I look up a parked vehicle here?",
+        "answer": "No. To protect privacy, vehicle numbers and parking records are not public. Please contact campus security staff for help."
+      },
+      "login": {
+        "question": "Who can sign in?",
+        "answer": "Administrators and security staff sign in at the staff sign-in page. Students and campus staff create an account and sign in with their e-mail address. Visitors need no account."
+      },
+      "language": {
+        "question": "How do I change the language?",
+        "answer": "Use the language menu at the top of the page to switch between English, Kannada, Hindi and Marathi."
+      },
+      "register": {
+        "question": "How do I register as a student or staff member?",
+        "answer": "Choose Create account, enter your details and your college or employee ID, then upload a photo or scan of your ID card. The document is seen only by administrators."
+      },
+      "verification": {
+        "question": "Why is my account pending?",
+        "answer": "An administrator checks every ID once. Until it is approved you can sign in and see the status, but parking features and student or staff rates are not active. If it is rejected, you will see the reason and can submit a new document."
+      },
+      "visitor": {
+        "question": "I am a visitor. How do I see my parking?",
+        "answer": "Open Visitor parking and enter the vehicle number and session number printed on your slip. You can see only your own parking, your fee so far and your receipt after you leave."
+      },
+      "findVehicle": {
+        "question": "How do I find my parked vehicle?",
+        "answer": "Sign in and choose Locate my vehicle. Google Maps shows the parking block, and the CPVTS layout highlights your exact slot such as T-04. There is no turn-by-turn navigation."
+      }
+    }
+  },
+  "parking": {
+    "common": {
+      "vehicleNumber": "Vehicle number",
+      "vehicleType": "Vehicle type",
+      "ownerCategory": "Owner category",
+      "block": "Parking block",
+      "zone": "Zone",
+      "slot": "Slot",
+      "sessionNumber": "Session number",
+      "entry": "Entry",
+      "exit": "Exit",
+      "entryHour": "Entry hour",
+      "exitHour": "Exit hour",
+      "duration": "Duration",
+      "currentDuration": "Current duration",
+      "status": "Status",
+      "estimatedFee": "Estimated fee",
+      "estimatedFeeHint": "If the vehicle leaves at the current hour.",
+      "hours_one": "{{count}} hour",
+      "hours_other": "{{count}} hours",
+      "viewSession": "View session",
+      "viewReceipt": "View receipt",
+      "checkout": "Check out",
+      "locateOnMap": "Locate on parking map"
+    },
+    "sessionStatus": {
+      "ACTIVE": "Parked",
+      "COMPLETED": "Completed"
+    },
+    "slotStatus": {
+      "AVAILABLE": "Available",
+      "OCCUPIED": "Occupied",
+      "BLOCKED": "Blocked",
+      "HELD": "Being assigned"
+    },
+    "fee": {
+      "title": "Fee breakdown",
+      "free_one": "{{count}} hour free",
+      "free_other": "{{count}} hours free",
+      "charged_one": "{{count}} hour × {{rate}}",
+      "charged_other": "{{count}} hours × {{rate}}",
+      "total": "Total"
+    },
+    "search": {
+      "label": "Vehicle number, slot ID, session number or entry QR",
+      "placeholder": "KA22AB1234 · T-04 · CPVTS-P-…",
+      "submit": "Search",
+      "hint": "You can also scan the entry QR with a barcode scanner."
+    },
+    "entry": {
+      "title": "Vehicle entry",
+      "description": "Check in a vehicle. The best available slot in the correct zone is assigned automatically.",
+      "vehicleNumberPlaceholder": "e.g. KA22AB1234",
+      "submit": "Check in and assign slot",
+      "submitting": "Assigning slot…",
+      "successTitle": "Vehicle checked in",
+      "assignedSlot": "Assigned slot",
+      "checkInAnother": "Check in another vehicle",
+      "entryQrTitle": "Entry QR",
+      "entryQrHint": "Scan this code at exit to find the session instantly.",
+      "categoryFromAccount": "Billed as {{category}}: set by the vehicle's verified account, not by the operator."
+    },
+    "allocation": {
+      "title": "Smart allocation",
+      "checks": {
+        "CORRECT_ZONE": "Correct zone for the vehicle type",
+        "AVAILABLE": "Slot was available",
+        "NOT_BLOCKED": "Slot is not blocked",
+        "BEST_SCORE": "Best valid allocation score ({{score}})",
+        "FINAL_AVAILABILITY_VERIFIED": "Final availability verified before assignment"
+      },
+      "candidates_one": "{{count}} available slot compared",
+      "candidates_other": "{{count}} available slots compared",
+      "fallbacks_one": "{{count}} slot was taken by another terminal and skipped",
+      "fallbacks_other": "{{count}} slots were taken by other terminals and skipped"
+    },
+    "exit": {
+      "title": "Vehicle exit",
+      "description": "Find the parked vehicle, confirm the exit hour, review the fee and complete payment.",
+      "find": "Find vehicle",
+      "vehicleTitle": "Parked vehicle",
+      "calculate": "Calculate fee",
+      "feePreviewTitle": "Fee preview",
+      "changeVehicle": "Choose another vehicle",
+      "nextVehicle": "Check out another vehicle"
+    },
+    "payment": {
+      "methodLabel": "Payment method",
+      "statusLabel": "Payment status",
+      "transactionId": "Transaction ID",
+      "demoNotice": "This is a test/demo payment. No real money is charged.",
+      "noChargeNotice": "No payment is due for this stay.",
+      "pay": "Pay {{amount}}",
+      "completeNoCharge": "Complete checkout",
+      "simulateDecline": "Simulate a declined payment (test)",
+      "testBadge": "Test payment",
+      "inProgressTitle": "Processing test payment",
+      "stages": {
+        "creating": "Creating payment request",
+        "processing": "Processing payment…",
+        "verifying": "Verifying transaction…"
+      },
+      "successTitle": "Payment successful",
+      "noChargeSuccessTitle": "Checkout complete",
+      "successDescription": "The session is closed and slot {{slot}} is available again.",
+      "failedTitle": "Payment failed",
+      "failedDescription": "The test payment was declined. Nothing was charged and the vehicle is still checked in."
+    },
+    "paymentMethods": {
+      "UPI": "UPI",
+      "CARD": "Card",
+      "CASH": "Cash",
+      "NO_CHARGE": "No charge"
+    },
+    "paymentStatus": {
+      "PENDING": "Pending",
+      "PROCESSING": "Processing",
+      "PAID": "Paid",
+      "FAILED": "Failed",
+      "CANCELLED": "Cancelled"
+    },
+    "finder": {
+      "title": "Vehicle finder",
+      "description": "Locate a parked vehicle by vehicle number, slot ID, session number or entry QR.",
+      "foundTitle": "Vehicle found",
+      "completedTitle": "Session completed"
+    },
+    "live": {
+      "title": "Live parking",
+      "description": "Live status of every slot. Select a slot for details.",
+      "legend": "Legend",
+      "highlight": "Highlight",
+      "highlighted": "Highlighting slot {{slot}}",
+      "clearHighlight": "Clear",
+      "zoneCounts": "{{available}} of {{total}} available",
+      "activeVehicles": "Parked vehicles",
+      "noActive": "No vehicles are parked right now.",
+      "slotTitle": "Slot {{slot}}",
+      "emptySlot": "This slot is free.",
+      "blockedReason": "Reason"
+    },
+    "session": {
+      "title": "Parking session"
+    },
+    "receipt": {
+      "title": "Receipt",
+      "heading": "Parking receipt",
+      "receiptNumber": "Receipt number",
+      "issuedAt": "Date and time",
+      "print": "Print",
+      "download": "Download",
+      "demoNote": "Test/demo payment — no real money was processed.",
+      "verifyHint": "Scan to verify this receipt",
+      "thanks": "Thank you for using {{product}}"
+    },
+    "verify": {
+      "title": "Receipt verification",
+      "checking": "Verifying receipt…",
+      "validTitle": "Valid receipt",
+      "validDescription": "This receipt matches the {{product}} records.",
+      "invalidTitle": "Receipt could not be verified",
+      "invalidDescription": "The records for this receipt do not match. Please contact campus security.",
+      "notFoundTitle": "Receipt not found",
+      "notFoundDescription": "This verification code does not match any receipt.",
+      "statusLabel": "Verification status",
+      "status": {
+        "VALID": "Verified",
+        "INVALID": "Not verified"
+      }
+    }
+  },
+  "charts": {
+    "total": "Total",
+    "showTable": "Show as table"
+  },
+  "filters": {
+    "title": "Filters",
+    "all": "All",
+    "apply": "Apply filters",
+    "reset": "Reset",
+    "from": "From date",
+    "to": "To date"
+  },
+  "pager": {
+    "label": "Pagination",
+    "showing": "Showing {{first}}–{{last}} of {{total}}",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {{page}} of {{pages}}"
+  },
+  "alerts": {
+    "title": "Alerts",
+    "rules": "Rules: zone at {{percent}}% or more, parked {{hours}} hours or more, blocked slots",
+    "none": "No alerts. Every zone has space and no vehicle is over the time limit.",
+    "zoneFull": "{{zone}} is FULL ({{occupied}} of {{usable}} usable slots).",
+    "zoneNearlyFull": "{{zone}} is {{percent}}% occupied ({{occupied}} of {{usable}} usable slots).",
+    "availableSlots": "Still free: {{slots}}",
+    "longDuration_one": "{{vehicle}} in slot {{slot}} has been parked for {{count}} hour.",
+    "longDuration_other": "{{vehicle}} in slot {{slot}} has been parked for {{count}} hours.",
+    "slotBlocked": "Slot {{slot}} ({{zone}}) is blocked and excluded from allocation.",
+    "reason": "Reason: {{reason}}",
+    "severity": {
+      "critical": "Critical",
+      "warning": "Warning",
+      "info": "Info"
+    }
+  },
+  "timeline": {
+    "title": "Session timeline",
+    "description": "Every recorded step of this session, from the audit log.",
+    "empty": "No events have been recorded for this session.",
+    "score": "score {{score}}"
+  },
+  "audit": {
+    "title": "Audit logs",
+    "description": "A read-only record of sign-ins, parking operations and administrative changes.",
+    "empty": "No audit entries match these filters.",
+    "time": "Time",
+    "action": "Action",
+    "actor": "Performed by",
+    "actorUsername": "Username",
+    "entity": "Record",
+    "entityType": "Record type",
+    "entityId": "Record ID",
+    "details": "Details",
+    "showDetails": "Show details",
+    "system": "System",
+    "actions": {
+      "AUTH_LOGIN_SUCCEEDED": "Signed in",
+      "AUTH_LOGIN_FAILED": "Sign-in failed",
+      "AUTH_LOGOUT": "Signed out",
+      "VEHICLE_CHECKED_IN": "Vehicle checked in",
+      "SLOT_ASSIGNED": "Slot assigned",
+      "CHECKOUT_INITIATED": "Checkout started",
+      "PAYMENT_INITIATED": "Payment started",
+      "PAYMENT_SUCCEEDED": "Payment succeeded",
+      "PAYMENT_FAILED": "Payment failed",
+      "PAYMENT_CANCELLED": "Payment cancelled",
+      "TRANSACTION_FINALIZED": "Transaction finalized",
+      "RECEIPT_GENERATED": "Receipt generated",
+      "SLOT_RELEASED": "Slot released",
+      "SLOT_BLOCKED": "Slot blocked",
+      "SLOT_UNBLOCKED": "Slot unblocked",
+      "SLOT_PRIORITY_CHANGED": "Slot priority changed",
+      "BLOCK_LOCATION_UPDATED": "Block location updated",
+      "REPORT_EXPORTED": "Report exported",
+      "INTEGRITY_REJECTED": "Rejected by integrity rule",
+      "USER_REGISTERED": "Account registered",
+      "IDENTITY_SUBMITTED": "Identity document submitted",
+      "IDENTITY_DOCUMENT_VIEWED": "Identity document viewed",
+      "USER_VERIFIED": "Identity verified",
+      "USER_VERIFICATION_REJECTED": "Verification rejected",
+      "USER_ACTIVATED": "Account activated",
+      "USER_DEACTIVATED": "Account deactivated",
+      "USER_UPDATED": "Account updated by administrator",
+      "PROFILE_UPDATED": "Profile updated",
+      "VEHICLE_REGISTERED": "Vehicle registered",
+      "VEHICLE_UPDATED": "Vehicle updated",
+      "VISITOR_ACCESS_GRANTED": "Visitor access granted",
+      "BLOCK_UPDATED": "Parking block updated",
+      "ZONE_UPDATED": "Parking zone updated",
+      "SLOT_CREATED": "Slot created",
+      "SLOT_UPDATED": "Slot updated",
+      "SLOT_ENABLED": "Slot enabled",
+      "SLOT_DISABLED": "Slot disabled",
+      "SLOT_DELETED": "Slot deleted",
+      "SLOT_ARCHIVED": "Slot archived"
+    },
+    "entityTypes": {
+      "USER": "User",
+      "PARKING_SESSION": "Parking session",
+      "PARKING_SLOT": "Parking slot",
+      "PARKING_BLOCK": "Parking block",
+      "PAYMENT": "Payment",
+      "RECEIPT": "Receipt",
+      "VEHICLE": "Vehicle",
+      "REPORT": "Report",
+      "IDENTITY_DOCUMENT": "Identity document",
+      "PARKING_ZONE": "Parking zone"
+    }
+  },
+  "history": {
+    "title": "Parking history",
+    "description": "Search every parking session by vehicle, slot, category, status or date.",
+    "empty": "No parking sessions match these filters.",
+    "fee": "Fee",
+    "receipt": "Receipt"
+  },
+  "analytics": {
+    "title": "Analytics",
+    "description": "Occupancy, entries, revenue and zone usage for one campus day.",
+    "date": "Date",
+    "show": "Show",
+    "today": "Today",
+    "previousDay": "Previous day",
+    "nextDay": "Next day",
+    "summary": "Summary for the day",
+    "entered": "Vehicles entered",
+    "completed": "Sessions completed",
+    "averageDuration": "Average duration",
+    "hoursShort": "{{value}} h",
+    "peakEntryHour": "Busiest entry hour",
+    "revenue": "Revenue",
+    "transactions_one": "{{count}} finalized transaction",
+    "transactions_other": "{{count}} finalized transactions",
+    "occupancyTitle": "Occupancy by hour",
+    "occupancyDescription": "Vehicles parked during each hour, by vehicle type.",
+    "hour": "Hour",
+    "entriesTitle": "Entries by hour",
+    "entriesDescription": "Vehicles checked in during each hour.",
+    "entriesSeries": "Entries",
+    "revenueByVehicleType": "Revenue by vehicle type",
+    "revenueByOwnerCategory": "Revenue by owner category",
+    "zonesTitle": "Zone usage",
+    "zonesDescription": "Peak occupancy is the highest number of vehicles parked in any hour.",
+    "topSlotsTitle": "Most used slots",
+    "topSlotsDescription": "Sessions started in each slot on this day.",
+    "noSessions": "No sessions on this day.",
+    "sessionsColumn": "Sessions",
+    "peakOccupancy": "Peak occupancy",
+    "currentOccupancy": "Now",
+    "usableSlots": "Usable slots"
+  },
+  "reports": {
+    "title": "Reports",
+    "description": "Download CSV files for spreadsheets. Amounts come only from finalized transactions.",
+    "rangeTitle": "Date range",
+    "rangeHint": "Leave both dates empty for the last 30 days. The longest range is 366 days.",
+    "download": "Download CSV",
+    "downloaded": "Downloaded {{file}}.",
+    "kinds": {
+      "history": {
+        "title": "Parking history",
+        "description": "Every session that entered in the range, with slot, duration, fee and receipt."
+      },
+      "transactions": {
+        "title": "Transactions",
+        "description": "Every simulated payment attempt in the range, including failed and cancelled ones."
+      },
+      "revenue": {
+        "title": "Daily revenue",
+        "description": "Revenue per day with totals by vehicle type and owner category."
+      },
+      "vehicles": {
+        "title": "Vehicles",
+        "description": "All recorded vehicles with visit counts. Not limited by the date range."
+      }
+    }
+  },
+  "slots": {
+    "title": "Slot management",
+    "description": "Block slots for maintenance, set allocation priority and record block locations.",
+    "noLocation": "Location not set",
+    "editLocation": "Edit location",
+    "priority": "Priority",
+    "blockedReason": "Blocked reason",
+    "actions": "Actions",
+    "block": "Block",
+    "unblock": "Unblock",
+    "blockOnlyAvailable": "Only available slots can be blocked.",
+    "setPriority": "Priority",
+    "blockTitle": "Block slot {{slot}}",
+    "blockHint": "A blocked slot is excluded from automatic allocation until it is unblocked.",
+    "unblockTitle": "Unblock slot {{slot}}",
+    "unblockHint": "The slot becomes available for allocation again.",
+    "priorityTitle": "Priority of slot {{slot}}",
+    "priorityHint": "0–100. Higher priority slots are offered first; ties use daily use and layout order.",
+    "locationTitle": "Location of {{block}}",
+    "locationHint": "Enter real, surveyed coordinates only. Leave both empty to remove the location.",
+    "reason": "Reason",
+    "reasonPlaceholder": "e.g. Surface repair",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "removeLocation": "Remove location",
+    "confirm": {
+      "block": "Block slot",
+      "unblock": "Unblock slot",
+      "priority": "Save priority",
+      "location": "Save location"
+    },
+    "blocked": "Slot {{slot}} is now blocked.",
+    "unblocked": "Slot {{slot}} is available again.",
+    "prioritySaved": "Priority of slot {{slot}} is now {{priority}}.",
+    "locationSaved": "Location of {{block}} saved.",
+    "locationRemoved": "Location of {{block}} removed."
+  },
+  "integrity": {
+    "title": "Parking integrity",
+    "description": "Read-only checks that slots, sessions, payments and receipts agree with each other.",
+    "runAgain": "Run checks again",
+    "healthy": "All integrity checks passed",
+    "unhealthy": "Some integrity checks failed",
+    "checkedAt": "Checked at {{time}}.",
+    "checksTitle": "Checks",
+    "passed": "Passed",
+    "failed": "Failed",
+    "rule": "Rule",
+    "rejectionsTitle": "Recently rejected operations",
+    "rejectionsDescription": "Requests refused by a consistency or security rule.",
+    "noRejections": "No operations have been rejected.",
+    "checks": {
+      "OCCUPIED_SLOT_HAS_ACTIVE_SESSION": "Every occupied slot has an active session",
+      "ACTIVE_SESSION_SLOT_OCCUPIED": "Every active session's slot is marked occupied",
+      "ONE_ACTIVE_SESSION_PER_VEHICLE": "No vehicle has more than one active session",
+      "NO_EXPIRED_SLOT_HOLDS": "No expired temporary slot holds remain",
+      "COMPLETED_SESSION_HAS_RECEIPT": "Every completed session has a receipt",
+      "PAID_PAYMENT_HAS_RECEIPT": "Every paid payment has a receipt",
+      "RECEIPT_MATCHES_TRANSACTION": "Every receipt matches its finalized transaction",
+      "NO_STUCK_PAYMENTS": "No payment is stuck in processing"
+    }
+  },
+  "verification": {
+    "status": {
+      "PENDING": "Pending review",
+      "VERIFIED": "Verified",
+      "REJECTED": "Rejected"
+    },
+    "title": "Identity verification",
+    "studentDescription": "Your college ID is checked once before you can use student parking.",
+    "staffDescription": "Your institutional ID is checked once before you can use staff parking.",
+    "studentStatus": "College identity verification",
+    "staffStatus": "Institutional verification",
+    "pendingMessage": "An administrator is reviewing your document. Parking features unlock as soon as it is approved.",
+    "rejectedMessage": "Your document was not accepted. Submit a clearer or correct document to try again.",
+    "reason": "Reason",
+    "submitted": "Submitted",
+    "checkStatus": "Check status",
+    "resubmitTitle": "Submit a new document",
+    "resubmitDescription": "Correct the ID if needed and upload a clear photo or scan.",
+    "resubmit": "Submit for review",
+    "document": {
+      "label": "ID document",
+      "choose": "Choose a file or take a photo",
+      "hint": "JPEG, PNG or PDF, up to 2 MB. Only administrators can see it.",
+      "remove": "Remove file"
+    }
+  },
+  "userAuth": {
+    "signInTitle": "Student & staff sign-in",
+    "signInDescription": "Sign in with the e-mail address you registered with.",
+    "tagline": "Know where your vehicle is parked, how long it has been there and what it costs.",
+    "email": "E-mail address",
+    "noAccount": "No account yet?",
+    "registerAsStudent": "Register as a student",
+    "registerAsStaff": "Register as campus staff",
+    "visitorLink": "Visiting? Open visitor parking",
+    "operationalLink": "Admin or Security Staff sign-in",
+    "haveAccount": "Already registered?",
+    "studentStaffPrompt": "Student or campus staff?",
+    "studentStaffLink": "Sign in here",
+    "register": {
+      "studentTitle": "Student registration",
+      "staffTitle": "Campus staff registration",
+      "description": "Create your account, then upload your ID for a one-time check.",
+      "iAm": "I am a",
+      "student": "Student",
+      "staff": "Campus staff",
+      "steps": "Registration steps",
+      "stepDetails": "Your details",
+      "stepIdentity": "Identity",
+      "fullName": "Full name",
+      "studentId": "Student ID (USN)",
+      "staffId": "Employee / staff ID",
+      "phone": "Phone number",
+      "passwordHint": "At least 10 characters.",
+      "confirmPassword": "Confirm password",
+      "continue": "Continue",
+      "back": "Back",
+      "submit": "Create account",
+      "submitting": "Creating account…",
+      "studentNotice": "Student parking rates apply only after an administrator verifies your college ID.",
+      "staffNotice": "Staff parking applies only after an administrator verifies your institutional ID.",
+      "confirmId": "Confirm {{label}}",
+      "confirmIdHint": "Type the ID exactly as printed on your document."
+    }
+  },
+  "user": {
+    "current": {
+      "title": "Current parking",
+      "fee": "Current fee"
+    },
+    "actions": {
+      "locate": "Locate my vehicle",
+      "viewSession": "View session",
+      "showOnMap": "Show on parking map",
+      "openBlockInMaps": "Open parking block in Google Maps"
+    },
+    "locate": {
+      "found": "Vehicle found",
+      "title": "Locate my vehicle",
+      "description": "Your exact slot on the CPVTS parking layout, and the parking block on Google Maps.",
+      "notParkedTitle": "No vehicle is parked right now",
+      "notParkedHint": "When security checks your vehicle in, its exact slot appears here.",
+      "chooseVehicle": "Choose a vehicle",
+      "layoutTitle": "Slot {{slot}} on the parking layout",
+      "mapsExplainer": "Google Maps shows {{block}}. The layout shows your exact slot {{slot}}, parked since {{entry}}."
+    },
+    "home": {
+      "morning": "Good morning,",
+      "afternoon": "Good afternoon,",
+      "evening": "Good evening,",
+      "currentParking": "My current parking",
+      "notParkedTitle": "Your vehicle is not parked right now",
+      "notParkedHint": "When you park, your slot, time and fee appear here.",
+      "noVehicleHint": "Add your vehicle so CPVTS can recognise it when you arrive.",
+      "seeAvailability": "See parking availability",
+      "liveAvailability": "Live parking availability",
+      "viewLayout": "View layout",
+      "recentActivity": "Recent parking activity",
+      "viewHistory": "All history",
+      "noActivity": "No parking activity yet."
+    },
+    "myParking": {
+      "title": "My parking",
+      "description": "Everything about the vehicle you have parked right now.",
+      "emptyHint": "You have no active parking session. Free spaces right now:"
+    },
+    "availability": {
+      "title": "Parking availability",
+      "description": "Live status of every slot. Select a slot to see its details.",
+      "available": "available",
+      "breakdown": "{{occupied}} occupied · {{blocked}} blocked"
+    },
+    "layout": {
+      "yours": "Your vehicle",
+      "yourVehicle": "Your vehicle is here",
+      "zoneCounts": "{{available}} available · {{occupied}} occupied · {{blocked}} blocked",
+      "slotFree": "This slot is free.",
+      "slotBlocked": "This slot is not available for parking.",
+      "slotTaken": "This slot is in use.",
+      "tileYours": "Yours"
+    },
+    "vehicles": {
+      "title": "My vehicles",
+      "description": "Vehicles registered to your account. Parking is billed in your account category.",
+      "add": "Add vehicle",
+      "addTitle": "Add a vehicle",
+      "editTitle": "Edit vehicle",
+      "edit": "Edit",
+      "save": "Save",
+      "primary": "Primary",
+      "makePrimary": "Make primary",
+      "notParked": "Not parked",
+      "emptyTitle": "No vehicles yet",
+      "emptyHint": "Add your two-wheeler or four-wheeler to see it here when it is parked.",
+      "formHint": "Your category and fees are set by your verified account, not by this form.",
+      "lockedHint": "This vehicle has parking history, so its number and type can no longer be changed. You can still edit the label.",
+      "label": "Label (optional)",
+      "labelPlaceholder": "e.g. Red scooter",
+      "labelHint": "Only you see this name."
+    },
+    "history": {
+      "title": "Parking history",
+      "description": "Every time your vehicles were parked on campus.",
+      "vehicle": "Vehicle",
+      "date": "Date",
+      "empty": "No parking sessions yet.",
+      "emptyFiltered": "Try different filters."
+    },
+    "receipts": {
+      "title": "Receipts",
+      "description": "Your paid parking receipts. Scan a QR code to verify a receipt.",
+      "view": "View",
+      "empty": "No receipts yet",
+      "emptyHint": "A receipt appears here after a parking session is completed and paid."
+    },
+    "profile": {
+      "title": "Profile",
+      "description": "Your account details and language.",
+      "account": "Account",
+      "edit": "Edit",
+      "editTitle": "Edit your details",
+      "editHint": "Your category, ID and e-mail can only be changed by an administrator.",
+      "category": "Account category",
+      "categoryStudent": "Student",
+      "categoryStaff": "Campus staff",
+      "viewVerification": "View verification",
+      "vehicles": "Registered vehicles",
+      "vehicleCount_one": "{{count}} vehicle",
+      "vehicleCount_other": "{{count}} vehicles",
+      "memberSince": "Member since",
+      "language": "Language",
+      "languageHint": "Your choice is saved to your account and used the next time you sign in.",
+      "languageDiffers": "Your saved language is different from the one shown now."
+    }
+  },
+  "visitor": {
+    "accessTitle": "Visitor parking",
+    "accessDescription": "No account needed. Enter the vehicle number and session number printed on your parking slip.",
+    "slipHint": "Printed on your entry slip, for example CPVTS-P-7K4M92QX.",
+    "checking": "Checking…",
+    "viewParking": "View my parking",
+    "privacyNote": "This gives you a short-lived view of this one parking session only.",
+    "parkingTitle": "Your visitor parking",
+    "parkingDescription": "Where your vehicle is, how long it has been there and the fee so far.",
+    "exit": "Leave visitor view",
+    "noReceiptTitle": "No receipt yet",
+    "noReceiptHint": "Your receipt appears after you leave and the fee is paid at the exit."
+  },
+  "adminUsers": {
+    "title": "User management",
+    "description": "Students, campus staff and visitors. Review identity documents and manage accounts.",
+    "tabs": {
+      "ALL": "All users",
+      "STUDENT": "Students",
+      "STAFF": "Staff",
+      "VISITORS": "Visitors"
+    },
+    "counts": {
+      "students": "Total students",
+      "staff": "Total staff",
+      "visitors": "Total visitors",
+      "pending": "Pending verifications",
+      "activeUsers": "Active parking users"
+    },
+    "search": "Search",
+    "searchHint": "Name, ID or e-mail",
+    "visitorSearch": "Vehicle or session number",
+    "verification": "Verification",
+    "accountStatus": "Account status",
+    "accountStatuses": {
+      "ACTIVE": "Active",
+      "INACTIVE": "Deactivated"
+    },
+    "empty": "No users match these filters.",
+    "noVisitors": "No visitor parking sessions.",
+    "visitorsNote": "Visitors do not have accounts. They are listed from their parking sessions.",
+    "name": "Name",
+    "staffId": "Employee / staff ID",
+    "studentId": "Student ID",
+    "institutionalId": "ID",
+    "vehicles": "Vehicles",
+    "currentParking": "Current parking",
+    "notParked": "Not parked",
+    "actions": "Actions",
+    "review": "Review",
+    "view": "View",
+    "edit": "Edit",
+    "editTitle": "Edit user",
+    "editHint": "Role, category and password cannot be changed here.",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "verify": "Verify",
+    "reject": "Reject",
+    "rejectTitle": "Reject verification",
+    "rejectHint": "The user sees this reason and can submit a new document.",
+    "rejectionReason": "Reason for rejection",
+    "sections": {
+      "verification": "Verification",
+      "information": "User information",
+      "vehicles": "Registered vehicles",
+      "currentParking": "Current parking",
+      "history": "Parking history",
+      "receipts": "Receipts"
+    },
+    "reviewedBy": "Reviewed by {{name}}",
+    "latestDocument": "latest",
+    "viewDocument": "View document",
+    "documentTitle": "Identity document",
+    "openDocument": "Open the document",
+    "documentPrivacy": "Sensitive. Shown only to administrators and recorded in the audit log.",
+    "noVehicles": "No vehicles registered."
+  }
+}

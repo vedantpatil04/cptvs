@@ -1,0 +1,152 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * CPVTS design tokens.
+ * Colours are semantic CSS variables (shadcn/ui convention) so components never
+ * reference raw palette values. `--success`, `--warning` and `--info` extend the
+ * shadcn set for status badges and alerts.
+ */
+:root {
+  --radius: 0.625rem;
+
+  --background: oklch(0.985 0.002 247.84);
+  --foreground: oklch(0.208 0.042 265.755);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.208 0.042 265.755);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.208 0.042 265.755);
+
+  /* Brand: deep campus blue */
+  --primary: oklch(0.379 0.146 265.522);
+  --primary-foreground: oklch(0.985 0.002 247.84);
+  --secondary: oklch(0.951 0.023 255.09);
+  --secondary-foreground: oklch(0.379 0.146 265.522);
+  --muted: oklch(0.968 0.007 247.896);
+  --muted-foreground: oklch(0.504 0.043 257.417);
+  --accent: oklch(0.951 0.023 255.09);
+  --accent-foreground: oklch(0.279 0.077 262.02);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  --success: oklch(0.527 0.137 150.069);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.666 0.157 58.318);
+  --warning-foreground: oklch(0.985 0 0);
+  --info: oklch(0.546 0.215 262.881);
+  /* Bright "live" green for status dots on the dark brand surface. */
+  --live: oklch(0.82 0.17 155);
+  --info-foreground: oklch(0.985 0 0);
+
+  --border: oklch(0.929 0.013 255.508);
+  --input: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.546 0.215 262.881);
+
+  --sidebar: oklch(0.279 0.077 262.02);
+  --sidebar-foreground: oklch(0.929 0.013 255.508);
+  --sidebar-muted-foreground: oklch(0.704 0.04 256.788);
+  --sidebar-accent: oklch(0.379 0.146 265.522);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border: oklch(0.372 0.068 262.02);
+
+  /*
+   * Chart series, in fixed categorical order (validated for colour-vision
+   * deficiency on light surfaces). Series colours mark data only; text in and
+   * around charts always uses the text tokens.
+   */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+}
+
+@theme inline {
+  --font-sans:
+    'Noto Sans Variable', 'Noto Sans Kannada Variable', 'Noto Sans Devanagari Variable',
+    ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-live: var(--live);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground min-h-dvh font-sans antialiased;
+  }
+
+  /* Indic scripts need extra line height for vowel signs and conjuncts. */
+  :lang(kn),
+  :lang(hi),
+  :lang(mr) {
+    line-height: 1.65;
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Parking-bay lines: the one decorative motif of the CPVTS user experience. */
+@utility bay-lines {
+  background-image: repeating-linear-gradient(
+    90deg,
+    color-mix(in oklab, currentColor 14%, transparent) 0 2px,
+    transparent 2px 3.5rem
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
