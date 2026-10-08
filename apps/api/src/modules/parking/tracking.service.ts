@@ -27,7 +27,7 @@ import {
 import { parkingRepository, type SessionWithRelations } from './parking.repository.js';
 import { slotHoldRepository } from './slot-hold.repository.js';
 
-const liveContext = async (): Promise<LiveContext> => ({
+export const liveContext = async (): Promise<LiveContext> => ({
   currentHour: campusHour(),
   schedule: await feeScheduleService.find(),
 });

@@ -44,6 +44,8 @@ const getLocations = async (): Promise<PublicParkingLocation[]> => {
 };
 
 export const publicService = {
+  getAvailability,
+
   async getOverview(): Promise<PublicOverviewResponse> {
     const [availability, locations, feeSchedule] = await Promise.all([
       getAvailability(),

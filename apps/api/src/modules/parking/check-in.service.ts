@@ -2,18 +2,21 @@ import type { CheckInResponse, OwnerCategory, VehicleType } from '@cpvts/shared'
 
 import { isUniqueViolation } from '../../db/errors.js';
 import { withTransaction } from '../../db/transaction.js';
-import { campusDayStart, campusHour } from '../../lib/campus-time.js';
-import type { AppError } from '../../lib/errors.js';
+import { campusHour } from '../../lib/campus-time.js';
+import { AppError } from '../../lib/errors.js';
 import { newOpaqueReference, newSessionNumber } from '../../lib/identifiers.js';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';
 import { feeScheduleService } from '../fees/fee-schedule.service.js';
-import { allocateWithHold, rankCandidates, type AllocationCandidate } from './allocation.js';
+import { notificationService } from '../notifications/notification.service.js';
+import { allocateWithHold, type RankedCandidate } from './allocation.js';
+import { loadRankedCandidates } from './allocation-candidates.js';
 import { auditRejection, type OperationContext } from './operation-context.js';
 import { parkingErrors } from './parking.errors.js';
 import { toSessionView } from './parking.mappers.js';
 import { parkingRepository, SESSION_INCLUDE } from './parking.repository.js';
 import { slotHoldRepository, slotHoldStore } from './slot-hold.repository.js';
+import { accountCategoryOf } from './vehicle-lookup.service.js';
 
 export interface CheckInInput {
   /** Already normalised and validated (see `checkInRequestSchema`). */
@@ -33,7 +36,7 @@ const DUPLICATE_CHECK_IN_CONSTRAINTS = [
 ];
 
 /** Generates a session number not yet in use (collisions are astronomically unlikely). */
-const uniqueSessionNumber = async (
+export const uniqueSessionNumber = async (
   exists: (candidate: string) => Promise<boolean>,
 ): Promise<string> => {
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -68,118 +71,106 @@ export const checkInService = {
 
     // A vehicle registered to an active, verified Student / Campus Staff account
     // is billed in that account's category, whatever the operator selected.
-    const owner = existingVehicle?.owner;
-    const accountCategory =
-      owner?.isActive &&
-      owner.role === 'PARKING_USER' &&
-      owner.parkingProfile?.verificationStatus === 'VERIFIED'
-        ? owner.parkingProfile.category
-        : null;
+    const accountCategory = accountCategoryOf(existingVehicle?.owner ?? null);
     const ownerCategory: OwnerCategory = accountCategory ?? input.ownerCategory;
 
-    // 2. Zone identification: only slots of active zones for this vehicle type.
-    await slotHoldRepository.releaseExpired();
-    const slots = await parkingRepository.findSlotsForVehicleType(input.vehicleType);
-    if (slots.length === 0) throw await reject(parkingErrors.zoneNotConfigured());
-
-    // 3. Candidates: AVAILABLE only (OCCUPIED, BLOCKED and HELD are excluded).
-    const available = slots
-      .map((slot, layoutPosition) => ({ slot, layoutPosition }))
-      .filter(({ slot }) => slot.status === 'AVAILABLE');
-    if (available.length === 0) throw await reject(parkingErrors.zoneFull());
-
-    const now = new Date();
-    const usesToday = await parkingRepository.countSessionsSinceBySlot(
-      available.map(({ slot }) => slot.id),
-      campusDayStart(now),
-    );
-    const candidates: AllocationCandidate[] = available.map(({ slot, layoutPosition }) => ({
-      slotId: slot.id,
-      slotCode: slot.code,
-      zoneName: slot.zone.name,
-      blockName: slot.zone.block.name,
-      priority: slot.priority,
-      usesToday: usesToday.get(slot.id) ?? 0,
-      layoutPosition,
-    }));
+    // 2. Zone identification and 3. candidates: the shared deterministic rules.
+    let ranked: RankedCandidate[];
+    try {
+      ranked = await loadRankedCandidates(input.vehicleType);
+    } catch (error) {
+      if (error instanceof AppError) throw await reject(error);
+      throw error;
+    }
 
     // 4. Hold → final verification → commit, falling back on lost races.
     let outcome;
     try {
-      outcome = await allocateWithHold(
-        rankCandidates(candidates),
-        slotHoldStore,
-        (candidate, token) =>
-          withTransaction(async (tx) => {
-            const confirmed = await slotHoldRepository.confirm(
-              candidate.slotId,
-              token,
-              input.vehicleType,
-              tx,
-            );
-            if (!confirmed) return null;
+      outcome = await allocateWithHold(ranked, slotHoldStore, (candidate, token) =>
+        withTransaction(async (tx) => {
+          const confirmed = await slotHoldRepository.confirm(
+            candidate.slotId,
+            token,
+            input.vehicleType,
+            tx,
+          );
+          if (!confirmed) return null;
 
-            const vehicle = await tx.vehicle.upsert({
-              where: { vehicleNumber: input.vehicleNumber },
-              create: { vehicleNumber: input.vehicleNumber, vehicleType: input.vehicleType },
-              update: {},
-            });
-            const sessionNumber = await uniqueSessionNumber(
-              async (value) =>
-                (await tx.parkingSession.count({ where: { sessionNumber: value } })) > 0,
-            );
-            const session = await tx.parkingSession.create({
-              data: {
-                sessionNumber,
-                entryReference: newOpaqueReference(),
-                vehicleId: vehicle.id,
-                slotId: candidate.slotId,
+          const vehicle = await tx.vehicle.upsert({
+            where: { vehicleNumber: input.vehicleNumber },
+            create: { vehicleNumber: input.vehicleNumber, vehicleType: input.vehicleType },
+            update: {},
+          });
+          const sessionNumber = await uniqueSessionNumber(
+            async (value) =>
+              (await tx.parkingSession.count({ where: { sessionNumber: value } })) > 0,
+          );
+          const session = await tx.parkingSession.create({
+            data: {
+              sessionNumber,
+              entryReference: newOpaqueReference(),
+              vehicleId: vehicle.id,
+              slotId: candidate.slotId,
+              vehicleType: input.vehicleType,
+              ownerCategory,
+              entryHour: input.entryHour,
+              entryAt: new Date(),
+              checkedInById: context.actor.id,
+            },
+            include: SESSION_INCLUDE,
+          });
+
+          await auditRepository.record(
+            {
+              action: AUDIT_ACTIONS.vehicleCheckedIn,
+              actorId: context.actor.id,
+              entityType: AUDIT_ENTITY_TYPES.parkingSession,
+              entityId: session.sessionNumber,
+              metadata: {
+                vehicleNumber: input.vehicleNumber,
                 vehicleType: input.vehicleType,
                 ownerCategory,
+                categorySource: accountCategory ? 'ACCOUNT' : 'OPERATOR',
                 entryHour: input.entryHour,
-                entryAt: new Date(),
-                checkedInById: context.actor.id,
               },
-              include: SESSION_INCLUDE,
-            });
-
-            await auditRepository.record(
+              request: context.request,
+            },
+            tx,
+          );
+          await auditRepository.record(
+            {
+              action: AUDIT_ACTIONS.slotAssigned,
+              actorId: context.actor.id,
+              entityType: AUDIT_ENTITY_TYPES.parkingSlot,
+              entityId: candidate.slotCode,
+              metadata: {
+                sessionNumber: session.sessionNumber,
+                score: candidate.score,
+                priority: candidate.priority,
+                usesToday: candidate.usesToday,
+                layoutPosition: candidate.layoutPosition,
+                candidates: ranked.length,
+              },
+              request: context.request,
+            },
+            tx,
+          );
+          // A vehicle registered to a Student / Campus Staff account: tell its owner.
+          if (vehicle.ownerUserId && vehicle.ownerSince && accountCategory) {
+            await notificationService.notify(
+              vehicle.ownerUserId,
+              'PARKING_STARTED',
               {
-                action: AUDIT_ACTIONS.vehicleCheckedIn,
-                actorId: context.actor.id,
-                entityType: AUDIT_ENTITY_TYPES.parkingSession,
-                entityId: session.sessionNumber,
-                metadata: {
-                  vehicleNumber: input.vehicleNumber,
-                  vehicleType: input.vehicleType,
-                  ownerCategory,
-                  categorySource: accountCategory ? 'ACCOUNT' : 'OPERATOR',
-                  entryHour: input.entryHour,
-                },
-                request: context.request,
+                sessionNumber: session.sessionNumber,
+                slotCode: candidate.slotCode,
+                blockName: candidate.blockName,
+                vehicleNumber: input.vehicleNumber,
               },
               tx,
             );
-            await auditRepository.record(
-              {
-                action: AUDIT_ACTIONS.slotAssigned,
-                actorId: context.actor.id,
-                entityType: AUDIT_ENTITY_TYPES.parkingSlot,
-                entityId: candidate.slotCode,
-                metadata: {
-                  sessionNumber: session.sessionNumber,
-                  score: candidate.score,
-                  priority: candidate.priority,
-                  usesToday: candidate.usesToday,
-                  layoutPosition: candidate.layoutPosition,
-                  candidates: candidates.length,
-                },
-                request: context.request,
-              },
-              tx,
-            );
-            return session;
-          }),
+          }
+          return session;
+        }),
       );
     } catch (error) {
       // Another terminal checked in the same vehicle between our check and commit.

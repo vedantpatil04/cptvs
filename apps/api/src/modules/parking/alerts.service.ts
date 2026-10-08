@@ -5,6 +5,7 @@ import { prisma } from '../../db/prisma.js';
 import { campusHour } from '../../lib/campus-time.js';
 import { currentDuration } from './parking.mappers.js';
 import { slotHoldRepository } from './slot-hold.repository.js';
+import { IN_SERVICE } from './slot-filters.js';
 
 const SEVERITY_ORDER = { critical: 0, warning: 1, info: 2 } as const;
 
@@ -22,7 +23,12 @@ export const alertsService = {
       prisma.parkingZone.findMany({
         where: { isActive: true, block: { isActive: true } },
         orderBy: [{ block: { sortOrder: 'asc' } }, { sortOrder: 'asc' }],
-        include: { slots: { orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }] } },
+        include: {
+          slots: {
+            where: IN_SERVICE,
+            orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+          },
+        },
       }),
       prisma.parkingSession.findMany({
         where: { status: 'ACTIVE' },

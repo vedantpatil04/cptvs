@@ -93,11 +93,12 @@ describe('slot management', () => {
   it('blocks an available slot with a reason, excludes it from allocation, and unblocks it', async () => {
     const blocked = await admin.post('/slots/t-01/block', { reason: 'Maintenance' });
     expect(blocked.status).toBe(200);
-    expect(blocked.body).toEqual({
+    expect(blocked.body).toMatchObject({
       code: 'T-01',
       status: 'BLOCKED',
       priority: 0,
       blockedReason: 'Maintenance',
+      isEnabled: true,
     });
     expect((await staff.checkInOk('KA01AB0001')).session.slotCode).toBe('T-02');
 
@@ -175,7 +176,15 @@ describe('slot management', () => {
     const layout = (await admin.get('/layout')).body as ManagedLayout;
     expect(layout.blocks.map((b) => b.code)).toEqual(['BLOCK-2W', 'BLOCK-4W']);
     const f05 = layout.blocks[1]!.zones[0]!.slots.find((s) => s.code === 'F-05');
-    expect(f05).toEqual({ code: 'F-05', status: 'BLOCKED', priority: 0, blockedReason: 'Repairs' });
+    expect(f05).toMatchObject({
+      code: 'F-05',
+      status: 'BLOCKED',
+      priority: 0,
+      blockedReason: 'Repairs',
+      isEnabled: true,
+      archivedAt: null,
+      occupant: null,
+    });
   });
 });
 

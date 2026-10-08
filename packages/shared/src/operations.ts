@@ -7,6 +7,8 @@ import {
   type OwnerCategory,
   type VehicleType,
 } from './parking.js';
+import type { HistoryItem } from './management.js';
+import type { UserCounts } from './users.js';
 import { VALIDATION_MESSAGES } from './validation.js';
 
 // ---------------------------------------------------------------------------
@@ -97,6 +99,10 @@ export const checkInRequestSchema = z.object({
   entryHour: hourSchema,
 });
 export type CheckInRequest = z.input<typeof checkInRequestSchema>;
+
+/** Entry desk: what is known about a plate before the owner category is chosen. */
+export const vehicleLookupQuerySchema = z.object({ vehicleNumber: vehicleNumberSchema });
+export type VehicleLookupQuery = z.input<typeof vehicleLookupQuerySchema>;
 
 export const trackingQuerySchema = z.object({
   q: z
@@ -225,6 +231,20 @@ export interface CheckInResponse {
    * account: the owner category then comes from that account, not the operator.
    */
   categorySource: 'ACCOUNT' | 'OPERATOR';
+}
+
+/**
+ * Aggregate facts only: no names, IDs or contact details of the owner. When
+ * `accountCategory` is set the vehicle belongs to a verified, active Student /
+ * Campus Staff account and check-in will bill in that category regardless of
+ * what the operator selects.
+ */
+export interface VehicleLookupResponse {
+  vehicleNumber: string;
+  known: boolean;
+  vehicleType: VehicleType | null;
+  accountCategory: OwnerCategory | null;
+  hasActiveSession: boolean;
 }
 
 export interface ActiveSessionsResponse {
@@ -374,4 +394,8 @@ export interface DashboardSummary {
   todayVehicleCount: number;
   /** Sum of today's finalized receipts. Null for roles that may not see revenue. */
   todayFeesCollectedPaise: number | null;
+  /** Account and verification figures. Administrators only (null otherwise). */
+  users: UserCounts | null;
+  /** The latest parking sessions. Administrators only (null otherwise). */
+  recentActivity: HistoryItem[] | null;
 }

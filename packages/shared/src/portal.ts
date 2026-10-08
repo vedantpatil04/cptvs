@@ -3,9 +3,13 @@ import { z } from 'zod';
 import { PASSWORD_INPUT_MAX_LENGTH, passwordPolicySchema } from './auth.js';
 import { campusDateSchema, paginationSchema, type HistoryItem } from './management.js';
 import {
+  MOCK_PAYMENT_OUTCOMES,
   normalizeVehicleNumber,
+  PAYMENT_METHODS,
   sessionNumberSchema,
   vehicleNumberSchema,
+  type AllocationExplanation,
+  type ParkingBlockSummary,
   type ParkingMapResponse,
   type ParkingSessionView,
 } from './operations.js';
@@ -121,6 +125,8 @@ export const registrationRequestSchema = z
     error: VALIDATION_MESSAGES.institutionalIdMismatch,
   });
 export type RegistrationRequest = z.input<typeof registrationRequestSchema>;
+/** The validated, normalised registration (what the server works with). */
+export type RegistrationInput = z.output<typeof registrationRequestSchema>;
 
 export const userLoginRequestSchema = z.object({
   email: emailSchema,
@@ -183,6 +189,9 @@ export type ProfileUpdate = z.input<typeof profileUpdateSchema>;
 // Vehicles
 // ---------------------------------------------------------------------------
 
+/** A user can register at most this many vehicles (guards against squatting on plates). */
+export const MAX_VEHICLES_PER_USER = 5;
+
 const vehicleLabelSchema = z
   .string()
   .trim()
@@ -213,6 +222,10 @@ export interface VehicleParkingState {
   slotCode: string;
   entryHour: number;
   entryAt: string;
+}
+
+export interface VehiclesResponse {
+  vehicles: RegisteredVehicle[];
 }
 
 export interface RegisteredVehicle {
@@ -278,3 +291,123 @@ export interface VisitorAccessResponse {
   expiresAt: string;
   session: ParkingSessionView;
 }
+
+// ---------------------------------------------------------------------------
+// Park Now (Student / Campus Staff self-service)
+// ---------------------------------------------------------------------------
+
+/**
+ * Step 1: the user picks one of their own vehicles. The server — never the
+ * client — chooses the slot with the deterministic allocation engine and
+ * holds it temporarily for the user.
+ */
+export const parkNowStartRequestSchema = z.object({
+  vehicleId: z.uuid({ error: VALIDATION_MESSAGES.selectOption }),
+});
+export type ParkNowStartRequest = z.input<typeof parkNowStartRequestSchema>;
+
+/** Step 2 (confirm) and the alternative (cancel) both refer to the offer. */
+export const parkNowDecisionRequestSchema = z.object({
+  offerId: z.uuid({ error: VALIDATION_MESSAGES.required }),
+});
+export type ParkNowDecisionRequest = z.input<typeof parkNowDecisionRequestSchema>;
+
+export interface ParkNowOffer {
+  offerId: string;
+  /** The hold lapses at this time and the slot returns to the pool. */
+  expiresAt: string;
+  vehicle: { id: string; vehicleNumber: string; vehicleType: VehicleType; label: string | null };
+  /** The category the session will be billed in: taken from the verified account. */
+  ownerCategory: ParkingUserCategory;
+  block: ParkingBlockSummary;
+  allocation: AllocationExplanation;
+}
+
+/** The user's open offer, if any (lets the client resume after a reload). */
+export interface CurrentParkNowOfferResponse {
+  offer: ParkNowOffer | null;
+}
+
+export interface ParkNowConfirmation {
+  session: ParkingSessionView;
+  allocation: AllocationExplanation;
+}
+
+// ---------------------------------------------------------------------------
+// Self-service checkout and payment (Student, Campus Staff)
+// ---------------------------------------------------------------------------
+
+/**
+ * The exit time is the server's current campus hour: the user cannot choose
+ * it. The fee always comes from the backend fee engine.
+ */
+export const selfCheckoutQuoteRequestSchema = z.object({ sessionNumber: sessionNumberSchema });
+export type SelfCheckoutQuoteRequest = z.input<typeof selfCheckoutQuoteRequestSchema>;
+
+export const selfPaymentRequestSchema = selfCheckoutQuoteRequestSchema.extend({
+  method: z.enum(PAYMENT_METHODS, { error: VALIDATION_MESSAGES.selectOption }),
+});
+export type SelfPaymentRequest = z.input<typeof selfPaymentRequestSchema>;
+
+// ---------------------------------------------------------------------------
+// Visitor checkout (the access token already identifies the one session)
+// ---------------------------------------------------------------------------
+
+export const visitorPaymentRequestSchema = z.object({
+  method: z.enum(PAYMENT_METHODS, { error: VALIDATION_MESSAGES.selectOption }),
+});
+export type VisitorPaymentRequest = z.input<typeof visitorPaymentRequestSchema>;
+
+export const visitorProcessRequestSchema = z.object({
+  outcome: z.enum(MOCK_PAYMENT_OUTCOMES).default('SUCCESS'),
+});
+export type VisitorProcessRequest = z.input<typeof visitorProcessRequestSchema>;
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+export const NOTIFICATION_KINDS = [
+  'VERIFICATION_APPROVED',
+  'VERIFICATION_REJECTED',
+  'PARKING_STARTED',
+  'RECEIPT_GENERATED',
+  'PARKING_NOTICE',
+] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+
+/** Values the client interpolates into the translated message for the `kind`. */
+export type NotificationParams = Partial<{
+  /** VERIFICATION_REJECTED: the reviewer's reason. */
+  note: string;
+  sessionNumber: string;
+  slotCode: string;
+  blockName: string;
+  vehicleNumber: string;
+  receiptNumber: string;
+  amountPaise: number;
+  /** PARKING_NOTICE: administrator-written text (shown as written). */
+  title: string;
+  message: string;
+}>;
+
+export interface NotificationView {
+  id: string;
+  kind: NotificationKind;
+  params: NotificationParams;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface NotificationsResponse {
+  items: NotificationView[];
+  unreadCount: number;
+}
+
+export const notificationListQuerySchema = z.object({
+  unreadOnly: z
+    .preprocess((value) => value === true || value === 'true' || value === '1', z.boolean())
+    .default(false),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type NotificationListQuery = z.input<typeof notificationListQuerySchema>;

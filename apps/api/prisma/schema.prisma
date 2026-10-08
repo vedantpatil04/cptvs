@@ -80,6 +80,28 @@ enum SlotStatus {
   @@map("slot_status")
 }
 
+/// Lifecycle of a Park Now allocation offer (a temporary slot hold awaiting confirmation).
+enum ParkNowOfferStatus {
+  OFFERED
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+
+  @@map("park_now_offer_status")
+}
+
+/// How a parking session was finalized (checked out).
+enum CheckoutChannel {
+  /// A Security Staff member at the gate.
+  SECURITY
+  /// The Student / Campus Staff owner, from their account.
+  SELF_SERVICE
+  /// A visitor holding the parking slip; no account is involved.
+  VISITOR
+
+  @@map("checkout_channel")
+}
+
 enum ParkingSessionStatus {
   ACTIVE
   COMPLETED
@@ -133,6 +155,8 @@ model User {
   reviewedProfiles   ParkingUserProfile[] @relation("ProfileReviewedBy")
   identityDocuments  IdentityDocument[]
   vehicles           Vehicle[]            @relation("VehicleOwner")
+  notifications      Notification[]
+  parkNowOffers      ParkNowOffer[]
 
   @@index([role, isActive])
   @@map("users")
@@ -275,11 +299,17 @@ model ParkingSlot {
   holdExpiresAt DateTime?  @map("hold_expires_at") @db.Timestamptz(3)
   /// Secret identifying the allocation attempt that holds the slot; only it may confirm or release.
   holdToken     String?    @map("hold_token") @db.VarChar(64)
+  /// A disabled slot is out of service: never allocated and not counted as capacity.
+  isEnabled     Boolean    @default(true) @map("is_enabled")
+  /// Soft delete. A slot with parking history is archived, never removed, so
+  /// historical sessions, receipts and reports keep their slot reference.
+  archivedAt    DateTime?  @map("archived_at") @db.Timestamptz(3)
   createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   zone     ParkingZone      @relation(fields: [zoneId], references: [id], onDelete: Restrict)
   sessions ParkingSession[]
+  offers   ParkNowOffer[]
 
   @@index([zoneId, status])
   @@index([status])
@@ -306,6 +336,7 @@ model Vehicle {
 
   owner    User?            @relation("VehicleOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   sessions ParkingSession[]
+  offers   ParkNowOffer[]
 
   @@unique([ownerUserId], map: "vehicles_one_primary_per_owner", where: { isPrimary: true })
   @@index([vehicleType])
@@ -337,6 +368,8 @@ model ParkingSession {
   feeBreakdown   Json?                @map("fee_breakdown")
   checkedInById  String               @map("checked_in_by_id") @db.Uuid
   checkedOutById String?              @map("checked_out_by_id") @db.Uuid
+  /// Who finalized the session. A VISITOR checkout has no `checkedOutById`.
+  checkedOutVia  CheckoutChannel?     @map("checked_out_via")
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -404,4 +437,53 @@ model Receipt {
 
   @@index([issuedAt])
   @@map("receipts")
+}
+
+// ---------------------------------------------------------------------------
+// Park Now offers and notifications (Parking User self-service)
+// ---------------------------------------------------------------------------
+
+/// A server-side allocation for a Student / Campus Staff member's vehicle. The
+/// slot is HELD for the offer; confirming turns the hold into an ACTIVE session,
+/// letting it lapse (or cancelling) returns the slot to AVAILABLE.
+model ParkNowOffer {
+  id         String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String             @map("user_id") @db.Uuid
+  vehicleId  String             @map("vehicle_id") @db.Uuid
+  slotId     String             @map("slot_id") @db.Uuid
+  /// Secret of the slot hold backing this offer (see ParkingSlot.holdToken).
+  holdToken  String             @map("hold_token") @db.VarChar(64)
+  status     ParkNowOfferStatus @default(OFFERED)
+  /// `AllocationExplanation` (@cpvts/shared) produced by the allocation engine.
+  allocation Json
+  expiresAt  DateTime           @map("expires_at") @db.Timestamptz(3)
+  createdAt  DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  slot    ParkingSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  /// Database-level guarantee: a user holds at most one open offer, so Park Now cannot hoard slots.
+  @@unique([userId], map: "park_now_offers_one_open_per_user", where: { status: "OFFERED" })
+  @@index([status, expiresAt])
+  @@index([slotId])
+  @@map("park_now_offers")
+}
+
+/// Lightweight in-app notification. `kind` + `params` are translated by the client.
+model Notification {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// One of `NOTIFICATION_KINDS` (@cpvts/shared).
+  kind      String    @db.VarChar(40)
+  params    Json?
+  readAt    DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

@@ -3,10 +3,17 @@ import {
   auditLogQuerySchema,
   blockLocationRequestSchema,
   blockSlotRequestSchema,
+  createBlockRequestSchema,
+  createSlotRequestSchema,
+  createZoneRequestSchema,
   historyFilterSchema,
   historyQuerySchema,
+  layoutQuerySchema,
   REPORT_KINDS,
   slotPriorityRequestSchema,
+  updateBlockRequestSchema,
+  updateSlotRequestSchema,
+  updateZoneRequestSchema,
   type HistoryFilters,
   type ReportKind,
 } from '@cpvts/shared';
@@ -20,9 +27,11 @@ import { validate } from '../../middleware/validate.js';
 import type { OperationContext } from '../parking/operation-context.js';
 import { analyticsService } from './analytics.service.js';
 import { auditLogService } from './audit-log.service.js';
+import { blockManagementService } from './block-management.service.js';
 import { historyService } from './history.service.js';
 import { integrityService } from './integrity.service.js';
 import { reportsService } from './reports.service.js';
+import { adminUsersRouter } from '../users/admin-users.routes.js';
 import { slotManagementService } from './slot-management.service.js';
 
 const context = (req: Request): OperationContext => ({
@@ -38,10 +47,54 @@ export const adminRouter = Router();
 
 adminRouter.use(authenticate, authorize('ADMIN'));
 
+// --- Users, verification, visitors, notices -------------------------------
+
+adminRouter.use(adminUsersRouter);
+
 // --- Slot management -------------------------------------------------------
 
-adminRouter.get('/layout', async (_req, res) => {
-  res.status(200).json(await slotManagementService.getLayout());
+adminRouter.get('/layout', validate({ query: layoutQuerySchema }), async (req, res) => {
+  const { includeArchived } = req.query as unknown as z.infer<typeof layoutQuerySchema>;
+  res.status(200).json(await slotManagementService.getLayout({ includeArchived }));
+});
+
+adminRouter.post('/slots', validate({ body: createSlotRequestSchema }), async (req, res) => {
+  res.status(201).json(await slotManagementService.create(req.body, context(req)));
+});
+
+adminRouter.patch(
+  '/slots/:code',
+  validate({ params: codeParams, body: updateSlotRequestSchema }),
+  async (req, res) => {
+    res
+      .status(200)
+      .json(await slotManagementService.update(String(req.params.code), req.body, context(req)));
+  },
+);
+
+/** Safe delete: removes an unused slot, archives one with history, refuses an occupied one. */
+adminRouter.delete('/slots/:code', validate({ params: codeParams }), async (req, res) => {
+  res.status(200).json(await slotManagementService.remove(String(req.params.code), context(req)));
+});
+
+adminRouter.post('/slots/:code/archive', validate({ params: codeParams }), async (req, res) => {
+  res.status(200).json(
+    await slotManagementService.remove(String(req.params.code), context(req), {
+      forceArchive: true,
+    }),
+  );
+});
+
+adminRouter.post('/slots/:code/restore', validate({ params: codeParams }), async (req, res) => {
+  res.status(200).json(await slotManagementService.restore(String(req.params.code), context(req)));
+});
+
+adminRouter.post('/slots/:code/enable', validate({ params: codeParams }), async (req, res) => {
+  res.status(200).json(await slotManagementService.enable(String(req.params.code), context(req)));
+});
+
+adminRouter.post('/slots/:code/disable', validate({ params: codeParams }), async (req, res) => {
+  res.status(200).json(await slotManagementService.disable(String(req.params.code), context(req)));
 });
 
 adminRouter.post(
@@ -84,6 +137,40 @@ adminRouter.patch(
           req.body as z.infer<typeof blockLocationRequestSchema>,
           context(req),
         ),
+      );
+  },
+);
+
+// --- Blocks and zones ------------------------------------------------------
+
+adminRouter.post('/blocks', validate({ body: createBlockRequestSchema }), async (req, res) => {
+  res.status(201).json(await blockManagementService.createBlock(req.body, context(req)));
+});
+
+adminRouter.patch(
+  '/blocks/:code',
+  validate({ params: codeParams, body: updateBlockRequestSchema }),
+  async (req, res) => {
+    res
+      .status(200)
+      .json(
+        await blockManagementService.updateBlock(String(req.params.code), req.body, context(req)),
+      );
+  },
+);
+
+adminRouter.post('/zones', validate({ body: createZoneRequestSchema }), async (req, res) => {
+  res.status(201).json(await blockManagementService.createZone(req.body, context(req)));
+});
+
+adminRouter.patch(
+  '/zones/:code',
+  validate({ params: codeParams, body: updateZoneRequestSchema }),
+  async (req, res) => {
+    res
+      .status(200)
+      .json(
+        await blockManagementService.updateZone(String(req.params.code), req.body, context(req)),
       );
   },
 );

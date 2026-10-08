@@ -27,6 +27,10 @@ export const createApp = (config: AppConfig): Express => {
       maxAge: 600,
     }),
   );
+  // Identity documents arrive base64-encoded in the JSON body (at most 2 MB of file,
+  // ~2.8 MB encoded). Only the registration and resubmission routes get the larger
+  // limit; once a body is parsed here the default parser below skips it.
+  app.use(['/api/v1/auth/register', '/api/v1/portal/verification'], express.json({ limit: '4mb' }));
   app.use(express.json({ limit: '100kb' }));
 
   app.use('/health', healthRouter);

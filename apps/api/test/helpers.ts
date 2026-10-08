@@ -9,7 +9,7 @@ export const TEST_PASSWORD = 'correct-horse-battery';
 /** Removes all rows from every application table. */
 export const resetDatabase = async (): Promise<void> => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE receipts, payments, parking_sessions, parking_slots, parking_zones, parking_blocks, vehicles, audit_logs, settings, users RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE notifications, park_now_offers, receipts, payments, parking_sessions, parking_slots, parking_zones, parking_blocks, vehicles, identity_documents, parking_user_profiles, audit_logs, settings, users RESTART IDENTITY CASCADE',
   );
 };
 

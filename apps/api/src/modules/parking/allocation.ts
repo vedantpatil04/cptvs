@@ -63,6 +63,7 @@ export interface SlotHoldStore {
 export type CommitAllocation<T> = (
   candidate: RankedCandidate,
   holdToken: string,
+  explanation: AllocationExplanation,
 ) => Promise<T | null>;
 
 export interface AllocationOutcome<T> {
@@ -91,6 +92,21 @@ export const allocateWithHold = async <T>(
 ): Promise<AllocationOutcome<T>> => {
   let fallbacks = 0;
 
+  const explain = (candidate: RankedCandidate): AllocationExplanation => ({
+    slotCode: candidate.slotCode,
+    zoneName: candidate.zoneName,
+    blockName: candidate.blockName,
+    score: candidate.score,
+    factors: {
+      priority: candidate.priority,
+      usesToday: candidate.usesToday,
+      layoutPosition: candidate.layoutPosition,
+    },
+    candidatesConsidered: ranked.length,
+    fallbacks,
+    checks: CHECKS,
+  });
+
   for (const candidate of ranked) {
     const token = await holds.acquire(candidate.slotId);
     if (!token) {
@@ -98,9 +114,10 @@ export const allocateWithHold = async <T>(
       continue;
     }
 
+    const explanation = explain(candidate);
     let result: T | null;
     try {
-      result = await commit(candidate, token);
+      result = await commit(candidate, token, explanation);
     } catch (error) {
       await holds.release(candidate.slotId, token);
       throw error;
@@ -112,23 +129,7 @@ export const allocateWithHold = async <T>(
       continue;
     }
 
-    return {
-      result,
-      explanation: {
-        slotCode: candidate.slotCode,
-        zoneName: candidate.zoneName,
-        blockName: candidate.blockName,
-        score: candidate.score,
-        factors: {
-          priority: candidate.priority,
-          usesToday: candidate.usesToday,
-          layoutPosition: candidate.layoutPosition,
-        },
-        candidatesConsidered: ranked.length,
-        fallbacks,
-        checks: CHECKS,
-      },
-    };
+    return { result, explanation };
   }
 
   throw parkingErrors.allocationFailed();

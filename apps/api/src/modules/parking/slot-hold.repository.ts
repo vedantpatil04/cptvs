@@ -4,6 +4,7 @@ import { prisma } from '../../db/prisma.js';
 import type { VehicleType } from '../../generated/prisma/client.js';
 import { newHoldToken } from '../../lib/identifiers.js';
 import type { SlotHoldStore } from './allocation.js';
+import { IN_SERVICE } from './slot-filters.js';
 
 const RELEASED = { status: 'AVAILABLE', holdToken: null, holdExpiresAt: null } as const;
 
@@ -13,15 +14,23 @@ const RELEASED = { status: 'AVAILABLE', holdToken: null, holdExpiresAt: null } a
  * `SLOT_HOLD_SECONDS`; expired holds are reclaimed before allocation and reads.
  */
 export const slotHoldRepository = {
-  /** AVAILABLE → HELD. Returns the hold token, or null if the slot was not available. */
-  async acquire(slotId: string, db: DbClient = prisma): Promise<string | null> {
+  /**
+   * AVAILABLE → HELD. Returns the hold token, or null if the slot was not
+   * available. `ttlMs` defaults to the short allocation hold; Park Now uses a
+   * longer one so the user can read the offer and confirm.
+   */
+  async acquire(
+    slotId: string,
+    db: DbClient = prisma,
+    ttlMs: number = config.parking.slotHoldMs,
+  ): Promise<string | null> {
     const token = newHoldToken();
     const { count } = await db.parkingSlot.updateMany({
-      where: { id: slotId, status: 'AVAILABLE' },
+      where: { id: slotId, status: 'AVAILABLE', ...IN_SERVICE },
       data: {
         status: 'HELD',
         holdToken: token,
-        holdExpiresAt: new Date(Date.now() + config.parking.slotHoldMs),
+        holdExpiresAt: new Date(Date.now() + ttlMs),
       },
     });
     return count === 1 ? token : null;
@@ -44,6 +53,7 @@ export const slotHoldRepository = {
         status: 'HELD',
         holdToken: token,
         holdExpiresAt: { gt: new Date() },
+        ...IN_SERVICE,
         zone: { vehicleType, isActive: true, block: { isActive: true } },
       },
       data: { status: 'OCCUPIED', holdToken: null, holdExpiresAt: null },
@@ -59,11 +69,19 @@ export const slotHoldRepository = {
     });
   },
 
-  /** Returns every expired hold to AVAILABLE (e.g. after a crashed request). */
+  /**
+   * Returns every expired hold to AVAILABLE (e.g. after a crashed request or an
+   * unconfirmed Park Now offer) and marks the matching offers EXPIRED.
+   */
   async releaseExpired(db: DbClient = prisma): Promise<number> {
+    const now = new Date();
     const { count } = await db.parkingSlot.updateMany({
-      where: { status: 'HELD', holdExpiresAt: { lte: new Date() } },
+      where: { status: 'HELD', holdExpiresAt: { lte: now } },
       data: RELEASED,
+    });
+    await db.parkNowOffer.updateMany({
+      where: { status: 'OFFERED', expiresAt: { lte: now } },
+      data: { status: 'EXPIRED' },
     });
     return count;
   },

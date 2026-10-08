@@ -47,6 +47,7 @@ export const buildConfig = (env: Env) =>
     parking: Object.freeze({
       timeZone: env.CAMPUS_TIMEZONE,
       slotHoldMs: env.SLOT_HOLD_SECONDS * 1000,
+      parkNowHoldMs: env.PARK_NOW_HOLD_SECONDS * 1000,
     }),
     alerts: Object.freeze({
       nearlyFullPercent: env.ALERT_NEARLY_FULL_PERCENT,

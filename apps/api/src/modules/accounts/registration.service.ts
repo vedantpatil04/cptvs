@@ -1,7 +1,7 @@
 import type {
   LoginResponse,
   ParkingUserCategory,
-  RegistrationRequest,
+  RegistrationInput,
   VerificationResubmission,
 } from '@cpvts/shared';
 
@@ -17,11 +17,6 @@ import { hashPassword } from '../auth/password.js';
 import type { OperationContext } from '../parking/operation-context.js';
 import { accountErrors } from './accounts.errors.js';
 import { decodeIdentityDocument, type DecodedDocument } from './identity-document.js';
-
-/** Parsed registration body (normalised by `registrationRequestSchema`). */
-type Registration = {
-  [K in keyof RegistrationRequest]: K extends 'document' ? RegistrationRequest['document'] : string;
-};
 
 const emailDomainAllowed = (email: string): boolean => {
   const domains = config.accounts.emailDomains;
@@ -75,7 +70,7 @@ export const registrationService = {
    */
   async register(
     category: ParkingUserCategory,
-    input: Registration,
+    input: RegistrationInput,
     request: RequestMeta,
   ): Promise<LoginResponse> {
     if (!emailDomainAllowed(input.email)) throw accountErrors.emailDomainNotAllowed();

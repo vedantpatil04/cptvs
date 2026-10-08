@@ -3,14 +3,18 @@ import { z } from 'zod';
 import { AUDIT_ACTION_CODES, AUDIT_ENTITY_TYPE_CODES, type AuditAction } from './audit.js';
 import {
   normalizeVehicleNumber,
+  slotCodeSchema,
   type Coordinates,
+  type ParkingMapOccupant,
   type ParkingSessionStatus,
   type PaymentMethod,
   type PaymentStatus,
+  type SlotCounts,
   type SlotStatus,
 } from './operations.js';
 import {
   OWNER_CATEGORIES,
+  slotCodeMatchesVehicleType,
   VEHICLE_TYPES,
   type OwnerCategory,
   type VehicleType,
@@ -254,10 +258,15 @@ export type TimelineDetails = Partial<{
   reason: string;
 }>;
 
+/** Who performed a step: the security desk, the owner (self-service), a visitor, or the system. */
+export type TimelineChannel = 'SECURITY' | 'SELF_SERVICE' | 'VISITOR' | 'SYSTEM';
+
 export interface TimelineEvent {
   at: string;
   action: AuditAction;
+  /** Null when the step was not performed by a named user, or when the viewer may not see who. */
   actor: { fullName: string; role: UserRole } | null;
+  channel: TimelineChannel;
   details: TimelineDetails;
 }
 
@@ -331,19 +340,207 @@ export const blockLocationRequestSchema = z
     error: VALIDATION_MESSAGES.coordinatesPaired,
   });
 
+const priorityValue = z
+  .number({ error: VALIDATION_MESSAGES.outOfRange })
+  .int({ error: VALIDATION_MESSAGES.outOfRange })
+  .min(0, { error: VALIDATION_MESSAGES.outOfRange })
+  .max(100, { error: VALIDATION_MESSAGES.outOfRange });
+
+const sortOrderValue = z
+  .number({ error: VALIDATION_MESSAGES.outOfRange })
+  .int({ error: VALIDATION_MESSAGES.outOfRange })
+  .min(0, { error: VALIDATION_MESSAGES.outOfRange })
+  .max(9999, { error: VALIDATION_MESSAGES.outOfRange });
+
+const reasonValue = z
+  .string({ error: VALIDATION_MESSAGES.required })
+  .trim()
+  .min(1, { error: VALIDATION_MESSAGES.required })
+  .max(255, { error: VALIDATION_MESSAGES.tooLong });
+
+/** Block and zone codes, e.g. BLOCK-2W or ZONE-LIB. */
+export const INVENTORY_CODE_PATTERN = /^[A-Z0-9][A-Z0-9-]{0,31}$/;
+export const inventoryCodeSchema = z
+  .string({ error: VALIDATION_MESSAGES.required })
+  .trim()
+  .toUpperCase()
+  .regex(INVENTORY_CODE_PATTERN, { error: VALIDATION_MESSAGES.invalidInventoryCode });
+
+const nameValue = z
+  .string({ error: VALIDATION_MESSAGES.required })
+  .trim()
+  .min(1, { error: VALIDATION_MESSAGES.required })
+  .max(120, { error: VALIDATION_MESSAGES.tooLong });
+
+export const SLOT_INITIAL_STATUSES = ['AVAILABLE', 'BLOCKED'] as const;
+
+/**
+ * Adds a slot to a zone. The vehicle type must be the zone's type and the
+ * slot ID must carry that type's prefix (T-… for two-wheelers, F-… for
+ * four-wheelers); the server checks both against the stored zone. A new
+ * AVAILABLE slot is picked up by the allocation engine immediately.
+ */
+export const createSlotRequestSchema = z
+  .object({
+    zoneCode: inventoryCodeSchema,
+    vehicleType: z.enum(VEHICLE_TYPES, { error: VALIDATION_MESSAGES.selectOption }),
+    code: slotCodeSchema,
+    priority: priorityValue.default(0),
+    status: z
+      .enum(SLOT_INITIAL_STATUSES, { error: VALIDATION_MESSAGES.selectOption })
+      .default('AVAILABLE'),
+    blockedReason: reasonValue.optional(),
+    /** Position in the zone's layout; defaults to the end. */
+    sortOrder: sortOrderValue.optional(),
+  })
+  .refine((value) => slotCodeMatchesVehicleType(value.code, value.vehicleType), {
+    path: ['code'],
+    error: VALIDATION_MESSAGES.slotCodePrefix,
+  })
+  .refine((value) => value.status !== 'BLOCKED' || Boolean(value.blockedReason), {
+    path: ['blockedReason'],
+    error: VALIDATION_MESSAGES.required,
+  });
+export type CreateSlotRequest = z.input<typeof createSlotRequestSchema>;
+/** The validated request with defaults applied (what the server works with). */
+export type CreateSlotInput = z.output<typeof createSlotRequestSchema>;
+
+/**
+ * Edits a slot. `code` and `zoneCode` can change only while the slot has no
+ * parking history (history keeps pointing at the slot); `blockedReason` only
+ * while it is BLOCKED.
+ */
+export const updateSlotRequestSchema = z
+  .object({
+    code: slotCodeSchema.optional(),
+    zoneCode: inventoryCodeSchema.optional(),
+    priority: priorityValue.optional(),
+    sortOrder: sortOrderValue.optional(),
+    blockedReason: reasonValue.optional(),
+  })
+  .strict()
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    error: VALIDATION_MESSAGES.nothingToUpdate,
+  });
+export type UpdateSlotRequest = z.input<typeof updateSlotRequestSchema>;
+
+export const layoutQuerySchema = z.object({
+  includeArchived: z
+    .preprocess((value) => value === true || value === 'true' || value === '1', z.boolean())
+    .default(false),
+});
+export type LayoutQuery = z.input<typeof layoutQuerySchema>;
+
+export const createBlockRequestSchema = z
+  .object({
+    code: inventoryCodeSchema,
+    name: nameValue,
+    description: z
+      .string()
+      .trim()
+      .max(255, { error: VALIDATION_MESSAGES.tooLong })
+      .nullable()
+      .optional(),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
+    sortOrder: sortOrderValue.optional(),
+  })
+  .refine((value) => ((value.latitude ?? null) === null) === ((value.longitude ?? null) === null), {
+    path: ['longitude'],
+    error: VALIDATION_MESSAGES.coordinatesPaired,
+  });
+export type CreateBlockRequest = z.input<typeof createBlockRequestSchema>;
+export type CreateBlockInput = z.output<typeof createBlockRequestSchema>;
+
+export const updateBlockRequestSchema = z
+  .object({
+    name: nameValue.optional(),
+    description: z
+      .string()
+      .trim()
+      .max(255, { error: VALIDATION_MESSAGES.tooLong })
+      .nullable()
+      .optional(),
+    sortOrder: sortOrderValue.optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict()
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    error: VALIDATION_MESSAGES.nothingToUpdate,
+  });
+export type UpdateBlockRequest = z.input<typeof updateBlockRequestSchema>;
+
+export const createZoneRequestSchema = z.object({
+  blockCode: inventoryCodeSchema,
+  code: inventoryCodeSchema,
+  name: nameValue,
+  vehicleType: z.enum(VEHICLE_TYPES, { error: VALIDATION_MESSAGES.selectOption }),
+  sortOrder: sortOrderValue.optional(),
+});
+export type CreateZoneRequest = z.input<typeof createZoneRequestSchema>;
+export type CreateZoneInput = z.output<typeof createZoneRequestSchema>;
+
+/** A zone's vehicle type can change only while it has no slots. */
+export const updateZoneRequestSchema = z
+  .object({
+    name: nameValue.optional(),
+    vehicleType: z.enum(VEHICLE_TYPES, { error: VALIDATION_MESSAGES.selectOption }).optional(),
+    sortOrder: sortOrderValue.optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict()
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    error: VALIDATION_MESSAGES.nothingToUpdate,
+  });
+export type UpdateZoneRequest = z.input<typeof updateZoneRequestSchema>;
+
 export interface ManagedSlot {
   code: string;
   status: SlotStatus;
   priority: number;
   blockedReason: string | null;
+  /** A disabled slot is out of service: never allocated, not counted as capacity. */
+  isEnabled: boolean;
+  /** Soft-deleted. Only listed when archived slots are requested. */
+  archivedAt: string | null;
+  sortOrder: number;
+  /** When a temporary Park Now / allocation hold lapses (HELD slots only). */
+  holdExpiresAt: string | null;
+  /** True once any session used the slot: it can then be archived but not removed or renamed. */
+  hasHistory: boolean;
+  /** The vehicle parked in the slot (OCCUPIED slots only). */
+  occupant: ParkingMapOccupant | null;
+}
+
+export interface ManagedZone {
+  code: string;
+  name: string;
+  vehicleType: VehicleType;
+  isActive: boolean;
+  sortOrder: number;
+  /** Enabled, non-archived slots only. */
+  counts: SlotCounts;
+  /** Slots that are out of service (disabled). */
+  disabledSlots: number;
+  slots: ManagedSlot[];
+}
+
+export interface ManagedBlock {
+  code: string;
+  name: string;
+  description: string | null;
+  coordinates: Coordinates | null;
+  isActive: boolean;
+  sortOrder: number;
+  zones: ManagedZone[];
 }
 
 export interface ManagedLayout {
-  blocks: {
-    code: string;
-    name: string;
-    description: string | null;
-    coordinates: Coordinates | null;
-    zones: { code: string; name: string; vehicleType: VehicleType; slots: ManagedSlot[] }[];
-  }[];
+  blocks: ManagedBlock[];
+}
+
+/** Outcome of the safe delete: unused slots are removed, slots with history are archived. */
+export interface SlotDeletionResult {
+  outcome: 'DELETED' | 'ARCHIVED';
+  code: string;
 }

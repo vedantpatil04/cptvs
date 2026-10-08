@@ -14,4 +14,5 @@ export const testEnv = {
   CORS_ORIGINS: 'http://localhost:5173',
   LOGIN_RATE_LIMIT_MAX: '1000',
   PUBLIC_RATE_LIMIT_PER_MINUTE: '1000',
+  REGISTRATION_RATE_LIMIT_PER_HOUR: '1000',
 } as const;

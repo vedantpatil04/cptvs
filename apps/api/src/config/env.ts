@@ -62,6 +62,11 @@ const envSchema = z
       .refine(isValidTimeZone, 'CAMPUS_TIMEZONE must be a valid IANA time zone'),
     /** Lifetime of a temporary slot hold during allocation, in seconds. */
     SLOT_HOLD_SECONDS: z.coerce.number().int().min(2).max(120).default(15),
+    /**
+     * How long a Park Now allocation stays held while the user reads it and
+     * confirms, in seconds. After that the slot returns to the pool.
+     */
+    PARK_NOW_HOLD_SECONDS: z.coerce.number().int().min(10).max(600).default(90),
     /** A zone at or above this occupancy (percent of usable slots) raises a warning. */
     ALERT_NEARLY_FULL_PERCENT: z.coerce.number().int().min(50).max(99).default(90),
     /** An active session parked at least this many hours raises a long-duration alert. */

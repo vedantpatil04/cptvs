@@ -7,6 +7,8 @@ declare global {
       id: string;
       /** Present only after the `authenticate` middleware succeeds. */
       auth?: AuthContext;
+      /** Present only after `authenticateVisitor` succeeds: the one session the visitor may use. */
+      visitor?: { sessionId: string };
     }
   }
 }

@@ -4,6 +4,15 @@ import { z } from 'zod';
 export const VEHICLE_TYPES = ['TWO_WHEELER', 'FOUR_WHEELER'] as const;
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
 
+/** Slot IDs carry the vehicle type they serve: T-01 for two-wheelers, F-01 for four-wheelers. */
+export const SLOT_CODE_PREFIXES: Record<VehicleType, string> = {
+  TWO_WHEELER: 'T',
+  FOUR_WHEELER: 'F',
+};
+
+export const slotCodeMatchesVehicleType = (code: string, vehicleType: VehicleType): boolean =>
+  code.startsWith(`${SLOT_CODE_PREFIXES[vehicleType]}-`);
+
 /** Owner categories used for parking sessions and fees (Master Blueprint §9). */
 export const OWNER_CATEGORIES = ['STAFF', 'STUDENT', 'VISITOR'] as const;
 export type OwnerCategory = (typeof OWNER_CATEGORIES)[number];

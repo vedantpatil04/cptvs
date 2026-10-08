@@ -9,6 +9,7 @@ import {
 
 import { prisma } from '../../db/prisma.js';
 import { campusDateString, campusHour } from '../../lib/campus-time.js';
+import { IN_SERVICE } from '../parking/slot-filters.js';
 import { resolveRange } from './date-range.js';
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
@@ -67,7 +68,12 @@ export const analyticsService = {
       prisma.parkingZone.findMany({
         where: { isActive: true, block: { isActive: true } },
         orderBy: [{ block: { sortOrder: 'asc' } }, { sortOrder: 'asc' }],
-        select: { code: true, name: true, vehicleType: true, slots: { select: { status: true } } },
+        select: {
+          code: true,
+          name: true,
+          vehicleType: true,
+          slots: { where: IN_SERVICE, select: { status: true } },
+        },
       }),
     ]);
 

@@ -27,6 +27,9 @@ export const VALIDATION_MESSAGES = {
   documentType: 'validation.documentType',
   passwordsDoNotMatch: 'validation.passwordsDoNotMatch',
   rejectionNoteRequired: 'validation.rejectionNoteRequired',
+  invalidInventoryCode: 'validation.invalidInventoryCode',
+  slotCodePrefix: 'validation.slotCodePrefix',
+  nothingToUpdate: 'validation.nothingToUpdate',
 } as const;
 
 export type ValidationMessageKey = (typeof VALIDATION_MESSAGES)[keyof typeof VALIDATION_MESSAGES];

@@ -6,6 +6,7 @@ import {
   processPaymentRequestSchema,
   sessionNumberSchema,
   trackingQuerySchema,
+  vehicleLookupQuerySchema,
   VALIDATION_MESSAGES,
 } from '@cpvts/shared';
 import { Router, type Request } from 'express';
@@ -22,6 +23,7 @@ import type { OperationContext } from './operation-context.js';
 import { receiptService } from './receipt.service.js';
 import { timelineService } from './timeline.service.js';
 import { trackingService } from './tracking.service.js';
+import { vehicleLookupService } from './vehicle-lookup.service.js';
 
 const context = (req: Request): OperationContext => ({
   actor: requireAuth(req).user,
@@ -52,6 +54,20 @@ parkingRouter.post(
   validate({ body: checkInRequestSchema }),
   async (req, res) => {
     res.status(201).json(await checkInService.checkIn(req.body, context(req)));
+  },
+);
+
+/**
+ * Entry desk: is the plate known, and does a verified account fix its owner
+ * category? Reveals no personal details of the owner.
+ */
+parkingRouter.get(
+  '/vehicle-lookup',
+  anyRole,
+  validate({ query: vehicleLookupQuerySchema }),
+  async (req, res) => {
+    const { vehicleNumber } = req.query as unknown as z.infer<typeof vehicleLookupQuerySchema>;
+    res.status(200).json(await vehicleLookupService.lookup(vehicleNumber));
   },
 );
 

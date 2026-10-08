@@ -14,9 +14,10 @@ import { newOpaqueReference, newReceiptNumber, newTransactionId } from '../../li
 import { logger } from '../../lib/logger.js';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';
+import { notificationService } from '../notifications/notification.service.js';
 import { calculateDurationHours, calculateFee } from '../fees/fee-engine.js';
 import { feeScheduleService } from '../fees/fee-schedule.service.js';
-import { auditRejection, type OperationContext } from './operation-context.js';
+import { auditRejection, channelMetadata, type ActorContext } from './operation-context.js';
 import { parkingErrors } from './parking.errors.js';
 import { toPaymentView, toReceiptView, toSessionView } from './parking.mappers.js';
 import {
@@ -44,7 +45,7 @@ interface PreparedCheckout {
  */
 const prepareCheckout = async (
   request: CheckoutRequest,
-  context: OperationContext,
+  context: ActorContext,
 ): Promise<PreparedCheckout> => {
   const session = await parkingRepository.findSessionByNumber(request.sessionNumber);
   if (!session) throw parkingErrors.sessionNotFound();
@@ -116,17 +117,18 @@ const uniqueValue = async (
 
 export const checkoutService = {
   /** Step 1: fee preview with a transparent breakdown. */
-  async quote(request: CheckoutRequest, context: OperationContext): Promise<CheckoutQuote> {
+  async quote(request: CheckoutRequest, context: ActorContext): Promise<CheckoutQuote> {
     const { session, quote } = await prepareCheckout(request, context);
     await auditRepository.record({
       action: AUDIT_ACTIONS.checkoutInitiated,
-      actorId: context.actor.id,
+      actorId: context.actor?.id,
       entityType: AUDIT_ENTITY_TYPES.parkingSession,
       entityId: session.sessionNumber,
       metadata: {
         exitHour: quote.exitHour,
         durationHours: quote.durationHours,
         totalPaise: quote.fee.totalPaise,
+        ...channelMetadata(context),
       },
       request: context.request,
     });
@@ -139,7 +141,7 @@ export const checkoutService = {
    */
   async createPayment(
     request: CheckoutRequest & { method: PaymentMethod },
-    context: OperationContext,
+    context: ActorContext,
   ): Promise<CreatePaymentResponse> {
     const { session, quote } = await prepareCheckout(request, context);
     if (!allowedMethod(quote.fee.totalPaise, request.method)) {
@@ -172,7 +174,7 @@ export const checkoutService = {
       await auditRepository.record(
         {
           action: AUDIT_ACTIONS.paymentInitiated,
-          actorId: context.actor.id,
+          actorId: context.actor?.id,
           entityType: AUDIT_ENTITY_TYPES.payment,
           entityId: created.transactionId,
           metadata: {
@@ -180,6 +182,7 @@ export const checkoutService = {
             method: created.method,
             amountPaise: created.amountPaise,
             simulated: true,
+            ...channelMetadata(context),
           },
           request: context.request,
         },
@@ -199,7 +202,7 @@ export const checkoutService = {
   async processPayment(
     paymentId: string,
     request: { sessionNumber: string; outcome: 'SUCCESS' | 'FAILURE' },
-    context: OperationContext,
+    context: ActorContext,
   ): Promise<ProcessPaymentResponse> {
     const payment = await loadPaymentForSession(paymentId, request.sessionNumber, context);
 
@@ -241,7 +244,7 @@ export const checkoutService = {
   async cancelPayment(
     paymentId: string,
     sessionNumber: string,
-    context: OperationContext,
+    context: ActorContext,
   ): Promise<PaymentView> {
     const payment = await loadPaymentForSession(paymentId, sessionNumber, context);
     const cancelled = await withTransaction(async (tx) => {
@@ -253,10 +256,10 @@ export const checkoutService = {
       await auditRepository.record(
         {
           action: AUDIT_ACTIONS.paymentCancelled,
-          actorId: context.actor.id,
+          actorId: context.actor?.id,
           entityType: AUDIT_ENTITY_TYPES.payment,
           entityId: payment.transactionId,
-          metadata: { sessionNumber },
+          metadata: { sessionNumber, ...channelMetadata(context) },
           request: context.request,
         },
         tx,
@@ -271,7 +274,7 @@ export const checkoutService = {
 const loadPaymentForSession = async (
   paymentId: string,
   sessionNumber: string,
-  context: OperationContext,
+  context: ActorContext,
 ) => {
   const payment = await parkingRepository.findPaymentWithSessionNumber(paymentId);
   if (!payment) throw parkingErrors.paymentNotFound();
@@ -285,7 +288,7 @@ const loadPaymentForSession = async (
   return payment;
 };
 
-const markFailed = async (paymentId: string, reason: string, context: OperationContext) =>
+const markFailed = async (paymentId: string, reason: string, context: ActorContext) =>
   withTransaction(async (tx) => {
     await tx.payment.updateMany({
       where: { id: paymentId, status: 'PROCESSING' },
@@ -298,10 +301,15 @@ const markFailed = async (paymentId: string, reason: string, context: OperationC
     await auditRepository.record(
       {
         action: AUDIT_ACTIONS.paymentFailed,
-        actorId: context.actor.id,
+        actorId: context.actor?.id,
         entityType: AUDIT_ENTITY_TYPES.payment,
         entityId: failed.transactionId,
-        metadata: { sessionNumber: failed.session.sessionNumber, reason, simulated: true },
+        metadata: {
+          sessionNumber: failed.session.sessionNumber,
+          reason,
+          simulated: true,
+          ...channelMetadata(context),
+        },
         request: context.request,
       },
       tx,
@@ -314,15 +322,11 @@ const markFailed = async (paymentId: string, reason: string, context: OperationC
  * conditional update; if any precondition no longer holds, an error is thrown
  * and the whole transaction rolls back.
  */
-const finalize = async (
-  tx: Prisma.TransactionClient,
-  paymentId: string,
-  context: OperationContext,
-) => {
+const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context: ActorContext) => {
   const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
   const session = await tx.parkingSession.findUniqueOrThrow({
     where: { id: payment.sessionId },
-    include: { slot: true },
+    include: { slot: true, vehicle: { select: { ownerUserId: true, ownerSince: true } } },
   });
   if (session.status !== 'ACTIVE') throw parkingErrors.sessionNotActive();
 
@@ -349,7 +353,13 @@ const finalize = async (
       durationHours,
       feeAmountPaise: fee.totalPaise,
       feeBreakdown: fee as unknown as Prisma.InputJsonObject,
-      checkedOutById: context.actor.id,
+      checkedOutById: context.actor?.id ?? null,
+      checkedOutVia:
+        context.channel === 'VISITOR'
+          ? 'VISITOR'
+          : context.channel === 'SELF_SERVICE'
+            ? 'SELF_SERVICE'
+            : 'SECURITY',
     },
   });
   if (completed.count !== 1) throw parkingErrors.sessionNotActive();
@@ -389,10 +399,10 @@ const finalize = async (
     auditRepository.record(
       {
         action,
-        actorId: context.actor.id,
+        actorId: context.actor?.id,
         entityType,
         entityId,
-        metadata,
+        metadata: { ...metadata, ...channelMetadata(context) },
         request: context.request,
       },
       tx,
@@ -424,6 +434,24 @@ const finalize = async (
     await audit(AUDIT_ACTIONS.slotReleased, AUDIT_ENTITY_TYPES.parkingSlot, session.slot.code, {
       sessionNumber: session.sessionNumber,
     });
+  }
+
+  // Tell the registered owner (if any) that the receipt is ready.
+  if (
+    session.vehicle.ownerUserId &&
+    session.vehicle.ownerSince &&
+    session.vehicle.ownerSince <= session.entryAt
+  ) {
+    await notificationService.notify(
+      session.vehicle.ownerUserId,
+      'RECEIPT_GENERATED',
+      {
+        receiptNumber: receipt.receiptNumber,
+        sessionNumber: session.sessionNumber,
+        amountPaise: receipt.amountPaise,
+      },
+      tx,
+    );
   }
 
   return receipt;

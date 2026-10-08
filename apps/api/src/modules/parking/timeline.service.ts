@@ -2,7 +2,9 @@ import type {
   AuditAction,
   PaymentMethod,
   SessionTimelineResponse,
+  TimelineChannel,
   TimelineDetails,
+  UserRole,
 } from '@cpvts/shared';
 
 import { prisma } from '../../db/prisma.js';
@@ -59,12 +61,30 @@ const detailsFor = (action: string, entityId: string | null, meta: Metadata): Ti
   }
 };
 
+const channelOf = (actor: { role: UserRole } | null, meta: Metadata): TimelineChannel => {
+  if (meta.via === 'VISITOR') return 'VISITOR';
+  if (meta.via === 'SELF_SERVICE') return 'SELF_SERVICE';
+  if (!actor) return 'SYSTEM';
+  return actor.role === 'PARKING_USER' ? 'SELF_SERVICE' : 'SECURITY';
+};
+
+export interface TimelineViewer {
+  /**
+   * The vehicle's owner (or a visitor) viewing their own session: staff names
+   * are not shown and internal integrity refusals are left out.
+   */
+  isOwner?: boolean;
+}
+
 /**
  * Session timeline / audit replay (Master Blueprint §19), rebuilt from the
  * audit log: every event recorded for the session itself or referencing it.
  */
 export const timelineService = {
-  async forSession(sessionNumber: string): Promise<SessionTimelineResponse> {
+  async forSession(
+    sessionNumber: string,
+    { isOwner = false }: TimelineViewer = {},
+  ): Promise<SessionTimelineResponse> {
     const exists = await prisma.parkingSession.count({ where: { sessionNumber } });
     if (!exists) throw parkingErrors.sessionNotFound();
 
@@ -81,16 +101,18 @@ export const timelineService = {
 
     return {
       sessionNumber,
-      events: entries.map((entry) => ({
-        at: entry.createdAt.toISOString(),
-        action: entry.action as AuditAction,
-        actor: entry.actor,
-        details: detailsFor(
-          entry.action,
-          entry.entityId,
-          (entry.metadata as Metadata | null) ?? {},
-        ),
-      })),
+      events: entries
+        .filter((entry) => !(isOwner && entry.action === AUDIT_ACTIONS.integrityRejected))
+        .map((entry) => {
+          const meta = (entry.metadata as Metadata | null) ?? {};
+          return {
+            at: entry.createdAt.toISOString(),
+            action: entry.action as AuditAction,
+            actor: isOwner ? null : entry.actor,
+            channel: channelOf(entry.actor, meta),
+            details: detailsFor(entry.action, entry.entityId, meta),
+          };
+        }),
     };
   },
 };
