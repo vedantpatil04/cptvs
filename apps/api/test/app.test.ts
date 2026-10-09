@@ -79,6 +79,13 @@ describe('HTTP foundation', () => {
       .set('Access-Control-Request-Method', 'POST');
     expect(allowed.headers['access-control-allow-origin']).toBe('http://localhost:5173');
 
+    const vercelPreflight = await request(app)
+      .options('/api/v1/auth/login')
+      .set('Origin', 'https://cptvs-8v1z.vercel.app')
+      .set('Access-Control-Request-Method', 'POST');
+    expect(vercelPreflight.status).toBe(204);
+    expect(vercelPreflight.headers['access-control-allow-origin']).toBe('https://cptvs-8v1z.vercel.app');
+
     const denied = await request(app)
       .options('/api/v1/auth/login')
       .set('Origin', 'https://untrusted.example')
@@ -96,6 +103,7 @@ describe('HTTP foundation', () => {
     expect(isOriginAllowed('http://localhost:5173', allowed)).toBe(true);
     expect(isOriginAllowed('https://cpvts-preview-1.vercel.app', allowed)).toBe(true);
     expect(isOriginAllowed('https://cpvts.preview.vercel.app', allowed)).toBe(true);
+    expect(isOriginAllowed('https://cptvs-8v1z.vercel.app', [])).toBe(true);
     expect(isOriginAllowed('capacitor://localhost', allowed)).toBe(true);
     expect(isOriginAllowed('https://evil.com', allowed)).toBe(false);
     expect(isOriginAllowed('https://evil.com/?https://vercel.app', allowed)).toBe(false);

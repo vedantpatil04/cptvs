@@ -10,6 +10,19 @@ import { healthRouter } from './modules/health/health.routes.js';
 import { apiV1Router } from './routes/api-v1.js';
 
 export const isOriginAllowed = (origin: string, allowedOrigins: readonly string[]): boolean => {
+  if (!origin) return true;
+
+  // Always permit CPVTS Vercel frontend deployments (production, branch, and preview deployments)
+  if (/^https:\/\/[a-z0-9.-]+\.vercel\.app$/i.test(origin)) return true;
+  // Always permit mobile WebView / Capacitor local origins
+  if (
+    origin === 'https://localhost' ||
+    origin === 'capacitor://localhost' ||
+    origin === 'http://localhost'
+  ) {
+    return true;
+  }
+
   for (const allowed of allowedOrigins) {
     if (allowed === origin) return true;
     if (allowed.includes('*')) {
@@ -46,11 +59,19 @@ export const createApp = (config: AppConfig): Express => {
         }
         callback(null, false);
       },
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-      allowedHeaders: ['Authorization', 'Content-Type', 'Accept-Language', 'X-Request-Id'],
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: [
+        'Authorization',
+        'Content-Type',
+        'Accept',
+        'Accept-Language',
+        'X-Request-Id',
+        'Cache-Control',
+      ],
       // `Date` lets the web and Android clients correct for a wrong device clock (live timers).
       exposedHeaders: ['X-Request-Id', 'Content-Disposition', 'Date'],
-      maxAge: 600,
+      maxAge: 86400,
+      optionsSuccessStatus: 204,
     }),
   );
   // Identity documents arrive base64-encoded in the JSON body (at most 2 MB of file,

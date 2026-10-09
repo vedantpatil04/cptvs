@@ -4,6 +4,7 @@ import { parseEnv, type Env } from './env.js';
 
 const DEFAULT_DEV_ORIGINS = ['http://localhost:5173', 'http://localhost:4173'];
 const MOBILE_APP_ORIGINS = ['https://localhost', 'capacitor://localhost'];
+const VERCEL_DEFAULT_ORIGINS = ['https://*.vercel.app'];
 
 const readPackageVersion = (): string => {
   try {
@@ -31,16 +32,21 @@ export const resolveCorsOrigins = (env: Env): string[] => {
     }
   }
 
-  // When frontend or custom CORS origins are configured, ensure the Capacitor
-  // mobile app shell origins (Android WebView) are also allowed.
-  if (origins.size > 0) {
-    for (const mobileOrigin of MOBILE_APP_ORIGINS) {
-      origins.add(mobileOrigin);
-    }
-    return Array.from(origins);
+  // Always permit CPVTS Vercel frontend deployments and mobile WebViews
+  for (const vercelOrigin of VERCEL_DEFAULT_ORIGINS) {
+    origins.add(vercelOrigin);
+  }
+  for (const mobileOrigin of MOBILE_APP_ORIGINS) {
+    origins.add(mobileOrigin);
   }
 
-  return env.NODE_ENV === 'production' ? [] : [...DEFAULT_DEV_ORIGINS, ...MOBILE_APP_ORIGINS];
+  if (env.NODE_ENV !== 'production') {
+    for (const devOrigin of DEFAULT_DEV_ORIGINS) {
+      origins.add(devOrigin);
+    }
+  }
+
+  return Array.from(origins);
 };
 
 export const buildConfig = (env: Env) =>
