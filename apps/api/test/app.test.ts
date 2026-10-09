@@ -2,7 +2,7 @@ import type { ApiErrorBody } from '@cpvts/shared';
 import request from 'supertest';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { createApp } from '../src/app.js';
+import { createApp, isOriginAllowed } from '../src/app.js';
 import { config } from '../src/config/index.js';
 import { disconnectDatabase } from '../src/db/prisma.js';
 
@@ -59,5 +59,14 @@ describe('HTTP foundation', () => {
   it('does not advertise the framework', async () => {
     const res = await request(app).get('/health');
     expect(res.headers['x-powered-by']).toBeUndefined();
+  });
+
+  it('validates origins correctly for exact matches, wildcards, and capacitor schemes', () => {
+    const allowed = ['http://localhost:5173', 'https://*.vercel.app', 'capacitor://localhost'];
+    expect(isOriginAllowed('http://localhost:5173', allowed)).toBe(true);
+    expect(isOriginAllowed('https://cpvts-preview-1.vercel.app', allowed)).toBe(true);
+    expect(isOriginAllowed('capacitor://localhost', allowed)).toBe(true);
+    expect(isOriginAllowed('https://evil.com', allowed)).toBe(false);
+    expect(isOriginAllowed('https://evil.com/?https://vercel.app', allowed)).toBe(false);
   });
 });

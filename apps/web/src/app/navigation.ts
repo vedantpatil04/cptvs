@@ -1,17 +1,22 @@
 import type { UserRole } from '@cpvts/shared';
 import {
+  Calendar,
+  Car,
   ChartColumn,
+  Coins,
   FileSpreadsheet,
   History,
   LayoutDashboard,
   LogIn,
   LogOut,
   MapPinned,
+  Receipt,
   ScrollText,
   Search,
   ShieldCheck,
   SquareParking,
   UserRound,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -28,15 +33,17 @@ export interface NavItem {
 }
 
 /**
- * Sidebar navigation per role (Master Blueprint §39). Only real, working
- * pages are listed; later modules add their entries when they ship.
+ * Sidebar navigation per role (Master Blueprint §39).
  */
 export const NAVIGATION: Record<UserRole, NavItem[]> = {
   ADMIN: [
     { to: PATHS.admin.root, labelKey: 'nav.dashboard', icon: LayoutDashboard, end: true },
+    { to: PATHS.admin.users, labelKey: 'nav.users', icon: Users },
     { to: PATHS.admin.live, labelKey: 'nav.liveParking', icon: MapPinned },
     { to: PATHS.admin.finder, labelKey: 'nav.vehicleFinder', icon: Search },
     { to: PATHS.admin.slots, labelKey: 'nav.slotManagement', icon: SquareParking },
+    { to: PATHS.admin.shifts, labelKey: 'nav.shifts', icon: Calendar },
+    { to: PATHS.admin.cash, labelKey: 'nav.cash', icon: Coins },
     { to: PATHS.admin.history, labelKey: 'nav.history', icon: History },
     { to: PATHS.admin.analytics, labelKey: 'nav.analytics', icon: ChartColumn },
     { to: PATHS.admin.reports, labelKey: 'nav.reports', icon: FileSpreadsheet },
@@ -52,6 +59,15 @@ export const NAVIGATION: Record<UserRole, NavItem[]> = {
     { to: PATHS.staff.live, labelKey: 'nav.liveParking', icon: MapPinned },
     { to: PATHS.staff.account, labelKey: 'nav.account', icon: UserRound },
   ],
-  /** Added with the Student / Campus Staff screens. */
-  PARKING_USER: [],
+  PARKING_USER: [
+    { to: PATHS.portal.root, labelKey: 'nav.home', icon: LayoutDashboard, end: true },
+    { to: PATHS.portal.parkNow, labelKey: 'nav.parkNow', icon: SquareParking },
+    { to: PATHS.portal.myParking, labelKey: 'nav.myParking', icon: MapPinned },
+    { to: PATHS.portal.locator, labelKey: 'nav.locator', icon: Search },
+    { to: PATHS.portal.vehicles, labelKey: 'nav.myVehicles', icon: Car },
+    { to: PATHS.portal.parking, labelKey: 'nav.liveParking', icon: MapPinned },
+    { to: PATHS.portal.history, labelKey: 'nav.history', icon: History },
+    { to: PATHS.portal.receipts, labelKey: 'nav.receipts', icon: Receipt },
+    { to: PATHS.portal.profile, labelKey: 'nav.profile', icon: UserRound },
+  ],
 };

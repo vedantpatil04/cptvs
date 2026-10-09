@@ -1,8 +1,11 @@
-# Local development stack.
-#   docker compose up -d db          → PostgreSQL only (run API/web with npm run dev)
-#   docker compose up --build        → PostgreSQL + API + web, production images
+# Local containers. Normal development uses the shared Supabase database (apps/api/.env).
+#   docker compose up -d db          → local PostgreSQL for the automated tests
+#                                      (create the test database once:
+#                                       docker compose exec db createdb -U cpvts cpvts_test)
+#   docker compose --profile app up --build
+#                                    → self-contained stack: its own PostgreSQL + API + web
 #
-# Credentials below are for local development only.
+# Credentials below are for local, disposable use only.
 name: cpvts
 
 services:

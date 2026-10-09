@@ -27,6 +27,8 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Attach the stored access token (default true). */
   authenticated?: boolean;
+  /** Explicit token override (e.g. for visitor session tokens). */
+  token?: string | null;
 }
 
 type TokenProvider = () => string | null;
@@ -59,21 +61,27 @@ const parseJson = async (response: Response): Promise<unknown> => {
   }
 };
 
-const send = async (
-  path: string,
-  { method = 'GET', body, signal, authenticated = true }: RequestOptions,
-  accept: string,
-): Promise<Response> => {
+/** Safely joins base URL and endpoint path without duplicate slashes or missing slashes. */
+export const joinUrl = (baseUrl: string, endpointPath: string): string => {
+  const cleanBase = baseUrl.replace(/\/+$/, '');
+  const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+  return `${cleanBase}${cleanPath}`;
+};
+
+const send = async (path: string, options: RequestOptions, accept: string): Promise<Response> => {
+  const { method = 'GET', body, signal, authenticated = true, token: explicitToken } = options;
   const headers = new Headers({ Accept: accept, 'Accept-Language': i18n.language });
   if (body !== undefined) headers.set('Content-Type', 'application/json');
 
-  const token = authenticated ? getAccessToken() : null;
+  const token =
+    explicitToken !== undefined ? explicitToken : authenticated ? getAccessToken() : null;
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   let response: Response;
+  const targetUrl = joinUrl(appConfig.apiBaseUrl, path);
   try {
-    response = await fetch(`${appConfig.apiBaseUrl}${path}`, {
+    response = await fetch(targetUrl, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),

@@ -196,8 +196,10 @@ npm workspaces monorepo:
 ## Requirements
 
 - **Node.js 22.12+** and npm 10+ (`.nvmrc` pins Node 22)
-- **PostgreSQL 14+** — local install, Docker (`docker compose up -d db`) or Supabase
-- Docker (optional) for the containerised stack
+- **PostgreSQL 14+** — the shared **Supabase** database is the normal development
+  database ([setup](#supabase--postgresql-setup)); a local PostgreSQL (Docker:
+  `docker compose up -d db`) is for the automated tests and offline experiments
+- Docker (optional) for that disposable test database and the containerised stack
 
 ## Local setup
 
@@ -205,22 +207,31 @@ npm workspaces monorepo:
 # 1. Install dependencies (all workspaces)
 npm install
 
-# 2. Start PostgreSQL (or use your own / Supabase)
-docker compose up -d db
-
-# 3. Configure environment files
+# 2. Configure environment files
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
-#    Edit apps/api/.env: set JWT_SECRET (see below) and SEED_* passwords.
+#    Edit apps/api/.env: set DATABASE_URL (and DIRECT_URL if needed) to the shared
+#    Supabase database (see "Supabase / PostgreSQL setup"), JWT_SECRET (see below)
+#    and the SEED_* passwords.
 
-# 4. Create the database schema
+# 3. Apply the committed migrations to that database (never reset it)
 npm run db:migrate:deploy
 
-# 5. Create the initial accounts, the baseline parking layout and the fee schedule
+# 4. Create the initial accounts, the baseline parking layout, the fee schedule and
+#    the starter shift templates (idempotent: existing data is never overwritten)
 npm run db:seed
 
-# 6. Run API (http://localhost:4000) and web (http://localhost:5173)
+# 5. Run API (http://localhost:4000) and web (http://localhost:5173)
 npm run dev
+```
+
+To run the automated tests you also need a disposable local database (they
+truncate every table, so never point them at Supabase):
+
+```bash
+docker compose up -d db
+docker compose exec db createdb -U cpvts cpvts_test    # once
+npm test
 ```
 
 Generate a JWT secret:
@@ -236,8 +247,10 @@ Admins land on `/admin`, Security Staff on `/staff`.
 The seed is idempotent and never overwrites existing data. Besides the
 accounts it creates, only if absent, the minimum layout from Master Blueprint
 §5 (Two-Wheeler block T-01…T-10, Four-Wheeler block F-01…F-05, all available,
-no GPS coordinates) and the official fee schedule (`settings` key
-`parking.feeSchedule`).
+no GPS coordinates), the official fee schedule (`settings` key
+`parking.feeSchedule`) and three starter Security Staff shift templates
+(Morning 08:00–16:00, Evening 16:00–00:00, Night 00:00–08:00) that Admin can
+edit.
 
 > In `.env` files, quote values containing `#` (e.g. `SEED_ADMIN_PASSWORD="Pa#ss..."`),
 > otherwise everything after `#` is treated as a comment.
@@ -294,7 +307,8 @@ time. Never put secrets in them.
 
 | Variable                      | Required  | Purpose                                                                           |
 | ----------------------------- | --------- | --------------------------------------------------------------------------------- |
-| `VITE_API_URL`                | ✔ (build) | API base URL, e.g. `https://cpvts-api.onrender.com` (no trailing slash)           |
+| `VITE_API_BASE_URL`           | ✔ (build) | Primary API base URL, e.g. `https://cpvts-api.onrender.com` (no trailing slash)   |
+| `VITE_API_URL`                |           | Backwards-compatible alternative for API base URL                                 |
 | `VITE_BRAND_SHORT_NAME`       |           | Short product name (default `CPVTS`)                                              |
 | `VITE_BRAND_PRODUCT_NAME`     |           | Full product name                                                                 |
 | `VITE_BRAND_INSTITUTION_NAME` |           | Institution the deployment is prepared for                                        |
@@ -423,9 +437,9 @@ npm run db:migrate:deploy      # with production DATABASE_URL / DIRECT_URL
 npm run start:api              # node apps/api/dist/server.js
 ```
 
-`VITE_API_URL` must be set when building the web app. The web build output in
+`VITE_API_BASE_URL` (or `VITE_API_URL`) must be set when building the web app. The web build output in
 `apps/web/dist` is a static site that any static host can serve (single-page
-app: unknown paths must fall back to `index.html`).
+app: unknown paths fall back to `index.html` via `vercel.json`).
 
 Health checks: `GET /health` (liveness) and `GET /health/ready` (database
 connectivity; returns 503 when unavailable).
@@ -433,10 +447,10 @@ connectivity; returns 503 when unavailable).
 ## Deployment: Vercel (web)
 
 1. Import the repository in Vercel. Keep **Root Directory** as the repository
-   root — `vercel.json` sets the install/build commands and output directory.
-2. Add environment variables: `VITE_API_URL` (the Render API URL) and any
-   `VITE_BRAND_*` overrides.
-3. Deploy. `vercel.json` rewrites all routes to `index.html` for client routing.
+   root (`.`) — `vercel.json` sets the install/build commands and output directory.
+2. Add environment variables: `VITE_API_BASE_URL` (the Render API URL, e.g. `https://cpvts-api.onrender.com`)
+   and any `VITE_BRAND_*` overrides.
+3. Deploy. `vercel.json` rewrites all routes to `index.html` for client routing and sets immutable asset caching.
 4. Add the Vercel URL to the API's `CORS_ORIGINS` / `FRONTEND_URL`.
 
 ## Deployment: Render (API)
@@ -444,8 +458,8 @@ connectivity; returns 503 when unavailable).
 1. In Render choose **New → Blueprint** and select this repository; `render.yaml`
    defines the `cpvts-api` web service (build, start, health check, env vars).
 2. Fill in the prompted variables: `DATABASE_URL`, `DIRECT_URL` (Supabase),
-   `FRONTEND_URL` and `CORS_ORIGINS` (the Vercel URL). `JWT_SECRET` is generated.
-3. Deploy. The start command applies pending migrations before starting.
+   `FRONTEND_URL` and `CORS_ORIGINS` (the Vercel URL, e.g. `https://<app>.vercel.app,https://*.vercel.app,capacitor://localhost,http://localhost`). `JWT_SECRET` is generated.
+3. Deploy. The start command applies pending migrations (`prisma migrate deploy`) before starting.
 4. Seed the first accounts once from your machine against the production
    database (`npm run db:seed` with production URLs and `SEED_*` values), or from
    the Render Shell with `npm run db:seed:deploy -w @cpvts/api`.
@@ -455,8 +469,8 @@ Full guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 ## Docker
 
 ```bash
-docker compose up -d db              # PostgreSQL only, for npm run dev
-docker compose --profile app up --build   # PostgreSQL + API (:4000) + web (:8080)
+docker compose up -d db              # local PostgreSQL for the automated tests (not the dev database)
+docker compose --profile app up --build   # self-contained stack: its own PostgreSQL + API (:4000) + web (:8080)
 docker compose exec api npm run db:seed:deploy   # with SEED_* variables set via -e
 ```
 

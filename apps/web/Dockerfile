@@ -17,6 +17,7 @@ COPY tsconfig.base.json ./
 COPY packages/shared packages/shared
 COPY apps/web apps/web
 
+ARG VITE_API_BASE_URL
 ARG VITE_API_URL
 ARG VITE_BRAND_SHORT_NAME
 ARG VITE_BRAND_PRODUCT_NAME

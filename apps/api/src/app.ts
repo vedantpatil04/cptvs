@@ -9,6 +9,18 @@ import { requestLogger } from './middleware/request-logger.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { apiV1Router } from './routes/api-v1.js';
 
+export const isOriginAllowed = (origin: string, allowedOrigins: readonly string[]): boolean => {
+  for (const allowed of allowedOrigins) {
+    if (allowed === origin) return true;
+    if (allowed.includes('*')) {
+      const escaped = allowed.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[a-zA-Z0-9-]+');
+      const regex = new RegExp(`^${escaped}$`, 'i');
+      if (regex.test(origin)) return true;
+    }
+  }
+  return false;
+};
+
 export const createApp = (config: AppConfig): Express => {
   const app = express();
 
@@ -20,7 +32,18 @@ export const createApp = (config: AppConfig): Express => {
   app.use(helmet());
   app.use(
     cors({
-      origin: [...config.cors.origins],
+      origin: (requestOrigin, callback) => {
+        // Non-browser or server-to-server requests without Origin header
+        if (!requestOrigin) {
+          callback(null, true);
+          return;
+        }
+        if (isOriginAllowed(requestOrigin, config.cors.origins)) {
+          callback(null, true);
+          return;
+        }
+        callback(null, false);
+      },
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
       allowedHeaders: ['Authorization', 'Content-Type', 'Accept-Language', 'X-Request-Id'],
       exposedHeaders: ['X-Request-Id', 'Content-Disposition'],

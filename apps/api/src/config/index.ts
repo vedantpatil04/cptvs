@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { parseEnv, type Env } from './env.js';
 
-const DEFAULT_DEV_ORIGIN = 'http://localhost:5173';
+const DEFAULT_DEV_ORIGINS = ['http://localhost:5173', 'http://localhost:4173'];
 
 const readPackageVersion = (): string => {
   try {
@@ -20,7 +20,7 @@ const readPackageVersion = (): string => {
 const resolveCorsOrigins = (env: Env): string[] => {
   if (env.CORS_ORIGINS?.length) return env.CORS_ORIGINS;
   if (env.FRONTEND_URL) return [env.FRONTEND_URL.replace(/\/+$/, '')];
-  return env.NODE_ENV === 'production' ? [] : [DEFAULT_DEV_ORIGIN];
+  return env.NODE_ENV === 'production' ? [] : DEFAULT_DEV_ORIGINS;
 };
 
 export const buildConfig = (env: Env) =>

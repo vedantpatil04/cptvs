@@ -4,10 +4,12 @@ import {
   type PaymentMethod,
   type PaymentView,
   type ProcessPaymentResponse,
+  type ScanCheckoutResponse,
   type TrackingResponse,
 } from '@cpvts/shared';
 import {
   Banknote,
+  Camera,
   CircleAlert,
   CircleCheck,
   CircleX,
@@ -15,6 +17,7 @@ import {
   FlaskConical,
   LoaderCircle,
   ReceiptText,
+  Search,
   Smartphone,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -25,6 +28,7 @@ import { areaPaths } from '@/app/paths';
 import { StatusBadge } from '@/components/feedback/StatusBadge';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { CameraQrScanner } from '@/components/parking/CameraQrScanner';
 import { FeeBreakdownView } from '@/components/parking/FeeBreakdownView';
 import { SessionDetails } from '@/components/parking/SessionDetails';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -55,53 +59,147 @@ type Step =
   | { name: 'paying'; stage: PaymentStage; payment: PaymentView | null }
   | { name: 'done'; outcome: ProcessPaymentResponse };
 
+type ExitSessionResult = TrackingResponse | ScanCheckoutResponse;
+
 /** Identifiers the operator used, re-verified by the server against the session. */
-const identifiersFrom = (found: TrackingResponse) => ({
+const identifiersFrom = (found: ExitSessionResult) => ({
   ...(found.matchedBy === 'VEHICLE_NUMBER' ? { vehicleNumber: found.session.vehicleNumber } : {}),
   ...(found.matchedBy === 'SLOT' ? { slotCode: found.session.slotCode } : {}),
+  ...(found.matchedBy === 'ENTRY_QR' && found.session.entryReference
+    ? { entryReference: found.session.entryReference }
+    : {}),
 });
 
-/** Security Staff checkout: identify → exit hour → fee preview → test payment → receipt. */
+/** Security Staff checkout: identify (Camera QR / manual search) → exit hour → fee preview → test payment → receipt. */
 export function VehicleExitPage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const [initialSession] = useState(() => params.get('session'));
-  const { state: search, search: runSearch, clear } = useVehicleSearch(initialSession);
-  const found = search.status === 'found' ? search.result : null;
+  const { state: search, search: runSearch, clear: clearSearch } = useVehicleSearch(initialSession);
+
+  const [inputMode, setInputMode] = useState<'scan' | 'manual'>(() => {
+    const tab = params.get('tab') || params.get('mode');
+    return tab === 'scan' ? 'scan' : 'manual';
+  });
+  const [scannedResult, setScannedResult] = useState<ScanCheckoutResponse | null>(null);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanError, setScanError] = useState<unknown>(null);
+
+  const found: ExitSessionResult | null =
+    scannedResult ?? (search.status === 'found' ? search.result : null);
+
+  const handleReset = () => {
+    clearSearch();
+    setScannedResult(null);
+    setScanError(null);
+  };
+
+  const handleScanQr = async (qrData: string) => {
+    setScanLoading(true);
+    setScanError(null);
+    try {
+      const result = await parkingApi.scanCheckout(qrData);
+      setScannedResult(result);
+    } catch (err) {
+      setScanError(err);
+    } finally {
+      setScanLoading(false);
+    }
+  };
 
   return (
     <>
       <PageHeader title={t('parking.exit.title')} description={t('parking.exit.description')} />
       <div className="space-y-6">
         {!found && (
-          <Card className="max-w-3xl">
-            <CardContent>
-              <VehicleSearchForm
-                onSearch={(query) => void runSearch(query)}
-                searching={search.status === 'searching'}
-                initialValue={initialSession ?? ''}
-                submitLabel={t('parking.exit.find')}
-              />
-            </CardContent>
-          </Card>
+          <div className="max-w-3xl space-y-4">
+            {/* Mode selection tabs */}
+            <div className="flex border-b">
+              <button
+                type="button"
+                onClick={() => setInputMode('scan')}
+                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
+                  inputMode === 'scan'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Camera className="size-4" />
+                Scan Parking Session QR
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode('manual')}
+                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
+                  inputMode === 'manual'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Search className="size-4" />
+                Manual Lookup
+              </button>
+            </div>
+
+            {/* Mode 1: Real Camera QR Scanner */}
+            {inputMode === 'scan' && (
+              <div className="space-y-4">
+                <CameraQrScanner
+                  onScan={(qr) => void handleScanQr(qr)}
+                  onManualFallback={() => setInputMode('manual')}
+                />
+              </div>
+            )}
+
+            {/* Mode 2: Manual Search Form */}
+            {inputMode === 'manual' && (
+              <Card>
+                <CardContent className="pt-6">
+                  <VehicleSearchForm
+                    onSearch={(query) => void runSearch(query)}
+                    searching={search.status === 'searching'}
+                    initialValue={initialSession ?? ''}
+                    submitLabel={t('parking.exit.find')}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
-        {search.status === 'searching' && <LoadingState />}
+
+        {(search.status === 'searching' || scanLoading) && <LoadingState />}
+
         {search.status === 'error' && (
           <Alert variant="destructive" className="max-w-3xl">
             <CircleAlert aria-hidden />
             <AlertDescription>{errorMessage(t, search.error)}</AlertDescription>
           </Alert>
         )}
-        {found && <CheckoutFlow key={found.session.sessionNumber} found={found} onReset={clear} />}
+
+        {scanError !== null && (
+          <Alert variant="destructive" className="max-w-3xl">
+            <CircleAlert aria-hidden />
+            <AlertTitle>QR Code Check Failed</AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p>{errorMessage(t, scanError)}</p>
+              <Button size="sm" variant="outline" onClick={() => setScanError(null)} className="mt-2 bg-background">
+                Scan Again
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {found && <CheckoutFlow key={found.session.sessionNumber} found={found} onReset={handleReset} />}
       </div>
     </>
   );
 }
 
-function CheckoutFlow({ found, onReset }: { found: TrackingResponse; onReset: () => void }) {
+function CheckoutFlow({ found, onReset }: { found: ExitSessionResult; onReset: () => void }) {
   const { t } = useTranslation();
   const format = useFormatters();
   const { session } = found;
+  const isQrVerified = found.matchedBy === 'ENTRY_QR';
   const [exitHour, setExitHour] = useState(() =>
     Math.max(session.entryHour, session.currentHour ?? session.entryHour),
   );
@@ -179,6 +277,12 @@ function CheckoutFlow({ found, onReset }: { found: TrackingResponse; onReset: ()
           <CardDescription>{session.block.name}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {isQrVerified && (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              <CircleCheck className="size-4" />
+              <span>Verified Parking Session QR · Server Integrity Checks Passed</span>
+            </div>
+          )}
           <SessionDetails session={session} />
           <div className="flex flex-wrap items-end gap-3">
             <div className="grid gap-2">

@@ -4,16 +4,43 @@ export const PATHS = {
   home: '/',
   help: '/help',
   login: '/login',
+  register: {
+    root: '/register',
+    student: '/register/student',
+    staff: '/register/staff',
+  },
+  visitor: {
+    root: '/visitor',
+    parking: '/visitor/parking',
+    checkout: '/visitor/checkout',
+    receipt: '/visitor/receipt',
+  },
   /** Public receipt verification page (QR target). */
   verify: `${RECEIPT_VERIFICATION_PATH}/:reference`,
+  portal: {
+    root: '/portal',
+    parkNow: '/portal/park-now',
+    myParking: '/portal/my-parking',
+    checkout: '/portal/checkout',
+    locator: '/portal/locator',
+    vehicles: '/portal/vehicles',
+    parking: '/portal/parking',
+    history: '/portal/history',
+    receipts: '/portal/receipts',
+    receiptDetail: '/portal/receipts/:receiptNumber',
+    profile: '/portal/profile',
+  },
   admin: {
     root: '/admin',
     account: '/admin/account',
+    users: '/admin/users',
     live: '/admin/live',
     finder: '/admin/finder',
     session: '/admin/sessions/:sessionNumber',
     receipt: '/admin/receipts/:receiptNumber',
     slots: '/admin/slots',
+    shifts: '/admin/shifts',
+    cash: '/admin/cash',
     history: '/admin/history',
     analytics: '/admin/analytics',
     reports: '/admin/reports',
@@ -36,8 +63,7 @@ export const PATHS = {
 export const ROLE_HOME: Record<UserRole, string> = {
   ADMIN: PATHS.admin.root,
   SECURITY_STAFF: PATHS.staff.root,
-  /** Placeholder until the Student / Campus Staff screens are built on the `/portal` API. */
-  PARKING_USER: '/portal',
+  PARKING_USER: PATHS.portal.root,
 };
 
 /** Links into the signed-in user's own area (pages shared by both roles). */

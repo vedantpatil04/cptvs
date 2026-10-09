@@ -121,3 +121,12 @@
     line-height: 1.65;
   }
 }
+
+@keyframes scan {
+  0%, 100% {
+    top: 5%;
+  }
+  50% {
+    top: 95%;
+  }
+}

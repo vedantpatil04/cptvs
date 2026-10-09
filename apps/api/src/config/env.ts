@@ -19,7 +19,22 @@ const originList = z
       Boolean,
     ),
   )
-  .pipe(z.array(z.url({ protocol: /^https?$/ })));
+  .pipe(
+    z.array(
+      z
+        .string()
+        .refine(
+          (origin) =>
+            origin !== '*' &&
+            (/^capacitor:\/\/[a-z0-9.-]+$/i.test(origin) ||
+              /^https?:\/\/[a-z0-9*.-]+(:\d+)?$/i.test(origin)),
+          {
+            message:
+              'Invalid origin format. Must be an http(s) or capacitor URL (wildcard subdomains allowed).',
+          },
+        ),
+    ),
+  );
 
 /** Comma-separated e-mail domains, e.g. `college.edu.in,staff.college.edu.in`. */
 const domainList = z

@@ -23,6 +23,15 @@ describe('parseEnv', () => {
       CORS_ORIGINS: 'https://a.example/, https://b.example ,https://a.example',
     });
     expect(env.CORS_ORIGINS).toEqual(['https://a.example', 'https://b.example']);
+
+    const mobileAndPreview = parseEnv({
+      ...base,
+      CORS_ORIGINS: 'https://*.vercel.app, capacitor://localhost',
+    });
+    expect(mobileAndPreview.CORS_ORIGINS).toEqual([
+      'https://*.vercel.app',
+      'capacitor://localhost',
+    ]);
   });
 
   it('rejects a short JWT secret', () => {

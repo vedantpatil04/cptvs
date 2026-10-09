@@ -16,8 +16,11 @@ export default defineConfig(({ command, mode }) => {
     if (!env[key]) process.env[key] = value;
   }
 
-  if (command === 'build' && mode !== 'test' && !env.VITE_API_URL) {
-    throw new Error('VITE_API_URL must be set when building the CPVTS web app.');
+  const rawApiUrl = (env.VITE_API_BASE_URL || env.VITE_API_URL || '').trim();
+  if (command === 'build' && mode !== 'test' && !rawApiUrl) {
+    throw new Error(
+      'VITE_API_BASE_URL (or VITE_API_URL) must be set when building the CPVTS web app.',
+    );
   }
 
   return {
@@ -57,6 +60,7 @@ export default defineConfig(({ command, mode }) => {
       setupFiles: ['./src/test/setup.ts'],
       include: ['src/**/*.test.{ts,tsx}'],
       env: {
+        VITE_API_BASE_URL: 'http://localhost:4000',
         VITE_API_URL: 'http://localhost:4000',
       },
     },

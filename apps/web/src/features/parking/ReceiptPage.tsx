@@ -162,7 +162,7 @@ export function ReceiptPage() {
   );
 }
 
-function ReceiptActions({ receipt }: { receipt: ReceiptView }) {
+export function ReceiptActions({ receipt }: { receipt: ReceiptView }) {
   const { t } = useTranslation();
   const rows = useReceiptRows(receipt);
   const qr = useQrDataUrl(receiptVerificationUrl(receipt.verificationReference), 360);

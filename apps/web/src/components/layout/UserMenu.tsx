@@ -57,14 +57,27 @@ export function UserMenu() {
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            {accountPath && (
+            {user.role === 'PARKING_USER' ? (
+              <DropdownMenuItem asChild>
+                <Link to="/portal/profile">
+                  <UserRound aria-hidden />
+                  {t('nav.profile')}
+                </Link>
+              </DropdownMenuItem>
+            ) : accountPath ? (
               <DropdownMenuItem asChild>
                 <Link to={accountPath}>
                   <UserRound aria-hidden />
                   {t('nav.account')}
                 </Link>
               </DropdownMenuItem>
-            )}
+            ) : null}
+            <DropdownMenuItem asChild>
+              <Link to="/help">
+                <span className="size-4 flex items-center justify-center font-bold text-xs border rounded-full">?</span>
+                {t('nav.help')}
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onSelect={() => setSignOutOpen(true)}>
               <LogOut aria-hidden />
               {t('auth.signOut')}
