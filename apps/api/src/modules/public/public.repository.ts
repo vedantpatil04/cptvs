@@ -38,6 +38,61 @@ export const publicRepository = {
     return [...totals.values()];
   },
 
+  /** Free and total slots per block and vehicle type, in active zones of active blocks. */
+  async countSlotsByBlock(db: DbClient = prisma) {
+    const [zones, groups] = await Promise.all([
+      db.parkingZone.findMany({
+        where: ACTIVE_ZONE,
+        select: {
+          id: true,
+          vehicleType: true,
+          block: { select: { code: true, name: true, sortOrder: true } },
+        },
+      }),
+      db.parkingSlot.groupBy({
+        by: ['zoneId', 'status'],
+        where: { zone: ACTIVE_ZONE, ...IN_SERVICE },
+        _count: { _all: true },
+      }),
+    ]);
+    const rows = new Map<
+      string,
+      {
+        blockCode: string;
+        blockName: string;
+        sortOrder: number;
+        vehicleType: VehicleType;
+        totalSlots: number;
+        availableSlots: number;
+      }
+    >();
+    for (const zone of zones) {
+      const key = `${zone.block.code}:${zone.vehicleType}`;
+      if (!rows.has(key)) {
+        rows.set(key, {
+          blockCode: zone.block.code,
+          blockName: zone.block.name,
+          sortOrder: zone.block.sortOrder,
+          vehicleType: zone.vehicleType,
+          totalSlots: 0,
+          availableSlots: 0,
+        });
+      }
+    }
+    const zoneKey = new Map(
+      zones.map((zone) => [zone.id, `${zone.block.code}:${zone.vehicleType}`] as const),
+    );
+    for (const group of groups) {
+      const row = rows.get(zoneKey.get(group.zoneId) ?? '');
+      if (!row) continue;
+      row.totalSlots += group._count._all;
+      if (group.status === 'AVAILABLE') row.availableSlots += group._count._all;
+    }
+    return [...rows.values()].sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.blockCode.localeCompare(b.blockCode),
+    );
+  },
+
   /** Active parking blocks with the vehicle types of their active zones. */
   findActiveBlocks(db: DbClient = prisma) {
     return db.parkingBlock.findMany({

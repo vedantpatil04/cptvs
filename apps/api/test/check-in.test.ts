@@ -343,6 +343,7 @@ describe('vehicle tracking', () => {
       occupied: 1,
       blocked: 1,
       held: 0,
+      reserved: 0,
     });
     const t01 = twoWheeler.slots.find((slot) => slot.code === 'T-01')!;
     expect(t01).toMatchObject({ status: 'OCCUPIED', occupant: { vehicleNumber: 'KA22AB1234' } });

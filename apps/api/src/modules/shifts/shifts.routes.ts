@@ -58,6 +58,15 @@ adminShiftsRouter.post(
   },
 );
 
+/** Removes a guard: deactivates the account and removes their upcoming shifts (not while on duty). */
+adminShiftsRouter.delete(
+  '/security-staff/:id',
+  validate({ params: idParams }),
+  async (req, res) => {
+    res.status(200).json(await securityStaffService.remove(String(req.params.id), context(req)));
+  },
+);
+
 adminShiftsRouter.post(
   '/security-staff/:id/password',
   validate({ params: idParams, body: resetPasswordRequestSchema }),

@@ -401,6 +401,7 @@ describe('live dashboard summary', () => {
       occupied: 2,
       blocked: 1,
       held: 0,
+      reserved: 0,
       occupancyPercent: 14.3,
     });
     expect(forAdmin.byVehicleType).toEqual([

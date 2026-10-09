@@ -456,6 +456,8 @@ describe('alerts and session timeline', () => {
       exitAt: new Date().toISOString(),
       durationHours: 4,
       fee: null,
+      exitCapturedAt: null,
+      timeAdjusted: false,
       receiptNumber: 'CPVTS-R-2026-8F3K2Q9M',
     };
     const timeline: SessionTimelineResponse = {

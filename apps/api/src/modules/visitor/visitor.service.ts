@@ -12,7 +12,6 @@ import type {
 
 import { config } from '../../config/index.js';
 import { prisma } from '../../db/prisma.js';
-import { campusHour } from '../../lib/campus-time.js';
 import { accountErrors } from '../accounts/accounts.errors.js';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';
@@ -104,7 +103,7 @@ export const visitorService = {
   /** A read-only preview of the amount due if the vehicle left now; nothing is recorded or reserved. */
   async quote(sessionId: string, request: RequestMeta): Promise<CheckoutQuote> {
     const { sessionNumber } = await loadSession(sessionId);
-    return checkoutService.quote({ sessionNumber, exitHour: campusHour() }, asVisitor(request), {
+    return checkoutService.quote({ sessionNumber }, asVisitor(request), {
       record: false,
     });
   },

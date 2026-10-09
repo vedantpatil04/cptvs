@@ -75,6 +75,8 @@ export const buildConfig = (env: Env) =>
       slotHoldMs: env.SLOT_HOLD_SECONDS * 1000,
       parkNowHoldMs: env.PARK_NOW_HOLD_SECONDS * 1000,
       exitCodeTtlSeconds: env.EXIT_CODE_TTL_SECONDS,
+      visitorHoldMs: env.VISITOR_HOLD_MINUTES * 60_000,
+      visitorMaxOpenReservations: env.VISITOR_MAX_OPEN_RESERVATIONS,
     }),
     alerts: Object.freeze({
       nearlyFullPercent: env.ALERT_NEARLY_FULL_PERCENT,

@@ -1,5 +1,10 @@
 import {
   activeSessionsQuerySchema,
+  adjustSessionTimeRequestSchema,
+  arrivalLookupRequestSchema,
+  releaseSlotReservationRequestSchema,
+  reserveSlotRequestSchema,
+  vipCheckInRequestSchema,
   cancelPaymentRequestSchema,
   checkInRequestSchema,
   checkoutQuoteRequestSchema,
@@ -25,12 +30,15 @@ import { alertsService } from './alerts.service.js';
 import { checkInService } from './check-in.service.js';
 import { checkoutService } from './checkout.service.js';
 import { exitCodeService } from './exit-code.service.js';
+import { exitTimeService } from './exit-time.service.js';
 import type { OperationContext } from './operation-context.js';
 import { qrCheckoutService } from './qr-checkout.service.js';
 import { receiptService } from './receipt.service.js';
 import { timelineService } from './timeline.service.js';
 import { trackingService } from './tracking.service.js';
 import { vehicleLookupService } from './vehicle-lookup.service.js';
+import { vipReservationService } from './vip-reservation.service.js';
+import { visitorArrivalService } from './visitor-arrival.service.js';
 
 /**
  * Who is acting and, for gate operations, under which duty shift (set by `resolveOperator`).
@@ -72,6 +80,92 @@ parkingRouter.post(
   validate({ body: checkInRequestSchema }),
   async (req, res) => {
     res.status(201).json(await checkInService.checkIn(req.body, context(req)));
+  },
+);
+
+// --- VIP / emergency slot reservations ------------------------------------------------
+// Security keeps one specific slot for an official guest or an emergency. Administrators can view
+// the reservations and their history; only Security reserves, releases or checks the VIP in.
+
+parkingRouter.get('/vip-reservations', anyRole, async (req, res) => {
+  res.status(200).json(await vipReservationService.list(req.query.history === 'true'));
+});
+
+parkingRouter.post(
+  '/vip-reservations',
+  security,
+  validate({ body: reserveSlotRequestSchema }),
+  async (req, res) => {
+    res
+      .status(201)
+      .json(
+        await vipReservationService.reserve(
+          req.body as Parameters<typeof vipReservationService.reserve>[0],
+          context(req),
+        ),
+      );
+  },
+);
+
+const vipParams = z.object({ id: z.uuid({ error: VALIDATION_MESSAGES.required }) });
+
+parkingRouter.post(
+  '/vip-reservations/:id/release',
+  security,
+  validate({ params: vipParams, body: releaseSlotReservationRequestSchema }),
+  async (req, res) => {
+    res
+      .status(200)
+      .json(
+        await vipReservationService.release(String(req.params.id), req.body, context(req)),
+      );
+  },
+);
+
+parkingRouter.post(
+  '/vip-reservations/:id/check-in',
+  security,
+  ...gateOperation,
+  validate({ params: vipParams, body: vipCheckInRequestSchema }),
+  async (req, res) => {
+    res
+      .status(201)
+      .json(
+        await vipReservationService.checkIn(
+          String(req.params.id),
+          req.body as Parameters<typeof vipReservationService.checkIn>[1],
+          context(req),
+        ),
+      );
+  },
+);
+
+// --- Visitor arrivals ---------------------------------------------------------------
+// A visitor reserved a space through the public "Park My Vehicle" request. Security verifies the
+// arrival and activates it: only then does a parking session (and its timer) start.
+
+parkingRouter.get('/arrivals/pending', security, async (_req, res) => {
+  res.status(200).json(await visitorArrivalService.pending());
+});
+
+parkingRouter.post(
+  '/arrivals/find',
+  security,
+  validate({ body: arrivalLookupRequestSchema }),
+  async (req, res) => {
+    res.status(200).json(await visitorArrivalService.find(req.body, context(req)));
+  },
+);
+
+parkingRouter.post(
+  '/arrivals/:reservationId/activate',
+  security,
+  ...gateOperation,
+  validate({ params: z.object({ reservationId: z.uuid({ error: VALIDATION_MESSAGES.required }) }) }),
+  async (req, res) => {
+    res
+      .status(201)
+      .json(await visitorArrivalService.activate(String(req.params.reservationId), context(req)));
   },
 );
 
@@ -173,6 +267,28 @@ parkingRouter.post(
   validate({ body: checkoutQuoteRequestSchema }),
   async (req, res) => {
     res.status(200).json(await checkoutService.quote(req.body, context(req)));
+  },
+);
+
+/**
+ * Security's audited correction of a session's entry and exit time before the final checkout.
+ * The reply is the session priced afresh from the corrected times; the client never supplies a fee.
+ */
+parkingRouter.post(
+  '/sessions/:sessionNumber/adjust-time',
+  anyRole,
+  ...gateOperation,
+  validate({ params: sessionParams, body: adjustSessionTimeRequestSchema }),
+  async (req, res) => {
+    const { sessionNumber } = req.params as z.infer<typeof sessionParams>;
+    const operation = context(req);
+    await exitTimeService.adjust(
+      sessionNumber,
+      req.body as z.infer<typeof adjustSessionTimeRequestSchema>,
+      operation,
+    );
+    const quote = await checkoutService.quote({ sessionNumber }, operation, { record: false });
+    res.status(200).json({ quote });
   },
 );
 

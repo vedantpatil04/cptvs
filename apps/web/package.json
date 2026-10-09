@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "build:android": "node scripts/prepare-android.mjs",
     "android:apk": "npm run build:android && node scripts/build-apk.mjs",
+    "android:apk:bundled": "node scripts/prepare-android.mjs --bundled && node scripts/build-apk.mjs --bundled",
     "pretypecheck": "npm run build -w @cpvts/shared",
     "typecheck": "tsc -b",
     "test": "vitest run",

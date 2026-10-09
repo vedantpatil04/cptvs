@@ -129,7 +129,12 @@ export const trackingQuerySchema = z.object({
  */
 export const checkoutQuoteRequestSchema = z.object({
   sessionNumber: sessionNumberSchema,
-  exitHour: hourSchema,
+  /**
+   * Optional manual override of the billable exit hour. The app leaves it out: the server uses the
+   * exit time it captured when the session was scanned at the exit gate (or that Security
+   * corrected), so the client never decides the exit time or the fee.
+   */
+  exitHour: hourSchema.optional(),
   vehicleNumber: vehicleNumberSchema.optional(),
   slotCode: slotCodeSchema.optional(),
   /**
@@ -154,6 +159,24 @@ export const scanCheckoutRequestSchema = z.object({
     .max(300, { error: VALIDATION_MESSAGES.tooLong }),
 });
 export type ScanCheckoutRequest = z.input<typeof scanCheckoutRequestSchema>;
+
+/**
+ * Security's audited correction of a session's recorded times before the final checkout. Times
+ * are instants (ISO 8601 with offset); the app shows and edits them on the campus clock. The
+ * fee is never sent: the server recalculates it from the corrected times.
+ */
+export const adjustSessionTimeRequestSchema = z.object({
+  entryAt: z.iso.datetime({ offset: true, error: VALIDATION_MESSAGES.invalidDate }),
+  exitAt: z.iso.datetime({ offset: true, error: VALIDATION_MESSAGES.invalidDate }),
+  reason: z
+    .string({ error: VALIDATION_MESSAGES.required })
+    .trim()
+    .min(3, { error: VALIDATION_MESSAGES.required })
+    .max(200, { error: VALIDATION_MESSAGES.tooLong }),
+  /** The guard confirmed the correction. */
+  confirm: z.literal(true, { error: VALIDATION_MESSAGES.required }),
+});
+export type AdjustSessionTimeRequest = z.input<typeof adjustSessionTimeRequestSchema>;
 
 /** Digits in the short exit code an owner can read out when the session QR cannot be scanned. */
 export const EXIT_CODE_LENGTH = 6;
@@ -207,7 +230,7 @@ export const cancelPaymentRequestSchema = z.object({ sessionNumber: sessionNumbe
 // Response types
 // ---------------------------------------------------------------------------
 
-export type SlotStatus = 'AVAILABLE' | 'HELD' | 'OCCUPIED' | 'BLOCKED';
+export type SlotStatus = 'AVAILABLE' | 'HELD' | 'OCCUPIED' | 'BLOCKED' | 'RESERVED';
 export type ParkingSessionStatus = 'ACTIVE' | 'COMPLETED';
 
 /**
@@ -264,6 +287,13 @@ export interface ParkingSessionView {
   currentDurationHours: number | null;
   /** Fee if the vehicle left at the current hour (authoritative fee engine); null if unavailable. */
   estimatedFee: FeeBreakdown | null;
+  /**
+   * The exit instant the server captured at the exit gate. While set on an ACTIVE session the
+   * timer is stopped and the live values above are those of this instant. Null otherwise.
+   */
+  exitCapturedAt: string | null;
+  /** True when Security corrected the entry and/or exit time (see the audit history). */
+  timeAdjusted: boolean;
   /** Final values from the finalized transaction (COMPLETED sessions only). */
   exitHour: number | null;
   exitAt: string | null;
@@ -341,6 +371,8 @@ export interface ScanCheckoutResponse {
   session: ParkingSessionView;
   /** The owner or visitor already marked the session "ready to leave". */
   exitRequested: boolean;
+  /** The exit instant captured by the server on the first exit scan; repeated scans return it unchanged. */
+  exitAt: string;
   checks: ScanChecks;
 }
 
@@ -377,6 +409,8 @@ export interface SlotCounts {
   blocked: number;
   /** Briefly reserved during allocation. */
   held: number;
+  /** Kept by Security for a VIP / emergency vehicle: never allocated, not counted as free. */
+  reserved?: number;
 }
 
 export interface ParkingMapZone {
@@ -408,8 +442,17 @@ export interface ParkingMapResponse {
   blocks: ParkingMapBlock[];
 }
 
+export interface AdjustSessionTimeResponse {
+  /** Fresh server-side pricing of the corrected times. */
+  quote: CheckoutQuote;
+}
+
 export interface CheckoutQuote {
   session: ParkingSessionView;
+  /** The exit instant this quote is priced for (captured at the gate, or corrected). */
+  exitAt: string;
+  /** True when Security corrected the entry and/or exit time. */
+  timeAdjusted: boolean;
   exitHour: number;
   durationHours: number;
   fee: FeeBreakdown;

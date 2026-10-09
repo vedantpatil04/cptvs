@@ -197,26 +197,41 @@ Any container platform (Fly.io, Railway, Cloud Run, ECS, a VM) can run these ima
 
 ## Android app
 
-The Android app is a Capacitor shell (`apps/web/android`) around the same React build that
-Vercel serves, talking to the same API. It ships the built web app inside the APK; the API
-URL is compiled in from `VITE_API_BASE_URL` at build time and is never `localhost`.
+The Android app is a Capacitor shell (`apps/web/android`) around the same React app that Vercel
+serves, talking to the same API. The API URL is compiled in from `VITE_API_BASE_URL` at build time
+and is never `localhost`.
 
 ```bash
 # JDK 21 (Android Studio's bundled JBR works) and the Android SDK (ANDROID_HOME) are required.
-npm run android:apk -w @cpvts/web
-# -> apps/web/android/app/build/outputs/apk/debug/app-debug.apk
+npm run android:apk -w @cpvts/web           # WebView opens https://cptvs-8v1z.vercel.app (default)
+npm run android:apk:bundled -w @cpvts/web   # web app bundled inside the APK (fallback)
+# -> apps/web/android/app/build/outputs/apk/debug/app-debug.apk (and app-debug-bundled.apk)
 ```
+
+- **Remote (default)**: the WebView opens the Vercel site, so UI updates ship by deploying to Vercel
+  with no new APK. Capacitor injects its native bridge into that page (the site is an allowed
+  origin), which is how the web app reaches the native QR scanner. Navigation is limited to the
+  site's host; if the page can not load (offline, server waking up) the app shows a bundled
+  "Try again" page that retries on its own. Change the site with `CPVTS_WEB_URL=https://...`.
+- **Bundled**: `CPVTS_WEB_URL=bundled` (or `android:apk:bundled`) ships the built app inside the APK.
+  Use it if a device's WebView does not support the native bridge for a remote origin. Trade-off:
+  every UI change needs a new APK, and the API must allow the `https://localhost` CORS origin.
+- Debug-signed only: there is no release signing configuration in the repository.
 
 `build:android` refuses to build when the API URL is missing, plain `http`, `localhost` or a
 private-network address (including the emulator alias `10.0.2.2`), and forces the validated URL
 into the bundle, so a developer's local `.env` can not leak into the APK.
 
-- **CORS**: the WebView is served from `https://localhost`. Add it to Render's `CORS_ORIGINS`
-  (together with the Vercel origin), otherwise the app can not call the API.
+- **CORS**: in remote mode the origin is the Vercel site, which is already allowed. The bundled build
+  is served from `https://localhost`: add it to Render's `CORS_ORIGINS` for that variant.
 - **Camera**: Security Staff scan the Parking Session QR with the native ML Kit scanner
   (Capacitor plugin `@capacitor-mlkit/barcode-scanning`). Android asks for the camera
   permission on first use; if it is refused the scanner offers the app settings, the 6-digit exit
   code and the manual lookup. In a browser the scanner uses the device camera and needs HTTPS.
+- **Visitor "Park My Vehicle"**: `VISITOR_HOLD_MINUTES` (default 15) is how long the server holds the
+  visitor's slot while they drive in, and `VISITOR_MAX_OPEN_RESERVATIONS` (default 10) caps open
+  reservations so the public form can not hoard the lot. Per-IP requests use the registration hourly
+  limit. The `visitor_reservations` migration is applied by `db:migrate:deploy`.
 - **Exit code**: `EXIT_CODE_TTL_SECONDS` (API, default 300) is how long the driver's 6-digit code
   works. A new migration (`exit_codes`) is applied by `db:migrate:deploy` on the next deploy.
 

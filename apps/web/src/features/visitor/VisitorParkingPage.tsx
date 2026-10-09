@@ -118,7 +118,7 @@ export function VisitorParkingPage() {
                 >
                   <Link to="/visitor/checkout">
                     <CreditCard className="size-4" />
-                    Check Out & Pay
+                    Ready to leave
                   </Link>
                 </Button>
               </div>

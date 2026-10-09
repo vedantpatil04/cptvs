@@ -11,6 +11,7 @@ export const PATHS = {
   },
   visitor: {
     root: '/visitor',
+    park: '/visitor/park',
     parking: '/visitor/parking',
     checkout: '/visitor/checkout',
     receipt: '/visitor/receipt',

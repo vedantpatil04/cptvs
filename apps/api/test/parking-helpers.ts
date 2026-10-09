@@ -123,6 +123,12 @@ export const parkingApi = (app: Express, token: string) => {
       request(app).get(`/api/v1/parking/sessions/${sessionNumber}`).set(auth),
     quote: (body: Record<string, unknown>) =>
       request(app).post('/api/v1/parking/checkouts/quote').set(auth).send(body),
+    /** Security's audited correction of a session's entry and exit time. */
+    adjustTime: (sessionNumber: string, body: Record<string, unknown>) =>
+      request(app)
+        .post(`/api/v1/parking/sessions/${sessionNumber}/adjust-time`)
+        .set(auth)
+        .send(body),
     createPayment: (body: Record<string, unknown>) =>
       request(app).post('/api/v1/parking/payments').set(auth).send(body),
     process: (paymentId: string, body: Record<string, unknown>) =>

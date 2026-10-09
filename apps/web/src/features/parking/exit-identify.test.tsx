@@ -1,5 +1,10 @@
-import type { ParkingSessionView, ScanCheckoutResponse } from '@cpvts/shared';
-import { screen } from '@testing-library/react';
+import type {
+  CheckoutQuote,
+  FeeBreakdown,
+  ParkingSessionView,
+  ScanCheckoutResponse,
+} from '@cpvts/shared';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,6 +67,8 @@ const session: ParkingSessionView = {
   exitAt: null,
   durationHours: null,
   fee: null,
+  exitCapturedAt: null,
+  timeAdjusted: false,
   receiptNumber: null,
 };
 
@@ -69,12 +76,39 @@ const verified = (matchedBy: ScanCheckoutResponse['matchedBy']): ScanCheckoutRes
   matchedBy,
   session,
   exitRequested: false,
+  exitAt: new Date().toISOString(),
   checks: {
     reference: true,
     sessionActive: true,
     vehicleMatchesSession: true,
     slotMatchesSession: true,
   },
+});
+
+const EXIT_AT = '2026-10-09T08:00:00.000Z'; // 13:30 on the campus clock
+
+const fee: FeeBreakdown = {
+  ownerCategory: 'STUDENT',
+  vehicleType: 'TWO_WHEELER',
+  durationHours: 4,
+  rule: { type: 'FREE_HOURS_THEN_HOURLY', freeHours: 2, hourlyRatePaise: 1000 },
+  lines: [
+    { kind: 'FREE', hours: 2 },
+    { kind: 'CHARGED', hours: 2, ratePaise: 1000, amountPaise: 2000 },
+  ],
+  totalPaise: 2000,
+};
+
+const stoppedSession: ParkingSessionView = { ...session, exitCapturedAt: EXIT_AT };
+
+const quoted = (overrides: Partial<CheckoutQuote> = {}): CheckoutQuote => ({
+  session: stoppedSession,
+  exitAt: EXIT_AT,
+  timeAdjusted: false,
+  exitHour: 13,
+  durationHours: 4,
+  fee,
+  ...overrides,
 });
 
 const rejection = (status: number, code: string) =>
@@ -88,10 +122,11 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('identifying the vehicle at the exit gate', () => {
   it('shows the server-verified vehicle after a QR scan, and completes nothing', async () => {
-    const scan = vi.fn(() => verified('ENTRY_QR'));
+    const scan = vi.fn(() => ({ ...verified('ENTRY_QR'), exitAt: EXIT_AT }));
     const fetchMock = mockApi({
       ...signInAs('SECURITY_STAFF'),
       'POST /parking/checkouts/scan': scan,
+      'POST /parking/checkouts/quote': () => quoted(),
     });
     renderAt('/staff/exit');
 
@@ -109,7 +144,106 @@ describe('identifying the vehicle at the exit gate', () => {
     // Scanning never creates a payment or finalizes a checkout.
     const paths = fetchMock.mock.calls.map(([url]) => String(url));
     expect(paths.some((path) => path.includes('/parking/payments'))).toBe(false);
-    expect(paths.some((path) => path.includes('/parking/checkouts/quote'))).toBe(false);
+  });
+
+  it('stops the timer at the captured exit time and shows the stay and the estimated fee', async () => {
+    const quote = vi.fn(() => quoted());
+    mockApi({
+      ...signInAs('SECURITY_STAFF'),
+      'POST /parking/checkouts/scan': () => ({
+        ...verified('ENTRY_QR'),
+        session: stoppedSession,
+        exitAt: EXIT_AT,
+      }),
+      'POST /parking/checkouts/quote': quote,
+    });
+    renderAt('/staff/exit');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Scan QR' }));
+    await userEvent.click(screen.getByRole('button', { name: 'simulate camera read' }));
+
+    // 10:00 → 13:30 is 3 h 30 min, shown frozen however long the guard looks at it.
+    const timers = await screen.findAllByRole('timer');
+    expect(timers[0]).toHaveTextContent('03:30:00');
+    expect(screen.getAllByText('Timer stopped').length).toBeGreaterThan(0);
+    expect(await screen.findByText('Pay ₹20')).toBeInTheDocument();
+    // No exit hour and no amount are ever sent: the server prices its own recorded times.
+    expect(quote).toHaveBeenCalledTimes(1);
+    expect(quote).toHaveBeenCalledWith({
+      sessionNumber: session.sessionNumber,
+      entryReference: session.entryReference,
+    });
+  });
+
+  it('lets Security correct the times with a reason and shows the fee the server recalculated', async () => {
+    const adjust = vi.fn(() => ({
+      quote: quoted({
+        timeAdjusted: true,
+        session: { ...stoppedSession, entryHour: 10, timeAdjusted: true },
+      }),
+    }));
+    mockApi({
+      ...signInAs('SECURITY_STAFF'),
+      'POST /parking/checkouts/scan': () => ({
+        ...verified('ENTRY_QR'),
+        session: stoppedSession,
+        exitAt: EXIT_AT,
+      }),
+      'POST /parking/checkouts/quote': () => quoted(),
+      [`POST /parking/sessions/${session.sessionNumber}/adjust-time`]: adjust,
+    });
+    renderAt('/staff/exit');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Scan QR' }));
+    await userEvent.click(screen.getByRole('button', { name: 'simulate camera read' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Adjust time' }));
+
+    const save = screen.getByRole('button', { name: 'Save corrected times' });
+    expect(save).toBeDisabled(); // nothing changed, no reason, not confirmed
+    fireEvent.change(screen.getByLabelText('Entry time'), {
+      target: { value: '2026-10-09T09:15' },
+    });
+    await userEvent.type(screen.getByLabelText('Reason for the correction'), 'Entry scan was late');
+    expect(save).toBeDisabled(); // not confirmed yet
+    await userEvent.click(screen.getByRole('checkbox'));
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    // The corrected times go to the server with the reason; the fee comes back from the server.
+    expect(adjust).toHaveBeenCalledTimes(1);
+    expect(adjust).toHaveBeenCalledWith({
+      entryAt: '2026-10-09T03:45:00.000Z',
+      exitAt: EXIT_AT,
+      reason: 'Entry scan was late',
+      confirm: true,
+    });
+    expect(await screen.findByText('Corrected')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save corrected times' })).not.toBeInTheDocument();
+  });
+
+  it('warns before saving a range the server would refuse', async () => {
+    mockApi({
+      ...signInAs('SECURITY_STAFF'),
+      'POST /parking/checkouts/scan': () => ({
+        ...verified('ENTRY_QR'),
+        session: stoppedSession,
+        exitAt: EXIT_AT,
+      }),
+      'POST /parking/checkouts/quote': () => quoted(),
+    });
+    renderAt('/staff/exit');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Scan QR' }));
+    await userEvent.click(screen.getByRole('button', { name: 'simulate camera read' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Adjust time' }));
+
+    fireEvent.change(screen.getByLabelText('Entry time'), {
+      target: { value: '2026-10-09T14:00' },
+    });
+    expect(
+      await screen.findByText('The entry time cannot be after the exit time.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save corrected times' })).toBeDisabled();
   });
 
   it('explains an invalid or expired QR and lets the operator scan again', async () => {

@@ -74,13 +74,13 @@ export function MyParkingPage() {
                 </div>
                 <h3 className="text-xl font-bold tracking-tight">No Active Parking Sessions</h3>
                 <p className="text-sm text-muted-foreground">
-                  None of your registered vehicles are currently parked on campus. Use Park Now to
+                  None of your registered vehicles are currently parked on campus. Use Park My Vehicle to
                   find an available parking slot instantly.
                 </p>
                 <Button asChild size="lg" className="gap-2">
                   <Link to="/portal/park-now">
                     <ParkingCircle className="size-4" />
-                    Park Now
+                    Park My Vehicle
                   </Link>
                 </Button>
               </div>

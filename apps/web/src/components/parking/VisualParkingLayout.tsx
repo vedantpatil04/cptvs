@@ -76,6 +76,7 @@ const zoneCounts = (zone: VisualZoneItem): SlotCountValues => {
     total: zone.counts.total,
     available: zone.counts.available,
     held: zone.counts.held ?? derived.held,
+    reserved: (zone.counts as { reserved?: number }).reserved ?? derived.reserved,
     occupied: zone.counts.occupied,
     blocked: zone.counts.blocked,
     disabled: derived.disabled,
@@ -88,14 +89,15 @@ const sumCounts = (list: SlotCountValues[]): SlotCountValues =>
       total: sum.total + counts.total,
       available: sum.available + counts.available,
       held: sum.held + counts.held,
+      reserved: sum.reserved + counts.reserved,
       occupied: sum.occupied + counts.occupied,
       blocked: sum.blocked + counts.blocked,
       disabled: sum.disabled + counts.disabled,
     }),
-    { total: 0, available: 0, held: 0, occupied: 0, blocked: 0, disabled: 0 },
+    { total: 0, available: 0, held: 0, reserved: 0, occupied: 0, blocked: 0, disabled: 0 },
   );
 
-const LEGEND: SlotTileState[] = ['AVAILABLE', 'HELD', 'OCCUPIED', 'BLOCKED', 'DISABLED'];
+const LEGEND: SlotTileState[] = ['AVAILABLE', 'HELD', 'OCCUPIED', 'RESERVED', 'BLOCKED', 'DISABLED'];
 
 /**
  * The parking layout: block → zone → slot tiles. Slot availability comes from the server; this

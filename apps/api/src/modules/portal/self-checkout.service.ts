@@ -1,6 +1,5 @@
 import type { CheckoutQuote, ExitCodeResponse, ExitRequestState } from '@cpvts/shared';
 
-import { campusHour } from '../../lib/campus-time.js';
 import { checkoutService } from '../parking/checkout.service.js';
 import { exitCodeService } from '../parking/exit-code.service.js';
 import { exitRequestService } from '../parking/exit-request.service.js';
@@ -27,7 +26,7 @@ export const selfCheckoutService = {
    */
   async quote(sessionNumber: string, context: OperationContext): Promise<CheckoutQuote> {
     await findOwnSession(context.actor.id, sessionNumber);
-    return checkoutService.quote({ sessionNumber, exitHour: campusHour() }, asOwner(context), {
+    return checkoutService.quote({ sessionNumber }, asOwner(context), {
       record: false,
     });
   },

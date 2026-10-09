@@ -35,6 +35,8 @@ const session: ParkingSessionView = {
   exitAt: null,
   durationHours: null,
   fee: null,
+  exitCapturedAt: null,
+  timeAdjusted: false,
   receiptNumber: null,
 };
 
@@ -146,7 +148,14 @@ describe('vehicle entry', () => {
 
 describe('vehicle exit', () => {
   it('finds the vehicle, previews the fee, runs the test payment and links the receipt', async () => {
-    const quote: CheckoutQuote = { session, exitHour: 13, durationHours: 4, fee };
+    const quote: CheckoutQuote = {
+      session,
+      exitAt: new Date().toISOString(),
+      timeAdjusted: false,
+      exitHour: 13,
+      durationHours: 4,
+      fee,
+    };
     const pending: PaymentView = {
       id: '11111111-1111-4111-8111-111111111111',
       transactionId: 'TXN-7F84K29MQA',
@@ -209,7 +218,7 @@ describe('vehicle exit', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Find vehicle' }));
     expect(await screen.findByText('Parked vehicle')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Calculate fee' }));
+    // The stay is priced as soon as the vehicle is identified; no exit hour is chosen by hand.
     const preview = await screen.findByText('Fee preview');
     const card = preview.closest('[data-slot=card]') as HTMLElement;
     expect(within(card).getByText('2 hours free')).toBeInTheDocument();
@@ -221,7 +230,6 @@ describe('vehicle exit', () => {
     // The identifier used to find the vehicle is re-verified by the server.
     expect(quoteHandler).toHaveBeenCalledWith({
       sessionNumber: session.sessionNumber,
-      exitHour: 13,
       vehicleNumber: 'KA22AB1234',
     });
 

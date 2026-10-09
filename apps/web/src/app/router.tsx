@@ -40,6 +40,7 @@ import { ReceiptVerificationPage } from '@/features/public/ReceiptVerificationPa
 import { VisitorAccessPage } from '@/features/visitor/VisitorAccessPage';
 import { VisitorCheckoutPage } from '@/features/visitor/VisitorCheckoutPage';
 import { VisitorParkingPage } from '@/features/visitor/VisitorParkingPage';
+import { VisitorParkPage } from '@/features/visitor/VisitorParkPage';
 import { VisitorReceiptPage } from '@/features/visitor/VisitorReceiptPage';
 
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -57,6 +58,7 @@ export const router = createBrowserRouter([
           { path: PATHS.help, element: <HelpPage /> },
           { path: PATHS.verify, element: <ReceiptVerificationPage /> },
           { path: PATHS.visitor.root, element: <VisitorAccessPage /> },
+          { path: PATHS.visitor.park, element: <VisitorParkPage /> },
           { path: PATHS.visitor.parking, element: <VisitorParkingPage /> },
           { path: PATHS.visitor.checkout, element: <VisitorCheckoutPage /> },
           { path: PATHS.visitor.receipt, element: <VisitorReceiptPage /> },

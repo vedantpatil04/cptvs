@@ -9,7 +9,7 @@ import type {
   UserDetail,
   UserListItem,
 } from '@cpvts/shared';
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -137,6 +137,8 @@ const mockConfirmation: ParkNowConfirmation = {
     exitAt: null,
     durationHours: null,
     fee: null,
+    exitCapturedAt: null,
+    timeAdjusted: false,
     receiptNumber: null,
   },
   allocation: {
@@ -230,14 +232,13 @@ describe('Student Verification & Park Now flow', () => {
     renderAt('/portal/park-now');
 
     // Scenario 1: Unverified Student sees verification requirement with neutral wording
-    expect(await screen.findByText('Verification Required')).toBeInTheDocument();
+    expect(await screen.findByText('Verification required')).toBeInTheDocument();
     expect(
       screen.getByText('Institutional identity verification is required before you can park.'),
     ).toBeInTheDocument();
 
-    // Verify vehicle selection and allocation are NOT shown while unverified
-    expect(screen.queryByText('1. Select Your Vehicle')).not.toBeInTheDocument();
-    expect(screen.queryByText('Allocate Best Slot Now')).not.toBeInTheDocument();
+    // Parking is not offered while unverified
+    expect(screen.queryByRole('button', { name: 'Park My Vehicle' })).not.toBeInTheDocument();
   });
 
   it('allows verified Student to select vehicle, allocate slot, and confirm active parking', async () => {
@@ -258,28 +259,25 @@ describe('Student Verification & Park Now flow', () => {
     renderAt('/portal/park-now');
 
     // Scenario 4 & 5: Student sees verified state and Park Now becomes available
-    expect(await screen.findByText('✓ Institutional identity verified')).toBeInTheDocument();
-    expect(await screen.findByText('1. Select Your Vehicle')).toBeInTheDocument();
+    const parkBtn = await screen.findByRole('button', { name: 'Park My Vehicle' });
 
-    // Scenario 6: Verified Student sees registered vehicle
+    // Scenario 6: Verified Student sees the registered vehicle, and no slot or block to choose
     expect(screen.getByText('KA01AB1234')).toBeInTheDocument();
     expect(screen.getByText('Campus Car')).toBeInTheDocument();
+    expect(parkBtn).toBeEnabled();
+    await user.click(parkBtn);
 
-    // Start Allocation
-    const allocateBtn = screen.getByRole('button', { name: /Allocate Best Slot Now/i });
-    expect(allocateBtn).toBeEnabled();
-    await user.click(allocateBtn);
-
-    // Shows allocated slot code and reason
-    expect(await screen.findByText('YOUR PARKING SPACE')).toBeInTheDocument();
-    expect(screen.getByText('WHY A-01?')).toBeInTheDocument();
+    // The server assigned the block and slot and holds it, with a visible countdown
+    expect(await screen.findByText('Your space is held')).toBeInTheDocument();
+    expect(screen.getByText('A-01')).toBeInTheDocument();
+    expect(screen.getByRole('timer')).toBeInTheDocument();
 
     // Confirm parking
-    const confirmBtn = screen.getByRole('button', { name: /Confirm & Check In/i });
+    const confirmBtn = screen.getByRole('button', { name: /Confirm and park in A-01/i });
     await user.click(confirmBtn);
 
     // Active Parking confirmation
-    expect(await screen.findByText('Parking Confirmed')).toBeInTheDocument();
+    expect(await screen.findByText("You're parked")).toBeInTheDocument();
     expect(screen.getAllByText('CPVTS-P-98765432').length).toBeGreaterThanOrEqual(1);
   });
 
@@ -300,17 +298,14 @@ describe('Student Verification & Park Now flow', () => {
     renderAt('/portal/park-now');
 
     // Initially unverified
-    expect(await screen.findByText('Verification Required')).toBeInTheDocument();
+    expect(await screen.findByText('Verification required')).toBeInTheDocument();
 
     // Scenario 2, 3, 4: Admin approves student, state updates to VERIFIED
     currentStatus = 'VERIFIED';
     window.dispatchEvent(new Event('focus'));
 
     // Student now sees verified state and Park Now flow becomes active
-    await waitFor(() => {
-      expect(screen.getByText('✓ Institutional identity verified')).toBeInTheDocument();
-    });
-    expect(await screen.findByText('1. Select Your Vehicle')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Park My Vehicle' })).toBeInTheDocument();
   });
 });
 

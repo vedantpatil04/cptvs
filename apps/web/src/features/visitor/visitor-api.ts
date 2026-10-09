@@ -13,6 +13,10 @@ import type {
   SessionTimelineResponse,
   VisitorAccessRequest,
   VisitorAccessResponse,
+  VisitorReservationCreated,
+  VisitorReservationRequest,
+  VisitorReservationStatusResponse,
+  VisitorReservationView,
 } from '@cpvts/shared';
 
 import { apiRequest } from '@/lib/api-client';
@@ -26,6 +30,20 @@ export const visitorApi = {
       body: data,
       authenticated: false,
     }),
+
+  /** "Park My Vehicle" without an account: the server assigns and holds the block and slot. */
+  reserve: (body: VisitorReservationRequest) =>
+    apiRequest<VisitorReservationCreated>('/public/visitor-reservations', {
+      method: 'POST',
+      body,
+      authenticated: false,
+    }),
+
+  reservation: (token: string) =>
+    apiRequest<VisitorReservationStatusResponse>('/visitor/reservation', { token }),
+
+  cancelReservation: (token: string) =>
+    apiRequest<VisitorReservationView>('/visitor/reservation', { method: 'DELETE', token }),
 
   session: (token: string) => apiRequest<ParkingSessionView>('/visitor/session', { token }),
 

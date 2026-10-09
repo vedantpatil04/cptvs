@@ -78,6 +78,32 @@ export const tokenService = {
     return { token, expiresAt: new Date(exp * 1000) };
   },
 
+  /**
+   * Grants a visitor access to their own reservation (and, once Security activates it, lets
+   * them obtain the session token). It has a different scope than a session token, so neither
+   * works where the other is expected.
+   */
+  issueReservationToken(reservationId: string): IssuedToken {
+    const token = jwt.sign({ scope: 'reservation' }, config.jwt.secret, {
+      algorithm: ALGORITHM,
+      subject: reservationId,
+      issuer: config.jwt.issuer,
+      audience: visitorAudience(),
+      expiresIn: config.accounts.visitorAccessSeconds,
+    });
+    const { exp } = jwt.decode(token) as { exp: number };
+    return { token, expiresAt: new Date(exp * 1000) };
+  },
+
+  /** Returns the reservation id a reservation token grants access to. */
+  verifyReservationToken(token: string): string {
+    const claims = verify(token, visitorAudience()) as { sub?: unknown; scope?: unknown };
+    if (typeof claims.sub !== 'string' || claims.scope !== 'reservation') {
+      throw unauthenticated('The access token is invalid.');
+    }
+    return claims.sub;
+  },
+
   /** Returns the parking session id a visitor token grants access to. */
   verifyVisitorToken(token: string): string {
     const claims = verify(token, visitorAudience()) as { sub?: unknown; scope?: unknown };

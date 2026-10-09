@@ -1,5 +1,17 @@
 import type {
+  ActivateArrivalResponse,
+  AdjustSessionTimeRequest,
+  AdjustSessionTimeResponse,
+  ReleaseSlotReservationRequest,
+  ReserveSlotRequest,
+  SlotReservationsResponse,
+  SlotReservationView,
+  VipCheckInRequest,
+  VipCheckInResponse,
   ActiveSessionsResponse,
+  ArrivalLookupRequest,
+  ArrivalResponse,
+  PendingArrivalsResponse,
   CheckInRequest,
   CheckInResponse,
   CheckoutQuote,
@@ -35,6 +47,42 @@ export const parkingApi = {
       body: { code },
     }),
 
+  /** VIP / emergency slot reservations (Security manages, Admin views). */
+  vipReservations: (includeHistory = false, signal?: AbortSignal) =>
+    apiRequest<SlotReservationsResponse>(
+      `/parking/vip-reservations${includeHistory ? '?history=true' : ''}`,
+      { signal },
+    ),
+
+  reserveSlot: (body: ReserveSlotRequest) =>
+    apiRequest<SlotReservationView>('/parking/vip-reservations', { method: 'POST', body }),
+
+  releaseSlot: (id: string, body: ReleaseSlotReservationRequest = {}) =>
+    apiRequest<SlotReservationView>(`/parking/vip-reservations/${encodeURIComponent(id)}/release`, {
+      method: 'POST',
+      body,
+    }),
+
+  vipCheckIn: (id: string, body: VipCheckInRequest) =>
+    apiRequest<VipCheckInResponse>(`/parking/vip-reservations/${encodeURIComponent(id)}/check-in`, {
+      method: 'POST',
+      body,
+    }),
+
+  /** Visitors who reserved a space and are waiting to be verified at the gate. */
+  pendingArrivals: (signal?: AbortSignal) =>
+    apiRequest<PendingArrivalsResponse>('/parking/arrivals/pending', { signal }),
+
+  findArrival: (body: ArrivalLookupRequest) =>
+    apiRequest<ArrivalResponse>('/parking/arrivals/find', { method: 'POST', body }),
+
+  /** Starts the real parking session for a verified arrival. */
+  activateArrival: (reservationId: string) =>
+    apiRequest<ActivateArrivalResponse>(
+      `/parking/arrivals/${encodeURIComponent(reservationId)}/activate`,
+      { method: 'POST' },
+    ),
+
   lookup: (vehicleNumber: string, signal?: AbortSignal) =>
     apiRequest<VehicleLookupResponse>(
       `/parking/vehicle-lookup?vehicleNumber=${encodeURIComponent(vehicleNumber)}`,
@@ -59,6 +107,13 @@ export const parkingApi = {
 
   quote: (body: CheckoutQuoteRequest) =>
     apiRequest<CheckoutQuote>('/parking/checkouts/quote', { method: 'POST', body }),
+
+  /** Security's audited correction of the recorded times; the reply is the fee priced afresh. */
+  adjustTime: (sessionNumber: string, body: AdjustSessionTimeRequest) =>
+    apiRequest<AdjustSessionTimeResponse>(`/parking/sessions/${sessionNumber}/adjust-time`, {
+      method: 'POST',
+      body,
+    }),
 
   createPayment: (body: CreatePaymentRequest) =>
     apiRequest<CreatePaymentResponse>('/parking/payments', { method: 'POST', body }),

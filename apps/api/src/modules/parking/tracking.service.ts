@@ -136,7 +136,14 @@ export const trackingService = {
         description: block.description,
         isActive: block.isActive,
         zones: block.zones.map((zone) => {
-          const counts: SlotCounts = { total: 0, available: 0, occupied: 0, blocked: 0, held: 0 };
+          const counts: SlotCounts = {
+            total: 0,
+            available: 0,
+            occupied: 0,
+            blocked: 0,
+            held: 0,
+            reserved: 0,
+          };
           const live = block.isActive && zone.isActive;
           // A disabled zone shows only the vehicles still parked in it.
           const shown = live ? zone.slots : zone.slots.filter((slot) => slot.status === 'OCCUPIED');
@@ -145,6 +152,7 @@ export const trackingService = {
             if (slot.status === 'AVAILABLE') counts.available += 1;
             else if (slot.status === 'OCCUPIED') counts.occupied += 1;
             else if (slot.status === 'BLOCKED') counts.blocked += 1;
+            else if (slot.status === 'RESERVED') counts.reserved = (counts.reserved ?? 0) + 1;
             else counts.held += 1;
 
             const session = slot.sessions[0];

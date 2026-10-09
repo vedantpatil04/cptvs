@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { useCurrentUser } from '@/features/auth/use-auth';
+import { VipReservationsPanel } from '@/features/parking/VipReservationsPanel';
 import { AlertsPanel } from '@/features/operations/AlertsPanel';
 import { securityShiftApi } from '@/features/shifts/shifts-api';
 import { useApiQuery } from '@/hooks/use-api-query';
@@ -113,6 +114,9 @@ export function StaffDashboardPage() {
           </ul>
         </nav>
 
+        {/* VIP / emergency slot reservations */}
+        <VipReservationsPanel />
+
         {/* Current Security Duty Shift */}
         {currentShift ? (
           <Card className="border-border shadow-xs">
@@ -184,7 +188,7 @@ export function StaffDashboardPage() {
 
                 <div className="p-3 rounded-lg border bg-card">
                   <span className="text-muted-foreground flex items-center gap-1 font-medium">
-                    <CreditCard className="size-3.5 text-blue-500" /> Digital Collections
+                    <CreditCard className="size-3.5 text-info" /> Digital Collections
                   </span>
                   <p className="text-base font-mono font-bold mt-1 text-foreground">
                     {format.paise(currentShift.cash.digitalPaise)}

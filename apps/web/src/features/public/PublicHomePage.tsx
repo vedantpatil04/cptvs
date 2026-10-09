@@ -1,41 +1,27 @@
-import {
-  ArrowDown,
-  ArrowRight,
-  CircleHelp,
-  Languages,
-  ParkingCircle,
-  QrCode,
-  Receipt,
-  RefreshCw,
-  Scale,
-  ShieldCheck,
-  Sparkles,
-  UserCheck,
-  Wallet,
-} from 'lucide-react';
+import type { PublicBlockAvailability, PublicOverviewResponse, VehicleType } from '@cpvts/shared';
+import { Bike, Car, LogIn, ParkingCircle, RefreshCw, Ticket } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
-import { PATHS } from '@/app/paths';
+import { PATHS, ROLE_HOME } from '@/app/paths';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
-import { LoadingState } from '@/components/feedback/LoadingState';
-import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
+import { BlockMapLink } from '@/components/parking/BlockMapLink';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { H2, Muted } from '@/components/ui/typography';
+import { Card, CardContent } from '@/components/ui/card';
 import { branding } from '@/config/branding';
 import { useAuth } from '@/features/auth/use-auth';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { errorMessage } from '@/lib/error-message';
+import { cn } from '@/lib/utils';
 
-import { AvailabilityCard } from './AvailabilityCard';
 import { FeeTable } from './FeeTable';
-import { ParkingLocations } from './ParkingLocations';
 import { fetchPublicOverview } from './public-api';
+
+const TYPE_ICON = { TWO_WHEELER: Bike, FOUR_WHEELER: Car } as const;
 
 function Section({
   id,
@@ -46,7 +32,7 @@ function Section({
 }: {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   action?: ReactNode;
   children: ReactNode;
 }) {
@@ -54,8 +40,10 @@ function Section({
     <section aria-labelledby={id} className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
-          <H2 id={id}>{title}</H2>
-          <Muted>{description}</Muted>
+          <h2 id={id} className="text-2xl font-bold tracking-tight">
+            {title}
+          </h2>
+          {description && <p className="max-w-2xl text-muted-foreground">{description}</p>}
         </div>
         {action}
       </div>
@@ -64,134 +52,169 @@ function Section({
   );
 }
 
+/** Free-space meter: a bar that is empty when the block is full. */
+function Meter({ available, total }: { available: number; total: number }) {
+  const share = total > 0 ? Math.round((available / total) * 100) : 0;
+  return (
+    <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
+      <div
+        className={cn('h-full rounded-full', available === 0 ? 'bg-destructive' : 'bg-brand')}
+        style={{
+          width: `${available === 0 ? 100 : Math.max(share, 4)}%`,
+          opacity: available === 0 ? 0.25 : 1,
+        }}
+      />
+    </div>
+  );
+}
+
+function LiveTotals({ overview }: { overview: PublicOverviewResponse | undefined }) {
+  const { t } = useTranslation();
+  const format = useFormatters();
+  return (
+    <div className="grid grid-cols-2 gap-3" aria-label={t('public.hero.liveNow')}>
+      {(overview?.availability ?? [null, null]).map((entry, index) => {
+        const type: VehicleType =
+          entry?.vehicleType ?? (index === 0 ? 'TWO_WHEELER' : 'FOUR_WHEELER');
+        const Icon = TYPE_ICON[type];
+        return (
+          <div key={type} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="flex items-center gap-2 text-sm text-sidebar-foreground/80">
+              <Icon className="size-4" aria-hidden />
+              {t(`vehicleTypes.${type}`)}
+            </p>
+            <p className="mt-2 text-5xl leading-none font-extrabold tabular-nums text-white">
+              {entry ? format.number(entry.availableSlots) : '–'}
+            </p>
+            <p className="mt-1.5 text-sm text-sidebar-foreground/70">
+              {entry
+                ? t('public.availability.ofTotal', { total: format.number(entry.totalSlots) })
+                : t('common.loading')}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function BlockRow({
+  row,
+  overview,
+}: {
+  row: PublicBlockAvailability;
+  overview: PublicOverviewResponse;
+}) {
+  const { t } = useTranslation();
+  const format = useFormatters();
+  const Icon = TYPE_ICON[row.vehicleType];
+  const location = overview.locations.find((entry) => entry.code === row.blockCode);
+  return (
+    <li className="space-y-3 rounded-xl border bg-card p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-semibold text-balance">{row.blockName}</p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Icon className="size-4 shrink-0" aria-hidden />
+            {t(`vehicleTypes.${row.vehicleType}`)}
+          </p>
+        </div>
+        <p className="shrink-0 text-right">
+          <span className="block text-3xl leading-none font-bold tabular-nums">
+            {format.number(row.availableSlots)}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {t('public.availability.freeOfTotal', { total: format.number(row.totalSlots) })}
+          </span>
+        </p>
+      </div>
+      <Meter available={row.availableSlots} total={row.totalSlots} />
+      <BlockMapLink coordinates={location?.coordinates ?? null} />
+    </li>
+  );
+}
+
 /**
- * Public landing page. Communicates CPVTS as a real, complete campus parking product.
- * Aggregate-only data: spaces available, locations, fees, how it works, and key benefits.
- * No private user or vehicle data is exposed.
+ * Public landing page. The one thing a visitor can do here is park: "Park My Vehicle" opens the
+ * guest flow, and the live free spaces (per block and vehicle category) come straight from the
+ * server. No private user or vehicle data is exposed.
  */
 export function PublicHomePage() {
   const { t } = useTranslation();
   const format = useFormatters();
   const { state } = useAuth();
-  const overview = useApiQuery(fetchPublicOverview);
+  const overview = useApiQuery(fetchPublicOverview, { refreshIntervalMs: 20_000 });
   useDocumentTitle(branding.productName);
 
+  const signedIn = state.status === 'authenticated' ? state.user : null;
+  const parkTo = signedIn
+    ? signedIn.role === 'PARKING_USER'
+      ? PATHS.portal.parkNow
+      : ROLE_HOME[signedIn.role]
+    : PATHS.visitor.park;
   const pending = overview.status === 'loading';
-  const failed =
-    overview.status === 'error' ? (
-      <ErrorState description={errorMessage(t, overview.error)} onRetry={overview.refetch} />
-    ) : null;
+  const data = overview.status === 'success' ? overview.data : undefined;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-sidebar via-sidebar to-sidebar/95 text-sidebar-foreground border-b border-sidebar-border">
-        {/* Subtle grid accent */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
-
-        <div className="relative mx-auto w-full max-w-6xl space-y-8 px-4 py-12 sm:px-6 sm:py-20">
-          <div className="space-y-4 max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-sidebar-border bg-sidebar-accent/30 px-3 py-1 text-xs font-semibold text-sidebar-accent-foreground backdrop-blur-xs">
-              <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>{branding.shortName} · Smart Campus Parking Platform</span>
-            </div>
-
-            <h1 className="text-4xl leading-tight font-extrabold tracking-tight text-balance text-sidebar-accent-foreground sm:text-6xl">
-              {branding.productName}
-            </h1>
-
-            <p className="text-xl font-medium text-sidebar-foreground/90">
+    <div className="flex flex-col bg-background text-foreground">
+      <section className="border-b border-white/10 bg-sidebar text-sidebar-foreground">
+        <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[1.15fr_1fr] lg:items-center">
+          <div className="space-y-5">
+            <p className="text-sm font-medium tracking-wide text-emerald-300/90">
               {branding.institutionName}
             </p>
-
-            <p className="text-base text-sidebar-muted-foreground leading-relaxed sm:text-lg">
-              {t('public.tagline')}
-            </p>
+            <h1 className="text-4xl leading-[1.05] font-extrabold tracking-tight text-balance text-white sm:text-5xl lg:text-6xl">
+              {t('public.hero.headline')}
+            </h1>
+            <p className="max-w-xl text-lg text-sidebar-foreground/80">{t('public.hero.body')}</p>
+            <div className="flex flex-col gap-3 pt-1 sm:flex-row">
+              <Button asChild variant="brand" size="lg" className="h-14 px-8 text-base">
+                <Link to={parkTo}>
+                  <ParkingCircle aria-hidden />
+                  {t('parkMyVehicle.cta')}
+                </Link>
+              </Button>
+              {!signedIn && (
+                <Button asChild variant="inverseOutline" size="lg" className="h-14 px-6 text-base">
+                  <Link to={PATHS.login}>
+                    <LogIn aria-hidden />
+                    {t('public.hero.studentStaff')}
+                  </Link>
+                </Button>
+              )}
+              {!signedIn && (
+                <Button asChild variant="inverseOutline" size="lg" className="h-14 px-6 text-base">
+                  <Link to={PATHS.visitor.root}>
+                    <Ticket aria-hidden />
+                    {t('public.hero.visitorPass')}
+                  </Link>
+                </Button>
+              )}
+            </div>
           </div>
-
-          {/* Quick Action Navigation Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2">
-            <a
-              href="#availability"
-              className="flex items-center justify-between p-4 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/20 hover:bg-sidebar-accent/40 text-sidebar-foreground transition-all hover:scale-[1.01] group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-primary/20 text-primary">
-                  <ArrowDown className="size-5" />
-                </div>
-                <div>
-                  <span className="text-sm font-bold block">{t('public.checkAvailability')}</span>
-                  <span className="text-xs text-sidebar-muted-foreground">Live bay status</span>
-                </div>
-              </div>
-              <ArrowRight className="size-4 text-sidebar-muted-foreground group-hover:translate-x-1 transition-transform" />
-            </a>
-
-            <Link
-              to={state.status === 'authenticated' ? PATHS.portal.root : PATHS.login}
-              className="flex items-center justify-between p-4 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/20 hover:bg-sidebar-accent/40 text-sidebar-foreground transition-all hover:scale-[1.01] group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-emerald-500/20 text-emerald-400">
-                  <UserCheck className="size-5" />
-                </div>
-                <div>
-                  <span className="text-sm font-bold block">{t('public.portalLogin')}</span>
-                  <span className="text-xs text-sidebar-muted-foreground">Students & Staff</span>
-                </div>
-              </div>
-              <ArrowRight className="size-4 text-sidebar-muted-foreground group-hover:translate-x-1 transition-transform" />
-            </Link>
-
-            <Link
-              to={PATHS.visitor.root}
-              className="flex items-center justify-between p-4 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/20 hover:bg-sidebar-accent/40 text-sidebar-foreground transition-all hover:scale-[1.01] group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-amber-500/20 text-amber-400">
-                  <ParkingCircle className="size-5" />
-                </div>
-                <div>
-                  <span className="text-sm font-bold block">{t('public.visitorAccess')}</span>
-                  <span className="text-xs text-sidebar-muted-foreground">Slip & QR Pass</span>
-                </div>
-              </div>
-              <ArrowRight className="size-4 text-sidebar-muted-foreground group-hover:translate-x-1 transition-transform" />
-            </Link>
-
-            <Link
-              to={PATHS.login}
-              className="flex items-center justify-between p-4 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/20 hover:bg-sidebar-accent/40 text-sidebar-foreground transition-all hover:scale-[1.01] group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-sky-500/20 text-sky-400">
-                  <ShieldCheck className="size-5" />
-                </div>
-                <div>
-                  <span className="text-sm font-bold block">{t('public.adminStaffLogin')}</span>
-                  <span className="text-xs text-sidebar-muted-foreground">Security & Gate</span>
-                </div>
-              </div>
-              <ArrowRight className="size-4 text-sidebar-muted-foreground group-hover:translate-x-1 transition-transform" />
-            </Link>
+          <div className="space-y-2">
+            <p className="flex items-center gap-2 text-sm font-medium text-sidebar-foreground/80">
+              <span className="relative flex size-2.5">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                <span className="relative inline-flex size-2.5 rounded-full bg-emerald-400" />
+              </span>
+              {t('public.hero.liveNow')}
+            </p>
+            <LiveTotals overview={data} />
           </div>
         </div>
       </section>
 
-      {/* Main Content Area */}
-      <main className="flex-1 mx-auto w-full max-w-6xl space-y-16 px-4 py-12 sm:px-6">
-        {/* Section 1: Live Parking Availability */}
+      <main className="mx-auto w-full max-w-6xl flex-1 space-y-14 px-4 py-10 sm:px-6 sm:py-14">
         <Section
           id="availability"
-          title={t('public.availability.title')}
-          description={t('public.availability.description')}
+          title={t('public.availability.byBlockTitle')}
+          description={t('public.availability.byBlockDescription')}
           action={
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {overview.status === 'success' && (
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              {data && (
                 <span>
-                  {t('public.availability.lastUpdated', {
-                    time: format.time(overview.data.generatedAt),
-                  })}
+                  {t('public.availability.lastUpdated', { time: format.time(data.generatedAt) })}
                 </span>
               )}
               <Button variant="outline" size="sm" onClick={overview.refetch} disabled={pending}>
@@ -201,217 +224,75 @@ export function PublicHomePage() {
             </div>
           }
         >
-          {pending && <LoadingState />}
-          {failed}
-          {overview.status === 'success' && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {overview.data.availability.map((entry) => (
-                <AvailabilityCard key={entry.vehicleType} availability={entry} />
-              ))}
-            </div>
+          {pending && <div className="h-40 animate-pulse rounded-xl border bg-muted" aria-hidden />}
+          {overview.status === 'error' && (
+            <ErrorState description={errorMessage(t, overview.error)} onRetry={overview.refetch} />
           )}
+          {data &&
+            (data.blockAvailability.length > 0 ? (
+              <ul className="grid gap-3 lg:grid-cols-2">
+                {data.blockAvailability.map((row) => (
+                  <BlockRow key={`${row.blockCode}:${row.vehicleType}`} row={row} overview={data} />
+                ))}
+              </ul>
+            ) : (
+              <EmptyState icon={ParkingCircle} title={t('public.availability.notConfigured')} />
+            ))}
         </Section>
 
-        {/* Section 2: How CPVTS Works */}
-        <section aria-labelledby="how-it-works" className="space-y-6">
-          <div className="space-y-1 text-center max-w-2xl mx-auto">
-            <H2 id="how-it-works">{t('public.howItWorksTitle')}</H2>
-            <Muted>{t('public.howItWorksSubtitle')}</Muted>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-            <Card className="border-border shadow-xs hover:border-primary/50 transition-colors">
-              <CardHeader className="pb-2">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary mb-2">
-                  <UserCheck className="size-5" />
-                </div>
-                <CardTitle className="text-base font-bold">{t('public.step1Title')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {t('public.step1Desc')}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border shadow-xs hover:border-primary/50 transition-colors">
-              <CardHeader className="pb-2">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 mb-2">
-                  <Sparkles className="size-5" />
-                </div>
-                <CardTitle className="text-base font-bold">{t('public.step2Title')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {t('public.step2Desc')}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border shadow-xs hover:border-primary/50 transition-colors">
-              <CardHeader className="pb-2">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 mb-2">
-                  <QrCode className="size-5" />
-                </div>
-                <CardTitle className="text-base font-bold">{t('public.step3Title')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {t('public.step3Desc')}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border shadow-xs hover:border-primary/50 transition-colors">
-              <CardHeader className="pb-2">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 mb-2">
-                  <Receipt className="size-5" />
-                </div>
-                <CardTitle className="text-base font-bold">{t('public.step4Title')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {t('public.step4Desc')}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        {/* Section 3: Parking Locations & Blocks */}
-        <Section
-          id="locations"
-          title={t('public.locations.title')}
-          description={t('public.locations.description')}
-        >
-          {pending && <LoadingState />}
-          {failed}
-          {overview.status === 'success' && (
-            <ParkingLocations locations={overview.data.locations} />
-          )}
-        </Section>
-
-        {/* Section 4: Official Fee Table */}
         <Section
           id="fees"
           title={t('public.fees.title')}
           description={t('public.fees.description')}
         >
-          {pending && <LoadingState />}
-          {failed}
-          {overview.status === 'success' &&
-            (overview.data.feeSchedule ? (
-              <Card className="py-2">
-                <CardContent className="px-2 sm:px-4">
-                  <FeeTable schedule={overview.data.feeSchedule} />
-                </CardContent>
-              </Card>
-            ) : (
-              <EmptyState icon={Wallet} title={t('public.fees.notConfigured')} />
-            ))}
+          {data?.feeSchedule ? (
+            <Card className="py-2">
+              <CardContent className="px-2 sm:px-4">
+                <FeeTable schedule={data.feeSchedule} />
+              </CardContent>
+            </Card>
+          ) : (
+            data && <EmptyState icon={ParkingCircle} title={t('public.fees.notConfigured')} />
+          )}
         </Section>
 
-        {/* Section 5: Key Platform Benefits */}
-        <section aria-labelledby="key-benefits" className="space-y-6">
-          <div className="space-y-1 text-center max-w-2xl mx-auto">
-            <H2 id="key-benefits">{t('public.benefitsTitle')}</H2>
-            <Muted>{t('public.benefitsSubtitle')}</Muted>
-          </div>
+        <Section id="how-it-works" title={t('public.howItWorksTitle')}>
+          <ol className="grid gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-2 lg:grid-cols-4">
+            {(['step1', 'step2', 'step3', 'step4'] as const).map((step, index) => (
+              <li key={step} className="space-y-1.5 bg-card p-5">
+                <span className="grid size-8 place-items-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                  {index + 1}
+                </span>
+                <h3 className="pt-1 font-semibold">{t(`public.${step}Title`)}</h3>
+                <p className="text-sm text-muted-foreground">{t(`public.${step}Desc`)}</p>
+              </li>
+            ))}
+          </ol>
+        </Section>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-            <div className="rounded-xl border bg-card p-5 space-y-2">
-              <Scale className="size-6 text-primary" />
-              <h4 className="font-bold text-sm">{t('public.b1Title')}</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">{t('public.b1Desc')}</p>
-            </div>
-
-            <div className="rounded-xl border bg-card p-5 space-y-2">
-              <ShieldCheck className="size-6 text-emerald-600" />
-              <h4 className="font-bold text-sm">{t('public.b2Title')}</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">{t('public.b2Desc')}</p>
-            </div>
-
-            <div className="rounded-xl border bg-card p-5 space-y-2">
-              <Wallet className="size-6 text-amber-600" />
-              <h4 className="font-bold text-sm">{t('public.b3Title')}</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">{t('public.b3Desc')}</p>
-            </div>
-
-            <div className="rounded-xl border bg-card p-5 space-y-2">
-              <Languages className="size-6 text-sky-600" />
-              <h4 className="font-bold text-sm">{t('public.b4Title')}</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">{t('public.b4Desc')}</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 6: Help & Privacy */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CircleHelp className="size-5 text-primary" aria-hidden />
-                {t('public.helpCard.title')}
-              </CardTitle>
-              <CardDescription>{t('public.helpCard.description')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild variant="outline">
-                <Link to={PATHS.help}>{t('public.helpCard.action')}</Link>
-              </Button>
-            </CardContent>
-          </Card>
-
-          <div className="flex items-start gap-3 rounded-xl border bg-card p-6 text-sm text-muted-foreground">
-            <ShieldCheck className="size-5 shrink-0 text-success" aria-hidden />
-            <p>{t('public.privacyNote')}</p>
-          </div>
-        </div>
+        <p className="flex items-start gap-3 rounded-xl border bg-card p-5 text-sm text-muted-foreground">
+          {t('public.privacyNote')}
+        </p>
       </main>
 
-      {/* Product Footer */}
-      <footer className="border-t bg-muted/30 mt-16 text-xs text-muted-foreground">
-        <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 space-y-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-6">
-            <div className="space-y-1">
-              <span className="font-bold text-sm text-foreground">{branding.productName}</span>
-              <p className="text-xs">{branding.institutionName} · {t('public.footerTagline')}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <LanguageSwitcher />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-4 text-[11px]">
-            <div className="flex flex-wrap gap-4">
-              <a href="#availability" className="hover:text-foreground">
-                {t('public.availability.title')}
-              </a>
-              <a href="#locations" className="hover:text-foreground">
-                {t('public.locations.title')}
-              </a>
-              <a href="#fees" className="hover:text-foreground">
-                {t('public.fees.title')}
-              </a>
-              <Link to={PATHS.visitor.root} className="hover:text-foreground">
-                {t('public.visitorAccess')}
-              </Link>
-              <Link to={PATHS.help} className="hover:text-foreground">
-                {t('nav.help')}
-              </Link>
-              <Link to={PATHS.login} className="hover:text-foreground">
-                {t('auth.signIn')}
-              </Link>
-              <Link to={PATHS.register.student} className="hover:text-foreground">
-                Register Student
-              </Link>
-            </div>
-            <span>
-              © {new Date().getFullYear()} {branding.institutionName}. {t('public.footerCopyright')}
-            </span>
+      <nav aria-label={t('nav.mainNavigation')} className="border-t bg-card">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-5 text-sm text-muted-foreground sm:px-6">
+          <span>
+            © {new Date().getFullYear()} {branding.institutionName}. {t('public.footerCopyright')}
+          </span>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link to={PATHS.help} className="hover:text-foreground">
+              {t('nav.help')}
+            </Link>
+            <Link to={PATHS.login} className="hover:text-foreground">
+              {t('auth.signIn')}
+            </Link>
+            <Link to={PATHS.register.student} className="hover:text-foreground">
+              {t('public.hero.register')}
+            </Link>
           </div>
         </div>
-      </footer>
+      </nav>
     </div>
   );
 }

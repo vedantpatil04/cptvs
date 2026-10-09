@@ -196,9 +196,9 @@ export function AdminCashPage() {
 
             <Card className="p-4 bg-muted/20 border-border">
               <span className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
-                <CreditCard className="size-4 text-blue-500" /> Digital Collections
+                <CreditCard className="size-4 text-info" /> Digital Collections
               </span>
-              <p className="text-xl font-bold font-mono mt-1 text-blue-600 dark:text-blue-400">
+              <p className="text-xl font-bold font-mono mt-1 text-info">
                 {format.paise(summary.totals.digitalPaise)}
               </p>
               <span className="text-[11px] text-muted-foreground">Simulated UPI & Cards</span>
@@ -426,7 +426,7 @@ export function AdminCashPage() {
                       calculatedDifference === 0
                         ? 'text-emerald-600'
                         : calculatedDifference > 0
-                          ? 'text-blue-600'
+                          ? 'text-info'
                           : 'text-destructive'
                     }`}
                   >

@@ -55,6 +55,16 @@ export const publicService = {
       getLocations(),
       feeScheduleService.find(),
     ]);
-    return { generatedAt: new Date().toISOString(), availability, locations, feeSchedule };
+    // getAvailability released lapsed holds first, so these counts are current too.
+    const blockAvailability = (await publicRepository.countSlotsByBlock()).map(
+      ({ sortOrder: _sortOrder, ...row }) => row,
+    );
+    return {
+      generatedAt: new Date().toISOString(),
+      availability,
+      locations,
+      blockAvailability,
+      feeSchedule,
+    };
   },
 };

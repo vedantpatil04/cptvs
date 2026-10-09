@@ -5,9 +5,11 @@ import type { z } from 'zod';
 import { requestMeta } from '../../lib/request-context.js';
 import { unauthenticated } from '../../lib/errors.js';
 import { parkingErrors } from '../parking/parking.errors.js';
+import { authenticateReservation } from '../../middleware/authenticate-reservation.js';
 import { authenticateVisitor } from '../../middleware/authenticate-visitor.js';
 import { visitorAccessRateLimiter } from '../../middleware/rate-limit.js';
 import { validate } from '../../middleware/validate.js';
+import { visitorReservationService } from './visitor-reservation.service.js';
 import { visitorService } from './visitor.service.js';
 
 const sessionId = (req: Request): string => {
@@ -38,6 +40,23 @@ visitorRouter.post(
       );
   },
 );
+
+/**
+ * The visitor's own reservation (created through the public "Park My Vehicle" request). The
+ * reservation token reaches that one reservation only; once Security has activated the arrival
+ * the status also carries a normal session token for everything below.
+ */
+visitorRouter.get('/reservation', authenticateReservation, async (req, res) => {
+  const id = req.reservation?.reservationId;
+  if (!id) throw unauthenticated();
+  res.status(200).json(await visitorReservationService.status(id));
+});
+
+visitorRouter.delete('/reservation', authenticateReservation, async (req, res) => {
+  const id = req.reservation?.reservationId;
+  if (!id) throw unauthenticated();
+  res.status(200).json(await visitorReservationService.cancel(id, requestMeta(req)));
+});
 
 visitorRouter.use(authenticateVisitor);
 

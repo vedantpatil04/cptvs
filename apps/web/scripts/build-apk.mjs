@@ -1,10 +1,14 @@
 // Builds the debug APK with the Gradle wrapper of the Capacitor Android project and verifies
 // that the artifact exists. Run via `npm run android:apk` (which syncs the web build first).
+// `--bundled` additionally keeps a copy as app-debug-bundled.apk so it is not overwritten by
+// the default (remote) build.
 /* eslint-disable no-console */
 /* global process, console */
 import { spawnSync } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
+
+const bundled = process.argv.includes('--bundled');
 
 const androidDir = path.resolve('android');
 if (!existsSync(androidDir)) {
@@ -23,10 +27,16 @@ if (result.status !== 0) {
   process.exit(result.status ?? 1);
 }
 
-const apk = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+const outputs = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug');
+let apk = path.join(outputs, 'app-debug.apk');
 if (!existsSync(apk)) {
   console.error(`[android] Gradle reported success but ${apk} does not exist.`);
   process.exit(1);
+}
+if (bundled) {
+  const copy = path.join(outputs, 'app-debug-bundled.apk');
+  copyFileSync(apk, copy);
+  apk = copy;
 }
 const megabytes = (statSync(apk).size / 1024 / 1024).toFixed(1);
 console.log(`[android] Debug APK built: ${apk} (${megabytes} MB)`);

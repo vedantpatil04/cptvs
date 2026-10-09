@@ -497,7 +497,7 @@ describe('assigning shifts and the daily roster', () => {
     expect(((await admin.get('/admin/shifts/roster')).body as RosterResponse).date).toBe(DAY);
   });
 
-  it('corrects a shift: gate and note any time, the window while it is open, the start only before check-in', async () => {
+  it('corrects a shift: gate and note any time, and its times (start and end) until it is finished', async () => {
     const shift = await assigned('Morning');
     const edited = await admin.patch(`/admin/shifts/${shift.id}`, {
       gate: 'North Gate',
@@ -526,17 +526,26 @@ describe('assigning shifts and the daily roster', () => {
     });
     expect(errorCode(into)).toBe('SHIFT_CONFLICT');
 
-    // Once checked in, the end can still be corrected (extended or cut), the start cannot.
+    // Once checked in, both ends can still be corrected while the window covers the present.
     clock('09:30');
     await as(guardUser).post('/security/shift/check-in', {});
     const extended = await admin.patch(`/admin/shifts/${shift.id}`, {
       endsAt: instant('15:45').toISOString(),
     });
     expect(extended.status).toBe(200);
-    const late = await admin.patch(`/admin/shifts/${shift.id}`, {
+    const earlier = await admin.patch(`/admin/shifts/${shift.id}`, {
       startsAt: instant('08:00').toISOString(),
     });
-    expect(errorCode(late)).toBe('SHIFT_INVALID_STATE');
+    expect(earlier.status).toBe(200);
+    // A guard on duty can not be given a start in the future, nor a window that has already ended.
+    const future = await admin.patch(`/admin/shifts/${shift.id}`, {
+      startsAt: instant('11:00').toISOString(),
+    });
+    expect(errorCode(future)).toBe('SHIFT_INVALID_STATE');
+    const over = await admin.patch(`/admin/shifts/${shift.id}`, {
+      endsAt: instant('09:00').toISOString(),
+    });
+    expect(errorCode(over)).toBe('SHIFT_INVALID_STATE');
     expect(
       errorCode(
         await admin.patch('/admin/shifts/00000000-0000-4000-8000-000000000000', { gate: 'x' }),
@@ -552,7 +561,7 @@ describe('assigning shifts and the daily roster', () => {
     expect(errorCode(finished)).toBe('SHIFT_INVALID_STATE');
   });
 
-  it('removes a shift nobody started, and nothing else', async () => {
+  it('removes a shift, also after it was allotted and started, but never a finished one', async () => {
     const shift = await assigned('Morning');
     const removed = await admin.delete(`/admin/shifts/${shift.id}`);
     expect(removed.status).toBe(204);
@@ -561,12 +570,44 @@ describe('assigning shifts and the daily roster', () => {
     const started = await assigned('Morning');
     clock('08:30');
     await as(guardUser).post('/security/shift/check-in', {});
-    expect(errorCode(await admin.delete(`/admin/shifts/${started.id}`))).toBe(
+    // Started but nothing recorded yet: it can still be removed.
+    expect((await admin.delete(`/admin/shifts/${started.id}`)).status).toBe(204);
+    expect(await prisma.securityShift.count()).toBe(0);
+
+    // A finished shift is a record.
+    const finishedShift = await assigned('Evening');
+    clock('16:30');
+    await as(guardUser).post('/security/shift/check-in', {});
+    await as(guardUser).post('/security/shift/check-out');
+    expect(errorCode(await admin.delete(`/admin/shifts/${finishedShift.id}`))).toBe(
       'SHIFT_INVALID_STATE',
     );
     expect(
       errorCode(await admin.delete('/admin/shifts/00000000-0000-4000-8000-000000000000')),
     ).toBe('SHIFT_NOT_FOUND');
+  });
+
+  it('removes a guard: the account is deactivated and upcoming shifts go, but not while on duty', async () => {
+    const shift = await assigned('Morning');
+    clock('08:30');
+    await as(guardUser).post('/security/shift/check-in', {});
+    expect(errorCode(await admin.delete(`/admin/security-staff/${guardUser.id}`))).toBe(
+      'SHIFT_INVALID_STATE',
+    );
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: guardUser.id } })).isActive).toBe(true);
+
+    await as(guardUser).post('/security/shift/check-out');
+    const evening = await assigned('Evening');
+    const removed = await admin.delete(`/admin/security-staff/${guardUser.id}`);
+    expect(removed.status).toBe(200);
+    expect(removed.body).toMatchObject({ id: guardUser.id, isActive: false });
+    expect(await prisma.securityShift.findUnique({ where: { id: evening.id } })).toBeNull();
+    // The shift they worked stays on record.
+    expect(await prisma.securityShift.findUnique({ where: { id: shift.id } })).not.toBeNull();
+    expect(await prisma.auditLog.count({ where: { action: 'SECURITY_STAFF_REMOVED' } })).toBe(1);
+    expect(
+      errorCode(await admin.delete('/admin/security-staff/00000000-0000-4000-8000-000000000000')),
+    ).toBe('SECURITY_STAFF_NOT_FOUND');
   });
 
   it('keeps the shift history filterable', async () => {

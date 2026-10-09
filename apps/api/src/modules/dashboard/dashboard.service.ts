@@ -23,14 +23,17 @@ const summarise = (counts: SlotStatusCount[]): OccupancySummary => {
   const occupied = of('OCCUPIED');
   const blocked = of('BLOCKED');
   const held = of('HELD');
-  const total = available + occupied + blocked + held;
-  const usable = total - blocked;
+  const reserved = of('RESERVED');
+  const total = available + occupied + blocked + held + reserved;
+  // Blocked and VIP-reserved slots are not usable capacity for the public.
+  const usable = total - blocked - reserved;
   return {
     total,
     available,
     occupied,
     blocked,
     held,
+    reserved,
     occupancyPercent: usable > 0 ? Math.round(((occupied + held) / usable) * 1000) / 10 : 0,
   };
 };

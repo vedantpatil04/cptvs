@@ -21,6 +21,7 @@ import { notificationService } from '../notifications/notification.service.js';
 import { calculateDurationHours, calculateFee } from '../fees/fee-engine.js';
 import { feeScheduleService } from '../fees/fee-schedule.service.js';
 import { shiftErrors } from '../shifts/shift.errors.js';
+import { exitTimeService } from './exit-time.service.js';
 import { auditRejection, channelMetadata, type ActorContext } from './operation-context.js';
 import { parkingErrors } from './parking.errors.js';
 import { toPaymentView, toReceiptView, toSessionView } from './parking.mappers.js';
@@ -32,7 +33,8 @@ import {
 
 export interface CheckoutRequest {
   sessionNumber: string;
-  exitHour: number;
+  /** Manual override of the billable exit hour; the app omits it and the server's exit time is used. */
+  exitHour?: number;
   /** Optional identifiers the operator used; each must match the session. */
   vehicleNumber?: string;
   slotCode?: string;
@@ -62,13 +64,20 @@ const referenceOf = (scanned: string): string | null => {
   return parseEntryQrPayload(text) ?? (OPAQUE_REFERENCE_PATTERN.test(text) ? text : null);
 };
 
+/** Security (or an administrator) at the gate, as opposed to an owner's or visitor's own view. */
+const isGate = (context: ActorContext): boolean => !context.channel && context.actor !== null;
+
 /**
- * Verifies the session and the operator's identifiers, validates the exit hour
- * and prices the stay with the authoritative fee engine. No state changes.
+ * Verifies the session and the operator's identifiers and prices the stay with the
+ * authoritative fee engine. The exit time is the server's: the instant captured when the session
+ * was scanned at the gate (or that Security corrected), and — if the gate reaches checkout some
+ * other way — captured now (`capture`). An owner's or visitor's preview never captures, it just
+ * shows the amount at the current hour.
  */
 const prepareCheckout = async (
   request: CheckoutRequest,
   context: ActorContext,
+  { capture = false }: { capture?: boolean } = {},
 ): Promise<PreparedCheckout> => {
   const session = await parkingRepository.findSessionByNumber(request.sessionNumber);
   if (!session) throw parkingErrors.sessionNotFound();
@@ -112,14 +121,20 @@ const prepareCheckout = async (
     }
   }
 
+  const capturedAt =
+    session.exitCapturedAt ??
+    (capture ? await exitTimeService.capture(session, 'CHECKOUT', context) : null);
+  const exitAt = capturedAt ?? new Date();
+  const exitHour = request.exitHour ?? campusHour(exitAt);
+
   let durationHours: number;
   try {
-    durationHours = calculateDurationHours(session.entryHour, request.exitHour);
+    durationHours = calculateDurationHours(session.entryHour, exitHour);
   } catch (error) {
     if (error instanceof AppError) {
       throw await auditRejection(error, context, {
         ...subject,
-        metadata: { entryHour: session.entryHour, exitHour: request.exitHour },
+        metadata: { entryHour: session.entryHour, exitHour },
       });
     }
     throw error;
@@ -130,8 +145,13 @@ const prepareCheckout = async (
   return {
     session,
     quote: {
-      session: toSessionView(session, { currentHour: campusHour(), schedule }),
-      exitHour: request.exitHour,
+      session: toSessionView(
+        { ...session, exitCapturedAt: capturedAt },
+        { currentHour: campusHour(), schedule },
+      ),
+      exitAt: exitAt.toISOString(),
+      timeAdjusted: session.timeAdjustedAt !== null,
+      exitHour,
       durationHours,
       fee,
     },
@@ -164,7 +184,9 @@ export const checkoutService = {
     context: ActorContext,
     { record = true }: { record?: boolean } = {},
   ): Promise<CheckoutQuote> {
-    const { session, quote } = await prepareCheckout(request, context);
+    const { session, quote } = await prepareCheckout(request, context, {
+      capture: isGate(context),
+    });
     if (record) {
       await auditRepository.record({
         action: AUDIT_ACTIONS.checkoutInitiated,
@@ -172,6 +194,7 @@ export const checkoutService = {
         entityType: AUDIT_ENTITY_TYPES.parkingSession,
         entityId: session.sessionNumber,
         metadata: {
+          exitAt: quote.exitAt,
           exitHour: quote.exitHour,
           durationHours: quote.durationHours,
           totalPaise: quote.fee.totalPaise,
@@ -193,7 +216,7 @@ export const checkoutService = {
     context: ActorContext,
   ): Promise<CreatePaymentResponse> {
     assertGateChannel(context);
-    const { session, quote } = await prepareCheckout(request, context);
+    const { session, quote } = await prepareCheckout(request, context, { capture: true });
     if (!allowedMethod(quote.fee.totalPaise, request.method)) {
       throw parkingErrors.invalidPaymentMethod();
     }
@@ -412,6 +435,9 @@ const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context
   if (fee.totalPaise !== payment.amountPaise) throw parkingErrors.paymentAmountMismatch();
 
   const now = new Date();
+  // The exit time is the one captured at the gate (or corrected by Security), not the moment the
+  // payment happened to complete, so the recorded stay equals what the guard reviewed.
+  const exitAt = session.exitCapturedAt ?? now;
 
   const paid = await tx.payment.updateMany({
     where: { id: payment.id, status: 'PROCESSING', sessionId: session.id },
@@ -424,7 +450,7 @@ const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context
     data: {
       status: 'COMPLETED',
       exitHour: payment.exitHour,
-      exitAt: now,
+      exitAt,
       durationHours,
       feeAmountPaise: fee.totalPaise,
       feeBreakdown: fee as unknown as Prisma.InputJsonObject,
@@ -436,9 +462,13 @@ const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context
 
   // Release the slot: OCCUPIED → AVAILABLE. A slot an administrator blocked
   // while occupied stays BLOCKED; any other state is an integrity violation.
+  // A slot Security reserved for a VIP goes back to RESERVED, and stays out of every automatic
+  // allocation until Security explicitly releases the reservation.
+  const stillReserved =
+    (await tx.slotReservation.count({ where: { slotId: session.slotId, status: 'ACTIVE' } })) > 0;
   const released = await tx.parkingSlot.updateMany({
     where: { id: session.slotId, status: 'OCCUPIED' },
-    data: { status: 'AVAILABLE' },
+    data: { status: stillReserved ? 'RESERVED' : 'AVAILABLE' },
   });
   if (released.count !== 1 && session.slot.status !== 'BLOCKED') {
     throw new AppError(409, 'CONFLICT', 'The parking slot is not in the expected state.');
@@ -492,6 +522,7 @@ const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context
     AUDIT_ENTITY_TYPES.parkingSession,
     session.sessionNumber,
     {
+      exitAt: exitAt.toISOString(),
       exitHour: payment.exitHour,
       durationHours,
       totalPaise: fee.totalPaise,

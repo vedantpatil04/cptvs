@@ -38,6 +38,8 @@ const active: ParkingSessionView = {
   exitAt: null,
   durationHours: null,
   fee: null,
+  exitCapturedAt: null,
+  timeAdjusted: false,
   receiptNumber: null,
 };
 
@@ -158,5 +160,26 @@ describe('SessionTimer (completed session)', () => {
     expect(screen.getByText('3 hours')).toBeInTheDocument();
     expect(screen.queryByRole('timer')).not.toBeInTheDocument();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('SessionTimer (stopped at the exit gate)', () => {
+  it('stays on the captured exit time however long it is looked at, and after a re-render', () => {
+    // Security scanned the session at 12:00 IST (06:30 UTC); two hours later it still reads 02:00:00.
+    vi.setSystemTime(new Date('2026-10-09T08:30:00Z'));
+    const stopped: ParkingSessionView = { ...active, exitCapturedAt: '2026-10-09T06:30:00.000Z' };
+    const first = render(<SessionTimer session={stopped} />);
+
+    expect(screen.getByRole('timer')).toHaveTextContent('02:00:00');
+    expect(screen.getByText('Timer stopped')).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(screen.getByRole('timer')).toHaveTextContent('02:00:00');
+    expect(vi.getTimerCount()).toBe(0); // nothing keeps ticking
+
+    first.unmount();
+    render(<SessionTimer session={stopped} />);
+    expect(screen.getByRole('timer')).toHaveTextContent('02:00:00');
   });
 });

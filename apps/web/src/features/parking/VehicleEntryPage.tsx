@@ -35,10 +35,13 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { campusHourAt } from '@/lib/duration';
 import { errorMessage } from '@/lib/error-message';
 import { formatHour, HOURS } from '@/lib/format';
+import { serverNow } from '@/lib/server-clock';
 
 import { AllocationResult } from './AllocationResult';
+import { ArrivalsPanel } from './ArrivalsPanel';
 import { parkingApi } from './parking-api';
 
 type EntryForm = z.input<typeof checkInRequestSchema>;
@@ -59,7 +62,7 @@ export function VehicleEntryPage() {
       vehicleNumber: '',
       vehicleType: undefined,
       ownerCategory: undefined,
-      entryHour: new Date().getHours(),
+      entryHour: campusHourAt(serverNow()),
     },
   });
 
@@ -120,7 +123,7 @@ export function VehicleEntryPage() {
       vehicleNumber: '',
       vehicleType: undefined,
       ownerCategory: undefined,
-      entryHour: new Date().getHours(),
+      entryHour: campusHourAt(serverNow()),
     });
   };
 
@@ -130,7 +133,9 @@ export function VehicleEntryPage() {
       {result ? (
         <AllocationResult result={result} onNext={reset} />
       ) : (
-        <Card className="max-w-2xl">
+        <div className="max-w-3xl space-y-6">
+          <ArrivalsPanel />
+          <Card className="max-w-2xl">
           <CardContent className="pt-6">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-6" noValidate>
@@ -189,8 +194,8 @@ export function VehicleEntryPage() {
                         </AlertDescription>
                       </Alert>
                     ) : (
-                      <Alert className="border-blue-500/30 bg-blue-500/10 text-blue-900 dark:text-blue-200">
-                        <CheckCircle2 className="size-4 text-blue-600" />
+                      <Alert className="border-info/30 bg-info/5 text-foreground">
+                        <CheckCircle2 className="size-4 text-info" />
                         <AlertDescription className="text-xs">
                           Known vehicle record found. Please confirm vehicle type and category.
                         </AlertDescription>
@@ -315,6 +320,7 @@ export function VehicleEntryPage() {
             </Form>
           </CardContent>
         </Card>
+        </div>
       )}
     </>
   );
