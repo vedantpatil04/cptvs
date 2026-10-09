@@ -16,8 +16,10 @@ type Handler = unknown | ((body: unknown) => Response | unknown);
  * without the query string). Unknown routes fail the request with 404.
  */
 export const mockApi = (routes: Record<string, Handler>) => {
-  const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
-    const url = new URL(input);
+  const fetchMock = vi.fn(async (input: RequestInfo | URL | string, init?: RequestInit) => {
+    const rawUrl =
+      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const url = new URL(rawUrl, 'http://localhost');
     const key = `${init?.method ?? 'GET'} ${url.pathname.replace('/api/v1', '')}`;
     if (!(key in routes)) return jsonResponse(404, { error: { code: 'NOT_FOUND', message: key } });
     const handler = routes[key];
@@ -39,7 +41,14 @@ export const testUser = (role: UserRole): AuthUser => ({
   fullName: 'Demo User',
   role,
   lastLoginAt: null,
-  parkingUser: null,
+  parkingUser:
+    role === 'PARKING_USER'
+      ? {
+          category: 'STUDENT',
+          verificationStatus: 'VERIFIED',
+          parkNow: { eligible: true, blockedBy: null },
+        }
+      : null,
 });
 
 /** Stores a valid session so the app starts signed in (verified via GET /auth/me). */

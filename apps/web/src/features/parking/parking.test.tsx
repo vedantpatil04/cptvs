@@ -1,6 +1,7 @@
 import type {
   CheckInResponse,
   CheckoutQuote,
+  FeeBreakdown,
   ParkingMapResponse,
   ParkingSessionView,
   PaymentView,
@@ -37,14 +38,14 @@ const session: ParkingSessionView = {
   receiptNumber: null,
 };
 
-const fee = {
-  ownerCategory: 'STUDENT' as const,
-  vehicleType: 'TWO_WHEELER' as const,
+const fee: FeeBreakdown = {
+  ownerCategory: 'STUDENT',
+  vehicleType: 'TWO_WHEELER',
   durationHours: 4,
-  rule: { type: 'FREE_HOURS_THEN_HOURLY' as const, freeHours: 2, hourlyRatePaise: 1000 },
+  rule: { type: 'FREE_HOURS_THEN_HOURLY', freeHours: 2, hourlyRatePaise: 1000 },
   lines: [
-    { kind: 'FREE' as const, hours: 2 },
-    { kind: 'CHARGED' as const, hours: 2, ratePaise: 1000, amountPaise: 2000 },
+    { kind: 'FREE', hours: 2 },
+    { kind: 'CHARGED', hours: 2, ratePaise: 1000, amountPaise: 2000 },
   ],
   totalPaise: 2000,
 };
@@ -155,7 +156,29 @@ describe('vehicle exit', () => {
       paidAt: null,
       createdAt: new Date().toISOString(),
     };
-    const receipt = { receiptNumber: 'CPVTS-R-2026-8F3K2Q9M' } as ReceiptView;
+    const receipt: ReceiptView = {
+      receiptNumber: 'CPVTS-R-2026-8F3K2Q9M',
+      verificationReference: 'VR-2026-8F3K2Q9M-SECURE',
+      issuedAt: new Date().toISOString(),
+      sessionNumber: session.sessionNumber,
+      vehicleNumber: session.vehicleNumber,
+      vehicleType: session.vehicleType,
+      ownerCategory: session.ownerCategory,
+      block: session.block,
+      slotCode: session.slotCode,
+      entryHour: session.entryHour,
+      exitHour: 13,
+      durationHours: 4,
+      fee,
+      totalPaise: 2000,
+      payment: {
+        status: 'PAID',
+        method: 'UPI',
+        transactionId: pending.transactionId,
+        isSimulated: true,
+        paidAt: new Date().toISOString(),
+      },
+    };
     const quoteHandler = vi.fn(() => quote);
     mockApi({
       ...signInAs('SECURITY_STAFF'),
