@@ -1,5 +1,6 @@
 import type {
   CheckoutQuote,
+  ExitCodeResponse,
   ExitRequestState,
   ParkingSessionView,
   PortalLayoutResponse,
@@ -18,6 +19,7 @@ import { auditRepository } from '../audit/audit.repository.js';
 import type { RequestMeta } from '../auth/auth.types.js';
 import { tokenService } from '../auth/token.service.js';
 import { checkoutService } from '../parking/checkout.service.js';
+import { exitCodeService } from '../parking/exit-code.service.js';
 import { exitRequestService } from '../parking/exit-request.service.js';
 import type { ActorContext } from '../parking/operation-context.js';
 import { parkingErrors } from '../parking/parking.errors.js';
@@ -111,6 +113,12 @@ export const visitorService = {
   async requestExit(sessionId: string, request: RequestMeta): Promise<ExitRequestState> {
     await loadSession(sessionId);
     return exitRequestService.request(sessionId, asVisitor(request));
+  },
+
+  /** A fresh 6-digit exit code for the gate when the session QR cannot be scanned. */
+  async issueExitCode(sessionId: string, request: RequestMeta): Promise<ExitCodeResponse> {
+    await loadSession(sessionId);
+    return exitCodeService.issue(sessionId, asVisitor(request));
   },
 
   async cancelExitRequest(sessionId: string, request: RequestMeta): Promise<ExitRequestState> {

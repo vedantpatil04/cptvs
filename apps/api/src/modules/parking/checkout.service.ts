@@ -444,6 +444,9 @@ const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context
     throw new AppError(409, 'CONFLICT', 'The parking slot is not in the expected state.');
   }
 
+  // The session is over: its exit code (the QR fallback) must not work any more.
+  await tx.exitCode.deleteMany({ where: { sessionId: session.id } });
+
   const receiptNumber = await uniqueValue(
     () => newReceiptNumber(campusYear(now)),
     async (value) => (await tx.receipt.count({ where: { receiptNumber: value } })) > 0,

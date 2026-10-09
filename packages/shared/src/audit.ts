@@ -49,6 +49,8 @@ export const AUDIT_ACTIONS = {
   exitRequested: 'EXIT_REQUESTED',
   exitRequestCancelled: 'EXIT_REQUEST_CANCELLED',
   checkoutQrScanned: 'CHECKOUT_QR_SCANNED',
+  exitCodeIssued: 'EXIT_CODE_ISSUED',
+  checkoutCodeEntered: 'CHECKOUT_CODE_ENTERED',
   vehicleReleased: 'VEHICLE_RELEASED',
   identityDocumentDownloaded: 'IDENTITY_DOCUMENT_DOWNLOADED',
   shiftTemplateCreated: 'SHIFT_TEMPLATE_CREATED',

@@ -77,6 +77,7 @@ export const API_ERROR_CODES = [
   'GATE_CHECKOUT_REQUIRED',
   'QR_SESSION_MISMATCH',
   'SESSION_INCONSISTENT',
+  'INVALID_EXIT_CODE',
   // Security Staff shifts and cash
   'SHIFT_REQUIRED',
   'SHIFT_NOT_FOUND',

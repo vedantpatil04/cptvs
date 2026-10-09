@@ -3,6 +3,7 @@ import {
   cancelPaymentRequestSchema,
   checkInRequestSchema,
   checkoutQuoteRequestSchema,
+  codeCheckoutRequestSchema,
   createPaymentRequestSchema,
   processPaymentRequestSchema,
   scanCheckoutRequestSchema,
@@ -17,11 +18,13 @@ import { z } from 'zod';
 import { requestMeta, requireAuth } from '../../lib/request-context.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { authorize } from '../../middleware/authorize.js';
+import { exitCodeRateLimiter } from '../../middleware/rate-limit.js';
 import { validate } from '../../middleware/validate.js';
 import { gateOperation, resolveOperator } from '../shifts/shift-access.js';
 import { alertsService } from './alerts.service.js';
 import { checkInService } from './check-in.service.js';
 import { checkoutService } from './checkout.service.js';
+import { exitCodeService } from './exit-code.service.js';
 import type { OperationContext } from './operation-context.js';
 import { qrCheckoutService } from './qr-checkout.service.js';
 import { receiptService } from './receipt.service.js';
@@ -146,6 +149,21 @@ parkingRouter.post(
   async (req, res) => {
     const { qr } = req.body as z.infer<typeof scanCheckoutRequestSchema>;
     res.status(200).json(await qrCheckoutService.scan(qr, context(req)));
+  },
+);
+
+/**
+ * Fallback to the camera: the 6-digit exit code shown in the owner's or visitor's app. It
+ * returns the same verified ACTIVE session a QR scan does and likewise completes nothing.
+ */
+parkingRouter.post(
+  '/checkouts/code',
+  anyRole,
+  exitCodeRateLimiter,
+  validate({ body: codeCheckoutRequestSchema }),
+  async (req, res) => {
+    const { code } = req.body as z.infer<typeof codeCheckoutRequestSchema>;
+    res.status(200).json(await exitCodeService.resolve(code, context(req)));
   },
 );
 

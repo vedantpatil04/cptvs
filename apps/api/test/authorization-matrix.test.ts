@@ -111,6 +111,7 @@ const ROUTES: Route[] = [
   route('get', `${API}/portal/sessions/${SESSION}/timeline`, VERIFIED),
   route('post', `${API}/portal/checkout/quote`, VERIFIED),
   route('post', `${API}/portal/sessions/${SESSION}/exit-request`, VERIFIED),
+  route('post', `${API}/portal/sessions/${SESSION}/exit-code`, VERIFIED),
   route('delete', `${API}/portal/sessions/${SESSION}/exit-request`, VERIFIED),
   // There is no self-service payment: allowed callers get a clear refusal, not a payment.
   route('all', `${API}/portal/checkout/payments`, VERIFIED, {
@@ -126,6 +127,7 @@ const ROUTES: Route[] = [
   route('get', `${API}/visitor/timeline`, ['visitor'], visitorOnly),
   route('post', `${API}/visitor/checkout/quote`, ['visitor'], visitorOnly),
   route('post', `${API}/visitor/exit-request`, ['visitor'], visitorOnly),
+  route('post', `${API}/visitor/exit-code`, ['visitor'], visitorOnly),
   route('delete', `${API}/visitor/exit-request`, ['visitor'], visitorOnly),
   route('all', `${API}/visitor/checkout/payments`, ['visitor'], {
     denied: 401,
@@ -143,6 +145,7 @@ const ROUTES: Route[] = [
   route('get', `${API}/parking/sessions/${SESSION}/timeline`, OPERATORS),
   route('get', `${API}/parking/tracking`, OPERATORS),
   route('post', `${API}/parking/checkouts/scan`, OPERATORS),
+  route('post', `${API}/parking/checkouts/code`, OPERATORS),
   route('post', `${API}/parking/checkouts/quote`, OPERATORS),
   route('post', `${API}/parking/payments`, OPERATORS),
   route('post', `${API}/parking/payments/${ZERO}/process`, OPERATORS),

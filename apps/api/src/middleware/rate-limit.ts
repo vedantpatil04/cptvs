@@ -45,6 +45,35 @@ export const visitorAccessRateLimiter = rateLimit({
   },
 });
 
+/**
+ * Throttles guessing of 6-digit exit codes at the gate, per signed-in operator. Only failed
+ * attempts count, so an operator who types the right code is never locked out.
+ */
+export const createExitCodeRateLimiter = (options: { windowMs: number; limit: number }) =>
+  rateLimit({
+    ...options,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req) => req.auth?.user.id ?? 'anonymous',
+    handler: (req, res) => {
+      const body: ApiErrorBody = {
+        error: {
+          code: 'RATE_LIMITED',
+          message:
+            'Too many incorrect codes. Please wait and try again, or look the vehicle up manually.',
+          requestId: req.id,
+        },
+      };
+      res.status(429).json(body);
+    },
+  });
+
+export const exitCodeRateLimiter = createExitCodeRateLimiter({
+  windowMs: config.rateLimit.login.windowMs,
+  limit: config.rateLimit.login.max,
+});
+
 /** Limits account creation per client IP. */
 export const registrationRateLimiter = rateLimit({
   windowMs: 60 * 60_000,

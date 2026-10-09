@@ -1,7 +1,8 @@
-import type { CheckoutQuote, ExitRequestState } from '@cpvts/shared';
+import type { CheckoutQuote, ExitCodeResponse, ExitRequestState } from '@cpvts/shared';
 
 import { campusHour } from '../../lib/campus-time.js';
 import { checkoutService } from '../parking/checkout.service.js';
+import { exitCodeService } from '../parking/exit-code.service.js';
 import { exitRequestService } from '../parking/exit-request.service.js';
 import type { ActorContext, OperationContext } from '../parking/operation-context.js';
 import { findOwnSession } from './portal-access.js';
@@ -35,6 +36,12 @@ export const selfCheckoutService = {
   async requestExit(sessionNumber: string, context: OperationContext): Promise<ExitRequestState> {
     const session = await findOwnSession(context.actor.id, sessionNumber);
     return exitRequestService.request(session.id, asOwner(context));
+  },
+
+  /** A fresh 6-digit exit code for the gate when the session QR cannot be scanned. */
+  async issueExitCode(sessionNumber: string, context: OperationContext): Promise<ExitCodeResponse> {
+    const session = await findOwnSession(context.actor.id, sessionNumber);
+    return exitCodeService.issue(session.id, asOwner(context));
   },
 
   async cancelExitRequest(

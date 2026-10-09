@@ -155,6 +155,30 @@ export const scanCheckoutRequestSchema = z.object({
 });
 export type ScanCheckoutRequest = z.input<typeof scanCheckoutRequestSchema>;
 
+/** Digits in the short exit code an owner can read out when the session QR cannot be scanned. */
+export const EXIT_CODE_LENGTH = 6;
+
+/**
+ * Gate checkout by exit code: the 6 digits shown in the owner's or visitor's app. Like the QR
+ * it only finds and verifies the ACTIVE session; payment and finalization stay separate steps.
+ */
+export const codeCheckoutRequestSchema = z.object({
+  code: z
+    .string({ error: VALIDATION_MESSAGES.invalidExitCode })
+    .trim()
+    .regex(/^[0-9]{6}$/, { error: VALIDATION_MESSAGES.invalidExitCode }),
+});
+export type CodeCheckoutRequest = z.input<typeof codeCheckoutRequestSchema>;
+
+/** A freshly issued exit code. It is shown once; the server keeps only a keyed hash of it. */
+export interface ExitCodeResponse {
+  sessionNumber: string;
+  code: string;
+  /** ISO instant after which the code no longer works. */
+  expiresAt: string;
+  ttlSeconds: number;
+}
+
 export const PAYMENT_METHODS = ['UPI', 'CARD', 'CASH', 'NO_CHARGE'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 /** Methods offered when an amount is due. `NO_CHARGE` is used only for ₹0 checkouts. */
@@ -313,7 +337,7 @@ export interface ScanChecks {
 
 /** Result of scanning a session QR at the exit gate. The next step is the checkout quote. */
 export interface ScanCheckoutResponse {
-  matchedBy: 'ENTRY_QR';
+  matchedBy: 'ENTRY_QR' | 'EXIT_CODE';
   session: ParkingSessionView;
   /** The owner or visitor already marked the session "ready to leave". */
   exitRequested: boolean;

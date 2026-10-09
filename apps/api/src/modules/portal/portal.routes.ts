@@ -250,6 +250,19 @@ portalRouter.post(
   },
 );
 
+/** A fresh short-lived 6-digit code the gate can type if the session QR cannot be scanned. */
+portalRouter.post(
+  '/sessions/:sessionNumber/exit-code',
+  validate({ params: sessionParams }),
+  async (req, res) => {
+    res
+      .status(201)
+      .json(
+        await selfCheckoutService.issueExitCode(String(req.params.sessionNumber), context(req)),
+      );
+  },
+);
+
 portalRouter.delete(
   '/sessions/:sessionNumber/exit-request',
   validate({ params: sessionParams }),
