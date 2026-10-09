@@ -15,6 +15,8 @@ apps/api/src/generated/
 .env.*
 !.env.example
 !.env.*.example
+# Public production defaults for the web build (no secrets).
+!apps/web/.env.production
 
 # Logs
 *.log

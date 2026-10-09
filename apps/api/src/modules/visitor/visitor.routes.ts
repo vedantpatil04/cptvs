@@ -63,6 +63,11 @@ visitorRouter.post('/exit-request', async (req, res) => {
   res.status(200).json(await visitorService.requestExit(sessionId(req), requestMeta(req)));
 });
 
+/** A fresh short-lived 6-digit code the gate can type if the session QR cannot be scanned. */
+visitorRouter.post('/exit-code', async (req, res) => {
+  res.status(201).json(await visitorService.issueExitCode(sessionId(req), requestMeta(req)));
+});
+
 visitorRouter.delete('/exit-request', async (req, res) => {
   res.status(200).json(await visitorService.cancelExitRequest(sessionId(req), requestMeta(req)));
 });

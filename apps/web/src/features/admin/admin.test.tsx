@@ -177,14 +177,14 @@ describe('slot management', () => {
     });
     renderAt('/admin/slots');
 
-    const occupiedRow = (await screen.findByText('T-02')).closest('tr')!;
+    const occupiedRow = await screen.findByRole('row', { name: /T-02/ });
     expect(within(occupiedRow).getByRole('button', { name: 'Block' })).toBeDisabled();
     expect(
-      within(screen.getByText('T-03').closest('tr')!).getByRole('button', { name: 'Unblock' }),
+      within(screen.getByRole('row', { name: /T-03/ })).getByRole('button', { name: 'Unblock' }),
     ).toBeEnabled();
 
     await userEvent.click(
-      within(screen.getByText('T-01').closest('tr')!).getByRole('button', { name: 'Block' }),
+      within(screen.getByRole('row', { name: /T-01/ })).getByRole('button', { name: 'Block' }),
     );
     const dialog = await screen.findByRole('dialog', { name: 'Block slot T-01' });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Block slot' }));
@@ -209,7 +209,7 @@ describe('slot management', () => {
     });
     renderAt('/admin/slots');
     await userEvent.click(
-      within((await screen.findByText('T-03')).closest('tr')!).getByRole('button', {
+      within(await screen.findByRole('row', { name: /T-03/ })).getByRole('button', {
         name: 'Unblock',
       }),
     );

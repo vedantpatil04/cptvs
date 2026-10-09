@@ -430,6 +430,7 @@ model ParkingSession {
   owner        User?       @relation("SessionOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   payments     Payment[]
   receipt      Receipt?
+  exitCodes    ExitCode[]
 
   /// Database-level guarantee: a vehicle can have at most one ACTIVE session.
   @@unique([vehicleId], map: "parking_sessions_one_active_per_vehicle", where: { status: "ACTIVE" })
@@ -441,6 +442,24 @@ model ParkingSession {
   @@index([exitAt])
   @@index([ownerUserId, entryAt])
   @@map("parking_sessions")
+}
+
+/// Short-lived 6-digit exit code that lets the gate find an ACTIVE session when the QR cannot be
+/// scanned. Only a keyed hash is stored; a session has at most one live code (re-issuing replaces
+/// it) and finalizing the checkout deletes it. The code finds the session — it never completes it.
+model ExitCode {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  /// HMAC-SHA256 of the code (never the code itself).
+  codeHash  String   @map("code_hash") @db.VarChar(64)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  session ParkingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([codeHash, expiresAt])
+  @@index([sessionId])
+  @@map("exit_codes")
 }
 
 model Payment {

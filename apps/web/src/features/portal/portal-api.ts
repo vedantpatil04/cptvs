@@ -2,6 +2,7 @@ import type {
   CheckoutQuote,
   CreatePaymentResponse,
   CurrentParkNowOfferResponse,
+  ExitCodeResponse,
   ExitRequestState,
   HistoryItem,
   MOCK_PAYMENT_OUTCOMES,
@@ -112,6 +113,12 @@ export const portalApi = {
   requestExit: (sessionNumber: string) =>
     apiRequest<ExitRequestState>(
       `/portal/sessions/${encodeURIComponent(sessionNumber)}/exit-request`,
+      { method: 'POST' },
+    ),
+
+  issueExitCode: (sessionNumber: string) =>
+    apiRequest<ExitCodeResponse>(
+      `/portal/sessions/${encodeURIComponent(sessionNumber)}/exit-code`,
       { method: 'POST' },
     ),
 

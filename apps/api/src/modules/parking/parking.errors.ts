@@ -43,6 +43,8 @@ export const parkingErrors = {
       'QR_SESSION_MISMATCH',
       'This QR code does not belong to the session being checked out.',
     ),
+  invalidExitCode: () =>
+    new AppError(400, 'INVALID_EXIT_CODE', 'This exit code is invalid, expired or already used.'),
   sessionInconsistent: () =>
     new AppError(
       409,

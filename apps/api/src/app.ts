@@ -46,7 +46,8 @@ export const createApp = (config: AppConfig): Express => {
       },
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
       allowedHeaders: ['Authorization', 'Content-Type', 'Accept-Language', 'X-Request-Id'],
-      exposedHeaders: ['X-Request-Id', 'Content-Disposition'],
+      // `Date` lets the web and Android clients correct for a wrong device clock (live timers).
+      exposedHeaders: ['X-Request-Id', 'Content-Disposition', 'Date'],
       maxAge: 600,
     }),
   );

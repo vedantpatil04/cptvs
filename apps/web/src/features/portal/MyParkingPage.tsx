@@ -1,5 +1,4 @@
 import type { ParkingSessionView } from '@cpvts/shared';
-import { entryQrPayload } from '@cpvts/shared';
 import {
   Bike,
   Car,
@@ -18,7 +17,8 @@ import { ErrorState } from '@/components/feedback/ErrorState';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BlockMapLink } from '@/components/parking/BlockMapLink';
-import { QrCode } from '@/components/parking/QrCode';
+import { ExitPass } from '@/components/parking/ExitPass';
+import { SessionTimer } from '@/components/parking/SessionTimer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -31,14 +31,12 @@ import {
 } from '@/components/ui/dialog';
 import { SessionTimeline } from '@/features/parking/SessionTimeline';
 import { useApiQuery } from '@/hooks/use-api-query';
-import { useFormatters } from '@/hooks/use-formatters';
 import { errorMessage } from '@/lib/error-message';
 
 import { portalApi } from './portal-api';
 
 export function MyParkingPage() {
   const { t } = useTranslation();
-  const format = useFormatters();
 
   const sessionsQuery = useApiQuery(portalApi.activeSessions, { refreshIntervalMs: 20_000 });
   const [timelineSession, setTimelineSession] = useState<ParkingSessionView | null>(null);
@@ -91,10 +89,6 @@ export function MyParkingPage() {
             <div className="grid gap-6">
               {sessions.map((session) => {
                 const Icon = session.vehicleType === 'TWO_WHEELER' ? Bike : Car;
-                const feeText = session.estimatedFee
-                  ? format.paise(session.estimatedFee.totalPaise)
-                  : '₹0';
-
                 return (
                   <Card
                     key={session.sessionNumber}
@@ -171,47 +165,23 @@ export function MyParkingPage() {
                             )}
                           </div>
 
-                          {/* Stay Metrics */}
-                          <div className="grid grid-cols-3 gap-3">
-                            <div className="rounded-lg border bg-muted/30 p-3">
-                              <span className="text-[10px] font-semibold text-muted-foreground uppercase">
-                                Entry Time
-                              </span>
-                              <p className="text-sm font-bold mt-1">
-                                {format.time(session.entryAt)}
-                              </p>
-                            </div>
-
-                            <div className="rounded-lg border bg-muted/30 p-3">
-                              <span className="text-[10px] font-semibold text-muted-foreground uppercase">
-                                Current Duration
-                              </span>
-                              <p className="text-sm font-bold mt-1">
-                                {session.currentDurationHours ?? 0} hr(s)
-                              </p>
-                            </div>
-
-                            <div className="rounded-lg border bg-muted/30 p-3">
-                              <span className="text-[10px] font-semibold text-muted-foreground uppercase">
-                                Current Fee
-                              </span>
-                              <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                                {feeText}
-                              </p>
-                            </div>
-                          </div>
+                          <SessionTimer session={session} onStale={sessionsQuery.reload} />
 
                           {/* Action Buttons */}
                           <div className="flex flex-wrap items-center gap-2 pt-2">
                             <Button asChild size="default" className="gap-2">
-                              <Link to={`/portal/locate?session=${encodeURIComponent(session.sessionNumber)}`}>
+                              <Link
+                                to={`/portal/locate?session=${encodeURIComponent(session.sessionNumber)}`}
+                              >
                                 <Compass className="size-4" />
                                 Locate My Vehicle
                               </Link>
                             </Button>
 
                             <Button asChild variant="outline" size="default" className="gap-2">
-                              <Link to={`/portal/parking?slot=${encodeURIComponent(session.slotCode)}`}>
+                              <Link
+                                to={`/portal/parking?slot=${encodeURIComponent(session.slotCode)}`}
+                              >
                                 <MapPin className="size-4" />
                                 Show on Parking Map
                               </Link>
@@ -232,7 +202,9 @@ export function MyParkingPage() {
                               size="default"
                               className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white ml-auto"
                             >
-                              <Link to={`/portal/checkout?session=${encodeURIComponent(session.sessionNumber)}`}>
+                              <Link
+                                to={`/portal/checkout?session=${encodeURIComponent(session.sessionNumber)}`}
+                              >
                                 <CreditCard className="size-4" />
                                 Check Out
                               </Link>
@@ -240,24 +212,12 @@ export function MyParkingPage() {
                           </div>
                         </div>
 
-                        {/* Session QR Panel */}
-                        {session.entryReference && (
-                          <div className="flex flex-col items-center justify-center rounded-xl border bg-card p-4 text-center shrink-0">
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">
-                              Session Entry QR
-                            </span>
-                            <div className="rounded-lg border bg-white p-2">
-                              <QrCode
-                                value={entryQrPayload(session.entryReference)}
-                                label="Session QR"
-                                size={140}
-                              />
-                            </div>
-                            <span className="font-mono text-[11px] text-muted-foreground mt-2">
-                              Scan at exit gate
-                            </span>
-                          </div>
-                        )}
+                        <ExitPass
+                          entryReference={session.entryReference}
+                          issueCode={() => portalApi.issueExitCode(session.sessionNumber)}
+                          qrSize={150}
+                          className="w-full shrink-0 rounded-xl border bg-card p-4 lg:w-56"
+                        />
                       </div>
                     </div>
                   </Card>

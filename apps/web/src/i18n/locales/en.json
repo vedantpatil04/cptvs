@@ -203,6 +203,7 @@
     "GATE_CHECKOUT_REQUIRED": "Final checkout is completed at the exit gate by Security Staff. Tell them you are ready to leave.",
     "QR_SESSION_MISMATCH": "This QR code does not belong to the session being checked out.",
     "SESSION_INCONSISTENT": "The parking records for this session do not agree. Ask an administrator to check them.",
+    "INVALID_EXIT_CODE": "This exit code is invalid or has expired.",
     "SHIFT_REQUIRED": "You need to be checked in to a shift to do this. Check in to your shift, or ask an administrator.",
     "SHIFT_NOT_FOUND": "Shift not found.",
     "SHIFT_CONFLICT": "This person already has a shift that overlaps this time.",
@@ -251,7 +252,8 @@
     "academicIncomplete": "Enter all the academic details: program, department, admission year and semester.",
     "invalidTime": "Enter a time as HH:MM, for example 08:00.",
     "shiftTimesEqual": "A shift cannot start and end at the same time.",
-    "invalidBatch": "Enter a batch such as 2024–2027."
+    "invalidBatch": "Enter a batch such as 2024–2027.",
+    "invalidExitCode": "Enter a valid 6-digit exit code."
   },
   "public": {
     "loginButton": "Admin / Staff login",
@@ -391,7 +393,8 @@
       "AVAILABLE": "Available",
       "OCCUPIED": "Occupied",
       "BLOCKED": "Blocked",
-      "HELD": "Being assigned"
+      "HELD": "Held",
+      "DISABLED": "Disabled"
     },
     "fee": {
       "title": "Fee breakdown",
@@ -441,7 +444,12 @@
       "calculate": "Calculate fee",
       "feePreviewTitle": "Fee preview",
       "changeVehicle": "Choose another vehicle",
-      "nextVehicle": "Check out another vehicle"
+      "nextVehicle": "Check out another vehicle",
+      "verifiedQr": "Verified by Parking Session QR",
+      "verifiedCode": "Verified by 6-digit code",
+      "verifiedNote": "The server confirmed this is an active session. Check the vehicle number, slot and entry time below. Nothing is completed until you confirm the fee and payment.",
+      "overnightTitle": "This stay began on an earlier day",
+      "overnightBody": "The whole-hour fee model counts hours within one day (00:00–23:00), so it cannot price a stay across midnight. The fee shown covers only the hours from the entry hour to the chosen hour on the entry day. Ask an administrator before charging."
     },
     "payment": {
       "methodLabel": "Payment method",
@@ -526,6 +534,83 @@
         "VALID": "Verified",
         "INVALID": "Not verified"
       }
+    },
+    "slotTile": {
+      "yourVehicle": "Your vehicle",
+      "total": "Total",
+      "addSlot": "Add slot",
+      "archived": "Archived",
+      "priority": "Priority {{count}}",
+      "availableNote": "This slot is free. CPVTS picks the best valid slot for you when you park."
+    },
+    "timer": {
+      "elapsed": "Parked for",
+      "entered": "Entered",
+      "exited": "Exited",
+      "estimatedFee": "Estimated fee so far",
+      "estimatedFeeShort": "Est. fee",
+      "estimateBasis": "Estimate only: billed in whole clock hours, {{from}} to {{to}} ({{hours}}). The server works out the final fee at checkout.",
+      "finalFee": "Final fee",
+      "billedHours": "Billed duration",
+      "totalTime": "Total time parked"
+    },
+    "scan": {
+      "title": "Scan parking session QR",
+      "description": "Point the camera at the Parking Session QR on the driver's phone. Scanning only finds the vehicle; you still confirm the fee and payment.",
+      "start": "Scan QR",
+      "starting": "Starting camera…",
+      "hint": "Hold the Parking Session QR inside the frame. Receipt QR codes are not accepted.",
+      "lowLight": "Too dark to read? Turn on the flashlight.",
+      "torchOn": "Flashlight on",
+      "torchOff": "Flashlight off",
+      "switchCamera": "Switch camera",
+      "close": "Close scanner",
+      "openSettings": "Open app settings",
+      "useCode": "Enter 6-digit code",
+      "failedTitle": "QR code check failed",
+      "scanAgain": "Scan again",
+      "failure": {
+        "permission_denied": {
+          "title": "Camera access is blocked",
+          "body": "Allow camera access for CPVTS in your device or browser settings, then try again. You can also enter the 6-digit code."
+        },
+        "no_camera": {
+          "title": "No camera available",
+          "body": "This device has no usable camera. Enter the 6-digit code or look the vehicle up manually."
+        },
+        "insecure_context": {
+          "title": "Secure connection needed",
+          "body": "The browser only allows camera scanning on HTTPS pages. Enter the 6-digit code instead."
+        },
+        "camera_busy": {
+          "title": "Camera is in use",
+          "body": "Another app is using the camera. Close it and try again."
+        },
+        "error": {
+          "title": "Camera could not start",
+          "body": "Something went wrong starting the camera. Try again, or enter the 6-digit code."
+        }
+      }
+    },
+    "exitCode": {
+      "title": "Enter 6-digit code",
+      "description": "If the QR can't be scanned, ask the driver for the 6-digit code in their CPVTS app.",
+      "label": "Exit code",
+      "hint": "The code is valid for a few minutes and only for one parked vehicle.",
+      "verify": "Verify code",
+      "failedTitle": "Code check failed",
+      "manualToggle": "Look up by vehicle number or slot (last resort)",
+      "manualHint": "Use this only if neither the QR nor the code works. The vehicle number, slot or session number must match an active session."
+    },
+    "exitPass": {
+      "qrTitle": "Parking session QR",
+      "qrHint": "Show this to Security at the exit gate.",
+      "codeTitle": "Exit code",
+      "showCode": "Show 6-digit code",
+      "codeHint": "If the QR can't be scanned, tell Security this code. It is valid for a few minutes, for this vehicle only.",
+      "expiresIn": "Expires in {{time}}",
+      "expired": "This code has expired.",
+      "newCode": "Get a new code"
     }
   },
   "charts": {
@@ -635,6 +720,8 @@
       "EXIT_REQUESTED": "Exit requested",
       "EXIT_REQUEST_CANCELLED": "Exit request cancelled",
       "CHECKOUT_QR_SCANNED": "Session QR scanned at checkout",
+      "EXIT_CODE_ISSUED": "Exit code issued",
+      "CHECKOUT_CODE_ENTERED": "Exit code entered at checkout",
       "VEHICLE_RELEASED": "Vehicle removed from account",
       "IDENTITY_DOCUMENT_DOWNLOADED": "Identity document downloaded",
       "SHIFT_TEMPLATE_CREATED": "Shift template created",

@@ -1,5 +1,4 @@
 import type { ParkingSessionView } from '@cpvts/shared';
-import { entryQrPayload } from '@cpvts/shared';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -18,7 +17,7 @@ import { Link, useSearchParams } from 'react-router';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { QrCode } from '@/components/parking/QrCode';
+import { ExitPass } from '@/components/parking/ExitPass';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -105,10 +104,6 @@ export function PortalCheckoutPage() {
       setExitRequesting(false);
     }
   };
-
-  const qrValue = currentSession?.entryReference
-    ? entryQrPayload(currentSession.entryReference)
-    : selectedSessionNumber;
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -229,13 +224,12 @@ export function PortalCheckoutPage() {
 
             <CardContent className="pt-6 space-y-6">
               <div className="flex flex-col sm:flex-row items-center gap-6 justify-center p-4 bg-muted/10 rounded-xl border">
-                <div className="p-3 bg-white rounded-xl shadow-xs border">
-                  <QrCode
-                    value={qrValue}
-                    label={`Parking Session QR for ${currentSession.vehicleNumber}`}
-                    size={190}
-                  />
-                </div>
+                <ExitPass
+                  entryReference={currentSession.entryReference}
+                  issueCode={() => portalApi.issueExitCode(currentSession.sessionNumber)}
+                  qrSize={190}
+                  className="w-full sm:w-64"
+                />
 
                 <div className="space-y-3 text-center sm:text-left max-w-sm">
                   <div className="flex items-center justify-center sm:justify-start gap-2 text-primary font-semibold text-sm">

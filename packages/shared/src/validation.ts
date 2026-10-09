@@ -36,6 +36,7 @@ export const VALIDATION_MESSAGES = {
   invalidTime: 'validation.invalidTime',
   shiftTimesEqual: 'validation.shiftTimesEqual',
   invalidBatch: 'validation.invalidBatch',
+  invalidExitCode: 'validation.invalidExitCode',
 } as const;
 
 export type ValidationMessageKey = (typeof VALIDATION_MESSAGES)[keyof typeof VALIDATION_MESSAGES];

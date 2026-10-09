@@ -20,6 +20,7 @@ import { Link } from 'react-router';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { SessionTimer } from '@/components/parking/SessionTimer';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -240,32 +241,11 @@ export function PortalHomePage() {
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
-                    <div className="rounded-lg border bg-background/60 p-2.5">
-                      <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                        Entry Time
-                      </span>
-                      <p className="text-sm font-bold">{format.time(primaryActive.entryAt)}</p>
-                    </div>
-                    <div className="rounded-lg border bg-background/60 p-2.5">
-                      <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                        Duration
-                      </span>
-                      <p className="text-sm font-bold">
-                        {primaryActive.currentDurationHours ?? 0} hr(s)
-                      </p>
-                    </div>
-                    <div className="rounded-lg border bg-background/60 p-2.5 col-span-2 sm:col-span-1">
-                      <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                        Current Fee
-                      </span>
-                      <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                        {primaryActive.estimatedFee
-                          ? format.paise(primaryActive.estimatedFee.totalPaise)
-                          : '₹0'}
-                      </p>
-                    </div>
-                  </div>
+                  <SessionTimer
+                    session={primaryActive}
+                    onStale={overviewQuery.reload}
+                    className="mt-1"
+                  />
                 </div>
 
                 <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 shrink-0">

@@ -14,6 +14,7 @@ import { Link, useSearchParams } from 'react-router';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { SessionTimer } from '@/components/parking/SessionTimer';
 import { VisualParkingLayout } from '@/components/parking/VisualParkingLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -180,20 +181,9 @@ export function VehicleLocatorPage() {
                   </p>
                 </div>
 
-                <div className="rounded-xl border bg-background/80 p-4">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                    Duration & Current Fee
-                  </span>
-                  <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
-                    {activeSession.estimatedFee
-                      ? format.paise(activeSession.estimatedFee.totalPaise)
-                      : '₹0'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {activeSession.currentDurationHours ?? 0} hour(s) elapsed
-                  </p>
                 </div>
-              </div>
+
+              <SessionTimer session={activeSession} onStale={sessionsQuery.reload} />
 
               {/* Actions */}
               <div className="flex flex-wrap items-center gap-3 pt-2">

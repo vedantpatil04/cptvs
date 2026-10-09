@@ -39,6 +39,17 @@ const resolveApiUrl = (): string => {
   );
 };
 
+/** The campus time zone every clock time is shown in (matches the API's CAMPUS_TIMEZONE). */
+const resolveCampusTimeZone = (): string => {
+  const configured = import.meta.env.VITE_CAMPUS_TIMEZONE?.trim() || 'Asia/Kolkata';
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: configured });
+    return configured;
+  } catch {
+    return 'Asia/Kolkata';
+  }
+};
+
 const resolveDefaultLocale = (): Locale => {
   const value = import.meta.env.VITE_DEFAULT_LOCALE;
   return isLocale(value) ? value : DEFAULT_LOCALE;
@@ -48,4 +59,5 @@ export const appConfig = Object.freeze({
   apiBaseUrl: `${resolveApiUrl()}/api/v1`,
   healthUrl: `${resolveApiUrl()}/health`,
   defaultLocale: resolveDefaultLocale(),
+  campusTimeZone: resolveCampusTimeZone(),
 });

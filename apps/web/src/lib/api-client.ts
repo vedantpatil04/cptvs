@@ -3,6 +3,8 @@ import type { ApiErrorBody, ApiErrorCode, ApiValidationIssue } from '@cpvts/shar
 import { appConfig } from '@/config/env';
 import i18n from '@/i18n';
 
+import { syncServerClock } from './server-clock';
+
 /** Generous timeout: free-tier hosts may need time to wake from idle. */
 const REQUEST_TIMEOUT_MS = 60_000;
 
@@ -80,6 +82,7 @@ const send = async (path: string, options: RequestOptions, accept: string): Prom
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   let response: Response;
   const targetUrl = joinUrl(appConfig.apiBaseUrl, path);
+  const sentAt = Date.now();
   try {
     response = await fetch(targetUrl, {
       method,
@@ -91,6 +94,8 @@ const send = async (path: string, options: RequestOptions, accept: string): Prom
     if (signal?.aborted) throw error;
     throw new ApiError(0, 'NETWORK_ERROR', 'The server could not be reached.');
   }
+
+  syncServerClock(response.headers.get('Date'), sentAt, Date.now());
 
   if (!response.ok) {
     if (response.status === 401 && token) onUnauthorized();

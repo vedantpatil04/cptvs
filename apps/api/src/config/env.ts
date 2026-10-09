@@ -82,6 +82,8 @@ const envSchema = z
      * confirms, in seconds. After that the slot returns to the pool.
      */
     PARK_NOW_HOLD_SECONDS: z.coerce.number().int().min(10).max(600).default(90),
+    /** Lifetime of a 6-digit exit code (the QR fallback at the gate), in seconds. */
+    EXIT_CODE_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(300),
     /** A zone at or above this occupancy (percent of usable slots) raises a warning. */
     ALERT_NEARLY_FULL_PERCENT: z.coerce.number().int().min(50).max(99).default(90),
     /** An active session parked at least this many hours raises a long-duration alert. */

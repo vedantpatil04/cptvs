@@ -122,6 +122,28 @@
   }
 }
 
+/*
+ * Native QR scanning (Android): the camera preview is drawn behind the WebView, so while the
+ * scanner is open everything except the scanner overlay is hidden and the page is transparent.
+ */
+html.qr-scanning,
+html.qr-scanning body {
+  background: transparent !important;
+}
+html.qr-scanning body > *:not(.qr-scanner-overlay) {
+  visibility: hidden;
+}
+
+/* Comfortable touch behaviour inside the Android WebView. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+}
+
 @keyframes scan {
   0%, 100% {
     top: 5%;

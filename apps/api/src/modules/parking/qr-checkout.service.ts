@@ -8,9 +8,8 @@ import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';
 import { auditRejection, channelMetadata, type OperationContext } from './operation-context.js';
 import { parkingErrors } from './parking.errors.js';
-import { toSessionView } from './parking.mappers.js';
 import { parkingRepository } from './parking.repository.js';
-import { liveContext } from './tracking.service.js';
+import { verifyActiveSession } from './session-verification.js';
 
 /**
  * Camera checkout, server side. The Security Staff app scans the **session QR**
@@ -32,61 +31,28 @@ export const qrCheckoutService = {
     const text = qr.trim();
     const reference =
       parseEntryQrPayload(text) ?? (OPAQUE_REFERENCE_PATTERN.test(text) ? text : null);
-    const source = { source: 'ENTRY_QR' } as const;
 
     // Unknown and malformed references are indistinguishable to the caller.
     const session = reference
       ? await parkingRepository.findSessionByEntryReference(reference)
       : null;
     if (!session) {
-      throw await auditRejection(parkingErrors.invalidQrReference(), context, { metadata: source });
-    }
-
-    const subject = {
-      entityType: AUDIT_ENTITY_TYPES.parkingSession,
-      entityId: session.sessionNumber,
-    } as const;
-    if (session.status !== 'ACTIVE') {
-      throw await auditRejection(parkingErrors.sessionNotActive(), context, {
-        ...subject,
-        metadata: source,
+      throw await auditRejection(parkingErrors.invalidQrReference(), context, {
+        metadata: { source: 'ENTRY_QR' },
       });
     }
 
-    // The vehicle's and the slot's active session must both be this one, and the slot occupied.
-    const [vehicleSession, slotSession] = await Promise.all([
-      parkingRepository.findActiveSessionByVehicleNumber(session.vehicle.vehicleNumber),
-      parkingRepository.findActiveSessionBySlotId(session.slotId),
-    ]);
-    if (
-      vehicleSession?.id !== session.id ||
-      slotSession?.id !== session.id ||
-      session.slot.status !== 'OCCUPIED'
-    ) {
-      throw await auditRejection(parkingErrors.sessionInconsistent(), context, {
-        ...subject,
-        metadata: source,
-      });
-    }
+    const verified = await verifyActiveSession(session, 'ENTRY_QR', context);
 
     await auditRepository.record({
       action: AUDIT_ACTIONS.checkoutQrScanned,
       actorId: context.actor.id,
-      ...subject,
+      entityType: AUDIT_ENTITY_TYPES.parkingSession,
+      entityId: session.sessionNumber,
       metadata: channelMetadata(context),
       request: context.request,
     });
 
-    return {
-      matchedBy: 'ENTRY_QR',
-      session: toSessionView(session, await liveContext()),
-      exitRequested: session.exitRequestedAt !== null,
-      checks: {
-        reference: true,
-        sessionActive: true,
-        vehicleMatchesSession: true,
-        slotMatchesSession: true,
-      },
-    };
+    return verified;
   },
 };

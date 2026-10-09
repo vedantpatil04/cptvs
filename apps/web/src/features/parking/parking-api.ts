@@ -28,6 +28,13 @@ export const parkingApi = {
       body: { qr },
     }),
 
+  /** Fallback to the camera: the 6-digit exit code from the owner's or visitor's app. */
+  codeCheckout: (code: string) =>
+    apiRequest<ScanCheckoutResponse>('/parking/checkouts/code', {
+      method: 'POST',
+      body: { code },
+    }),
+
   lookup: (vehicleNumber: string, signal?: AbortSignal) =>
     apiRequest<VehicleLookupResponse>(
       `/parking/vehicle-lookup?vehicleNumber=${encodeURIComponent(vehicleNumber)}`,
