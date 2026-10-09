@@ -17,6 +17,26 @@ import { visitorRouter } from '../modules/visitor/visitor.routes.js';
  */
 export const apiV1Router = Router();
 
+apiV1Router.get('/', (_req, res) => {
+  res.status(200).json({
+    name: 'CPVTS REST API',
+    version: 'v1',
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    routes: {
+      public: '/api/v1/public/overview',
+      auth: '/api/v1/auth',
+      portal: '/api/v1/portal',
+      parking: '/api/v1/parking',
+      visitor: '/api/v1/visitor',
+      security: '/api/v1/security',
+      dashboard: '/api/v1/dashboard',
+      admin: '/api/v1/admin',
+      system: '/api/v1/system/status',
+    },
+  });
+});
+
 apiV1Router.use('/public', publicRouter);
 apiV1Router.use('/auth', authRouter);
 apiV1Router.use('/system', systemRouter);

@@ -168,7 +168,7 @@ Steps:
 1. Vercel → **Add New → Project** → import the repository.
    **Root Directory: repository root** (leave empty); framework preset "Other".
 2. Environment variables (Production, and Preview if used):
-   - `VITE_API_BASE_URL=https://cpt-w2v9.onrender.com` — the API origin only: no trailing slash and
+   - `VITE_API_BASE_URL=https://cptvs.onrender.com` (or `VITE_API_URL=https://cptvs.onrender.com`) — the API origin only: no trailing slash and
      no `/api/v1` (the client appends `/api/v1/...` itself). The same value is committed as the
      production default in `apps/web/.env.production`, so a build without this variable still
      targets the Render API; a variable set in Vercel overrides the file.

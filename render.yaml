@@ -36,6 +36,6 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        sync: false
+        value: https://cptvs.vercel.app
       - key: CORS_ORIGINS
-        sync: false
+        value: https://cptvs.vercel.app,https://*.vercel.app,https://localhost,capacitor://localhost

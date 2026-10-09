@@ -13,7 +13,9 @@ export const isOriginAllowed = (origin: string, allowedOrigins: readonly string[
   for (const allowed of allowedOrigins) {
     if (allowed === origin) return true;
     if (allowed.includes('*')) {
-      const escaped = allowed.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[a-zA-Z0-9-]+');
+      const escaped = allowed
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*');
       const regex = new RegExp(`^${escaped}$`, 'i');
       if (regex.test(origin)) return true;
     }
@@ -57,7 +59,27 @@ export const createApp = (config: AppConfig): Express => {
   app.use(['/api/v1/auth/register', '/api/v1/portal/verification'], express.json({ limit: '4mb' }));
   app.use(express.json({ limit: '100kb' }));
 
+  // Root health & metadata endpoint for platforms, monitors, and direct browser visits
+  app.get('/', (_req, res) => {
+    res.status(200).json({
+      name: 'CPVTS API',
+      status: 'ok',
+      version: config.version,
+      environment: config.appEnv,
+      timestamp: new Date().toISOString(),
+      endpoints: {
+        health: '/health',
+        ready: '/health/ready',
+        api: '/api/v1',
+      },
+    });
+  });
+
+  // Unauthenticated health & readiness probes across standard paths
   app.use('/health', healthRouter);
+  app.use('/api/health', healthRouter);
+  app.use('/api/v1/health', healthRouter);
+
   app.use('/api/v1', apiV1Router);
 
   app.use(notFoundHandler);

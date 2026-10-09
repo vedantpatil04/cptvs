@@ -11,8 +11,38 @@ const app = createApp(config);
 afterAll(disconnectDatabase);
 
 describe('health checks', () => {
+  it('GET / reports root service metadata and status', async () => {
+    const res = await request(app).get('/');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      name: 'CPVTS API',
+      status: 'ok',
+      endpoints: {
+        health: '/health',
+        ready: '/health/ready',
+        api: '/api/v1',
+      },
+    });
+  });
+
+  it('GET /api/v1 reports API v1 route directory', async () => {
+    const res = await request(app).get('/api/v1');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      name: 'CPVTS REST API',
+      version: 'v1',
+      status: 'ok',
+    });
+  });
+
   it('GET /health reports liveness', async () => {
     const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: 'ok' });
+  });
+
+  it('GET /api/v1/health reports liveness via prefix alias', async () => {
+    const res = await request(app).get('/api/v1/health');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ status: 'ok' });
   });
@@ -65,8 +95,10 @@ describe('HTTP foundation', () => {
     const allowed = ['http://localhost:5173', 'https://*.vercel.app', 'capacitor://localhost'];
     expect(isOriginAllowed('http://localhost:5173', allowed)).toBe(true);
     expect(isOriginAllowed('https://cpvts-preview-1.vercel.app', allowed)).toBe(true);
+    expect(isOriginAllowed('https://cpvts.preview.vercel.app', allowed)).toBe(true);
     expect(isOriginAllowed('capacitor://localhost', allowed)).toBe(true);
     expect(isOriginAllowed('https://evil.com', allowed)).toBe(false);
     expect(isOriginAllowed('https://evil.com/?https://vercel.app', allowed)).toBe(false);
+    expect(isOriginAllowed('https://evil.vercel.app.attacker.com', allowed)).toBe(false);
   });
 });

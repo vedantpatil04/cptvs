@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { parseEnv, type Env } from './env.js';
 
 const DEFAULT_DEV_ORIGINS = ['http://localhost:5173', 'http://localhost:4173'];
+const MOBILE_APP_ORIGINS = ['https://localhost', 'capacitor://localhost'];
 
 const readPackageVersion = (): string => {
   try {
@@ -17,10 +18,29 @@ const readPackageVersion = (): string => {
   }
 };
 
-const resolveCorsOrigins = (env: Env): string[] => {
-  if (env.CORS_ORIGINS?.length) return env.CORS_ORIGINS;
-  if (env.FRONTEND_URL) return [env.FRONTEND_URL.replace(/\/+$/, '')];
-  return env.NODE_ENV === 'production' ? [] : DEFAULT_DEV_ORIGINS;
+export const resolveCorsOrigins = (env: Env): string[] => {
+  const origins = new Set<string>();
+
+  if (env.FRONTEND_URL) {
+    origins.add(env.FRONTEND_URL.replace(/\/+$/, ''));
+  }
+
+  if (env.CORS_ORIGINS?.length) {
+    for (const origin of env.CORS_ORIGINS) {
+      origins.add(origin.replace(/\/+$/, ''));
+    }
+  }
+
+  // When frontend or custom CORS origins are configured, ensure the Capacitor
+  // mobile app shell origins (Android WebView) are also allowed.
+  if (origins.size > 0) {
+    for (const mobileOrigin of MOBILE_APP_ORIGINS) {
+      origins.add(mobileOrigin);
+    }
+    return Array.from(origins);
+  }
+
+  return env.NODE_ENV === 'production' ? [] : [...DEFAULT_DEV_ORIGINS, ...MOBILE_APP_ORIGINS];
 };
 
 export const buildConfig = (env: Env) =>

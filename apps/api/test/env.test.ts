@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseEnv } from '../src/config/env.js';
+import { resolveCorsOrigins } from '../src/config/index.js';
 
 const base = {
   DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
@@ -64,5 +65,28 @@ describe('parseEnv', () => {
     expect(
       parseEnv({ ...base, NODE_ENV: 'production', FRONTEND_URL: 'https://cpvts.example' }),
     ).toBeTruthy();
+  });
+});
+
+describe('resolveCorsOrigins', () => {
+  it('merges FRONTEND_URL and CORS_ORIGINS and includes mobile origins', () => {
+    const env = parseEnv({
+      ...base,
+      FRONTEND_URL: 'https://cptvs.vercel.app',
+      CORS_ORIGINS: 'https://*.vercel.app',
+    });
+    const origins = resolveCorsOrigins(env);
+    expect(origins).toContain('https://cptvs.vercel.app');
+    expect(origins).toContain('https://*.vercel.app');
+    expect(origins).toContain('https://localhost');
+    expect(origins).toContain('capacitor://localhost');
+  });
+
+  it('provides dev and mobile origins when none specified in development', () => {
+    const env = parseEnv({ ...base, NODE_ENV: 'development' });
+    const origins = resolveCorsOrigins(env);
+    expect(origins).toContain('http://localhost:5173');
+    expect(origins).toContain('https://localhost');
+    expect(origins).toContain('capacitor://localhost');
   });
 });
