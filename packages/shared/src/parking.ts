@@ -74,11 +74,22 @@ export interface PublicParkingLocation {
   coordinates: { latitude: number; longitude: number } | null;
 }
 
+/** Free and total spaces of one block for one vehicle category (public landing page). */
+export interface PublicBlockAvailability {
+  blockCode: string;
+  blockName: string;
+  vehicleType: VehicleType;
+  totalSlots: number;
+  availableSlots: number;
+}
+
 export interface PublicOverviewResponse {
   generatedAt: string;
   /** Always one entry per vehicle type, in `VEHICLE_TYPES` order. */
   availability: PublicAvailability[];
   locations: PublicParkingLocation[];
+  /** Live free/total spaces per block and vehicle category. */
+  blockAvailability: PublicBlockAvailability[];
   /** Null when no valid fee schedule has been configured. */
   feeSchedule: FeeSchedule | null;
 }

@@ -192,7 +192,7 @@ export function AdminUsersPage() {
             <span className="text-[10px] font-bold uppercase text-muted-foreground block">
               Campus Staff
             </span>
-            <span className="font-mono text-2xl font-black text-indigo-600">{counts.staff}</span>
+            <span className="font-mono text-2xl font-black text-brand">{counts.staff}</span>
           </Card>
 
           <Card

@@ -89,7 +89,7 @@ export function VehicleLocatorPage() {
             </div>
             <h3 className="text-xl font-bold tracking-tight">No Vehicle Currently Parked</h3>
             <p className="text-sm text-muted-foreground">
-              You do not have any active parking sessions. Once you park your vehicle with Park Now,
+              You do not have any active parking sessions. Once you park your vehicle with Park My Vehicle,
               its live location will be mapped here.
             </p>
             <Button asChild className="gap-2">

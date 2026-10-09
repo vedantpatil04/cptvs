@@ -15,6 +15,7 @@ import { auditRepository } from '../audit/audit.repository.js';
 import { hashPassword } from '../auth/password.js';
 import type { OperationContext } from '../parking/operation-context.js';
 import { userRepository } from '../users/user.repository.js';
+import { shiftErrors } from './shift.errors.js';
 import { isOnDuty } from './shift-policy.js';
 
 const STAFF_SELECT = {
@@ -111,6 +112,45 @@ export const securityStaffService = {
       }
       throw error;
     }
+  },
+
+  /**
+   * Removes a Security Staff member: the account is deactivated (signed out everywhere, history and
+   * receipts keep pointing at them) and their upcoming shifts are removed. Refused while they are
+   * on duty: end that shift first.
+   */
+  async remove(id: string, context: OperationContext): Promise<SecurityStaffMember> {
+    await withTransaction(async (tx) => {
+      const user = await tx.user.findFirst({ where: { id, role: 'SECURITY_STAFF' } });
+      if (!user) throw shiftErrors.staffNotFound();
+      const onDuty = await tx.securityShift.count({
+        where: { staffId: id, status: { in: ['CHECKED_IN', 'ACTIVE'] } },
+      });
+      if (onDuty > 0) {
+        throw shiftErrors.invalidState(
+          'This person is on duty. End their shift before removing them.',
+        );
+      }
+      const upcoming = await tx.securityShift.deleteMany({
+        where: { staffId: id, status: 'SCHEDULED' },
+      });
+      await tx.user.update({
+        where: { id },
+        data: { isActive: false, tokenVersion: { increment: 1 } },
+      });
+      await auditRepository.record(
+        {
+          action: AUDIT_ACTIONS.securityStaffRemoved,
+          actorId: context.actor.id,
+          entityType: AUDIT_ENTITY_TYPES.user,
+          entityId: id,
+          metadata: { username: user.username, removedUpcomingShifts: upcoming.count },
+          request: context.request,
+        },
+        tx,
+      );
+    });
+    return (await this.list()).find((member) => member.id === id)!;
   },
 
   /** Sets a new password and signs the person out everywhere (their tokens stop working). */

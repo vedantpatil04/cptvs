@@ -104,6 +104,19 @@ export const adminShiftsApi = {
       method: 'DELETE',
     }),
 
+  /** Switches the time (and gate/note) of a shift that is not finished yet. */
+  update: (id: string, body: { startsAt?: string; endsAt?: string; gate?: string | null; note?: string | null }) =>
+    apiRequest<ShiftView>(`/admin/shifts/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body,
+    }),
+
+  /** Removes a guard: deactivates the account and removes upcoming shifts (not while on duty). */
+  removeSecurityStaff: (id: string) =>
+    apiRequest<SecurityStaffMember>(`/admin/security-staff/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
   adminCheckOut: (id: string) =>
     apiRequest<ShiftView>(`/admin/shifts/${encodeURIComponent(id)}/check-out`, {
       method: 'POST',

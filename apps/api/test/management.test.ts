@@ -509,6 +509,7 @@ describe('session timeline', () => {
     expect(timeline.events.map((event) => event.action)).toEqual([
       'VEHICLE_CHECKED_IN',
       'SLOT_ASSIGNED',
+      'EXIT_TIME_CAPTURED',
       'CHECKOUT_INITIATED',
       'PAYMENT_INITIATED',
       'PAYMENT_SUCCEEDED',

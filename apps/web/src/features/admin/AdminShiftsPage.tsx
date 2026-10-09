@@ -40,6 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { adminShiftsApi } from '@/features/shifts/shifts-api';
 import { useApiQuery } from '@/hooks/use-api-query';
 import { useFormatters } from '@/hooks/use-formatters';
+import { campusLocalToIso, isoToCampusLocal } from '@/lib/duration';
 import { errorMessage } from '@/lib/error-message';
 
 export function AdminShiftsPage() {
@@ -168,8 +169,56 @@ export function AdminShiftsPage() {
     }
   };
 
+  const [editShift, setEditShift] = useState<ShiftView | null>(null);
+  const [editStart, setEditStart] = useState('');
+  const [editEnd, setEditEnd] = useState('');
+
+  const openEditShift = (shift: ShiftView) => {
+    setEditShift(shift);
+    setEditStart(isoToCampusLocal(shift.startsAt));
+    setEditEnd(isoToCampusLocal(shift.endsAt));
+    setModalError(null);
+  };
+
+  /** Switches the time of a shift, also after it was allotted (until it is finished). */
+  const handleEditShift = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editShift) return;
+    setSubmitting(true);
+    setModalError(null);
+    try {
+      await adminShiftsApi.update(editShift.id, {
+        startsAt: campusLocalToIso(editStart),
+        endsAt: campusLocalToIso(editEnd),
+      });
+      setEditShift(null);
+      rosterQuery.reload();
+    } catch (err) {
+      setModalError(errorMessage(t, err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRemoveStaff = async (guard: SecurityStaffMember) => {
+    if (
+      !confirm(
+        `Remove ${guard.fullName}? Their account is deactivated and their upcoming shifts are removed. Shifts they already worked stay on record.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await adminShiftsApi.removeSecurityStaff(guard.id);
+      staffQuery.reload();
+      rosterQuery.reload();
+    } catch (err) {
+      alert(errorMessage(t, err));
+    }
+  };
+
   const handleCancelShift = async (shiftId: string) => {
-    if (!confirm('Cancel this scheduled shift?')) return;
+    if (!confirm('Remove this shift from the roster?')) return;
     try {
       await adminShiftsApi.cancel(shiftId);
       rosterQuery.reload();
@@ -261,7 +310,8 @@ export function AdminShiftsPage() {
                   {/* Shifts List */}
                   {roster.shifts.length === 0 ? (
                     <div className="py-8 text-center text-sm text-muted-foreground border rounded-lg border-dashed">
-                      No shifts assigned for {selectedDate}. Click &quot;Assign Shift&quot; to assign personnel.
+                      No shifts assigned for {selectedDate}. Click &quot;Assign Shift&quot; to
+                      assign personnel.
                     </div>
                   ) : (
                     <div className="divide-y rounded-lg border">
@@ -288,10 +338,13 @@ export function AdminShiftsPage() {
                               ))}
                             </div>
                             <p className="text-muted-foreground font-mono">
-                              {shift.name} · {shift.gate ?? 'All Gates'} · {format.time(shift.startsAt)} – {format.time(shift.endsAt)}
+                              {shift.name} · {shift.gate ?? 'All Gates'} ·{' '}
+                              {format.time(shift.startsAt)} – {format.time(shift.endsAt)}
                             </p>
                             <p className="text-[11px] text-muted-foreground">
-                              Cash Collected: {format.paise(shift.cash.expectedCashPaise)} ({shift.cash.cashTransactions} txns) · Digital: {format.paise(shift.cash.digitalPaise)}
+                              Cash Collected: {format.paise(shift.cash.expectedCashPaise)} (
+                              {shift.cash.cashTransactions} txns) · Digital:{' '}
+                              {format.paise(shift.cash.digitalPaise)}
                             </p>
                           </div>
 
@@ -306,14 +359,27 @@ export function AdminShiftsPage() {
                                 Force Check-out
                               </Button>
                             )}
-                            {shift.status === 'SCHEDULED' && (
+                            {['SCHEDULED', 'CHECKED_IN', 'ACTIVE'].includes(shift.status) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openEditShift(shift)}
+                                className="text-xs h-9"
+                              >
+                                <Clock className="size-3.5" aria-hidden />
+                                Change time
+                              </Button>
+                            )}
+                            {['SCHEDULED', 'CHECKED_IN', 'ACTIVE', 'MISSED'].includes(
+                              shift.status,
+                            ) && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleCancelShift(shift.id)}
-                                className="text-xs h-7 text-destructive hover:bg-destructive/10"
+                                className="text-xs h-9 text-destructive hover:bg-destructive/10"
                               >
-                                Cancel
+                                Remove
                               </Button>
                             )}
                           </div>
@@ -371,7 +437,10 @@ export function AdminShiftsPage() {
                     <div key={tpl.id} className="p-3.5 rounded-xl border bg-card space-y-2">
                       <div className="flex items-center justify-between">
                         <h4 className="font-bold text-sm">{tpl.name}</h4>
-                        <Badge variant={tpl.isActive ? 'default' : 'secondary'} className="text-[10px]">
+                        <Badge
+                          variant={tpl.isActive ? 'default' : 'secondary'}
+                          className="text-[10px]"
+                        >
                           {tpl.isActive ? 'Active' : 'Inactive'}
                         </Badge>
                       </div>
@@ -410,12 +479,22 @@ export function AdminShiftsPage() {
               ) : (
                 <div className="divide-y rounded-lg border">
                   {staffList.map((guard: SecurityStaffMember) => (
-                    <div key={guard.id} className="p-3.5 flex items-center justify-between gap-3 text-xs">
+                    <div
+                      key={guard.id}
+                      className="p-3.5 flex items-center justify-between gap-3 text-xs"
+                    >
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-foreground">{guard.fullName}</span>
-                          <span className="font-mono text-muted-foreground">({guard.username})</span>
-                          <Badge variant={guard.isActive ? 'outline' : 'secondary'} className="text-[10px]">
+                          <span className="font-bold text-sm text-foreground">
+                            {guard.fullName}
+                          </span>
+                          <span className="font-mono text-muted-foreground">
+                            ({guard.username})
+                          </span>
+                          <Badge
+                            variant={guard.isActive ? 'outline' : 'secondary'}
+                            className="text-[10px]"
+                          >
                             {guard.isActive ? 'Active' : 'Inactive'}
                           </Badge>
                         </div>
@@ -429,9 +508,25 @@ export function AdminShiftsPage() {
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] text-muted-foreground font-mono">
-                        {guard.lastLoginAt ? `Last login: ${format.dateTime(guard.lastLoginAt)}` : 'Never logged in'}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="hidden text-[11px] text-muted-foreground font-mono sm:inline">
+                          {guard.lastLoginAt
+                            ? `Last login: ${format.dateTime(guard.lastLoginAt)}`
+                            : 'Never logged in'}
+                        </span>
+                        {guard.isActive && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 text-xs text-destructive hover:bg-destructive/10"
+                            disabled={Boolean(guard.onDutyShift)}
+                            title={guard.onDutyShift ? 'End their shift first' : undefined}
+                            onClick={() => void handleRemoveStaff(guard)}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -440,6 +535,62 @@ export function AdminShiftsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog: change the time of a shift */}
+      <Dialog open={editShift !== null} onOpenChange={(open) => !open && setEditShift(null)}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={handleEditShift} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>Change shift time</DialogTitle>
+              <DialogDescription className="text-xs">
+                {editShift?.staff.fullName} · {editShift?.name}. Times are on the campus clock.
+                {editShift && editShift.status !== 'SCHEDULED'
+                  ? ' This guard is on duty: the new window must still cover the current time.'
+                  : ''}
+              </DialogDescription>
+            </DialogHeader>
+            {modalError && (
+              <Alert variant="destructive">
+                <ShieldAlert className="size-4" />
+                <AlertDescription className="text-xs">{modalError}</AlertDescription>
+              </Alert>
+            )}
+            <div className="grid gap-3 text-xs">
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-shift-start">Starts</Label>
+                <Input
+                  id="edit-shift-start"
+                  type="datetime-local"
+                  value={editStart}
+                  onChange={(event) => setEditStart(event.target.value)}
+                  required
+                  className="h-11"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="edit-shift-end">Ends</Label>
+                <Input
+                  id="edit-shift-end"
+                  type="datetime-local"
+                  value={editEnd}
+                  onChange={(event) => setEditEnd(event.target.value)}
+                  required
+                  className="h-11"
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditShift(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting && <LoaderCircle className="animate-spin" aria-hidden />}
+                Save time
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: Assign Shift */}
       <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
@@ -461,7 +612,9 @@ export function AdminShiftsPage() {
 
             <div className="space-y-3 text-xs">
               <div>
-                <Label htmlFor="staff-select" className="text-xs">Security Guard</Label>
+                <Label htmlFor="staff-select" className="text-xs">
+                  Security Guard
+                </Label>
                 <select
                   id="staff-select"
                   value={assignStaffId}
@@ -479,7 +632,9 @@ export function AdminShiftsPage() {
               </div>
 
               <div>
-                <Label htmlFor="template-select" className="text-xs">Shift Template</Label>
+                <Label htmlFor="template-select" className="text-xs">
+                  Shift Template
+                </Label>
                 <select
                   id="template-select"
                   value={assignTemplateId}
@@ -487,16 +642,20 @@ export function AdminShiftsPage() {
                   className="w-full mt-1 rounded-md border border-input bg-background px-3 py-2 text-xs"
                 >
                   <option value="">Select template (or default 08:00-16:00)...</option>
-                  {templates.filter((x) => x.isActive).map((tpl) => (
-                    <option key={tpl.id} value={tpl.id}>
-                      {tpl.name} ({tpl.startTime} - {tpl.endTime})
-                    </option>
-                  ))}
+                  {templates
+                    .filter((x) => x.isActive)
+                    .map((tpl) => (
+                      <option key={tpl.id} value={tpl.id}>
+                        {tpl.name} ({tpl.startTime} - {tpl.endTime})
+                      </option>
+                    ))}
                 </select>
               </div>
 
               <div>
-                <Label htmlFor="gate-input" className="text-xs">Assigned Gate</Label>
+                <Label htmlFor="gate-input" className="text-xs">
+                  Assigned Gate
+                </Label>
                 <Input
                   id="gate-input"
                   value={assignGate}
@@ -508,7 +667,12 @@ export function AdminShiftsPage() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" size="sm" onClick={() => setAssignDialogOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAssignDialogOpen(false)}
+              >
                 Cancel
               </Button>
               <Button type="submit" size="sm" disabled={submitting || !assignStaffId}>
@@ -540,7 +704,9 @@ export function AdminShiftsPage() {
 
             <div className="space-y-3 text-xs">
               <div>
-                <Label htmlFor="tpl-name" className="text-xs">Template Name</Label>
+                <Label htmlFor="tpl-name" className="text-xs">
+                  Template Name
+                </Label>
                 <Input
                   id="tpl-name"
                   value={templateName}
@@ -553,7 +719,9 @@ export function AdminShiftsPage() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label htmlFor="tpl-start" className="text-xs">Start Time (HH:MM)</Label>
+                  <Label htmlFor="tpl-start" className="text-xs">
+                    Start Time (HH:MM)
+                  </Label>
                   <Input
                     id="tpl-start"
                     value={templateStart}
@@ -564,7 +732,9 @@ export function AdminShiftsPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="tpl-end" className="text-xs">End Time (HH:MM)</Label>
+                  <Label htmlFor="tpl-end" className="text-xs">
+                    End Time (HH:MM)
+                  </Label>
                   <Input
                     id="tpl-end"
                     value={templateEnd}
@@ -577,7 +747,9 @@ export function AdminShiftsPage() {
               </div>
 
               <div>
-                <Label htmlFor="tpl-gate" className="text-xs">Default Gate (Optional)</Label>
+                <Label htmlFor="tpl-gate" className="text-xs">
+                  Default Gate (Optional)
+                </Label>
                 <Input
                   id="tpl-gate"
                   value={templateGate}
@@ -589,7 +761,12 @@ export function AdminShiftsPage() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" size="sm" onClick={() => setTemplateDialogOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setTemplateDialogOpen(false)}
+              >
                 Cancel
               </Button>
               <Button type="submit" size="sm" disabled={submitting || !templateName}>
@@ -621,7 +798,9 @@ export function AdminShiftsPage() {
 
             <div className="space-y-3 text-xs">
               <div>
-                <Label htmlFor="staff-full" className="text-xs">Full Name</Label>
+                <Label htmlFor="staff-full" className="text-xs">
+                  Full Name
+                </Label>
                 <Input
                   id="staff-full"
                   value={staffFullName}
@@ -633,7 +812,9 @@ export function AdminShiftsPage() {
               </div>
 
               <div>
-                <Label htmlFor="staff-user" className="text-xs">Username</Label>
+                <Label htmlFor="staff-user" className="text-xs">
+                  Username
+                </Label>
                 <Input
                   id="staff-user"
                   value={staffUsername}
@@ -645,7 +826,9 @@ export function AdminShiftsPage() {
               </div>
 
               <div>
-                <Label htmlFor="staff-pass" className="text-xs">Initial Password</Label>
+                <Label htmlFor="staff-pass" className="text-xs">
+                  Initial Password
+                </Label>
                 <Input
                   id="staff-pass"
                   type="password"
@@ -659,10 +842,19 @@ export function AdminShiftsPage() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" size="sm" onClick={() => setStaffDialogOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setStaffDialogOpen(false)}
+              >
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={submitting || !staffUsername || !staffFullName || !staffPassword}>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={submitting || !staffUsername || !staffFullName || !staffPassword}
+              >
                 {submitting && <LoaderCircle className="size-3.5 animate-spin mr-1" />}
                 Create Account
               </Button>

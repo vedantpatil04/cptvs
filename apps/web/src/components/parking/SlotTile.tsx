@@ -71,7 +71,14 @@ export const SlotTile = forwardRef<HTMLButtonElement, SlotTileProps>(function Sl
   );
 });
 
-const COUNT_ORDER: SlotTileState[] = ['AVAILABLE', 'HELD', 'OCCUPIED', 'BLOCKED', 'DISABLED'];
+const COUNT_ORDER: SlotTileState[] = [
+  'AVAILABLE',
+  'HELD',
+  'OCCUPIED',
+  'RESERVED',
+  'BLOCKED',
+  'DISABLED',
+];
 
 /** "Available 4 · Held 0 · Occupied 5 · Blocked 1" with the same swatches as the tiles. */
 export function SlotCountChips({
@@ -86,7 +93,7 @@ export function SlotCountChips({
     <ul className={cn('flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm', className)}>
       {COUNT_ORDER.map((state) => {
         const value = counts[state.toLowerCase() as keyof SlotCountValues];
-        if (state === 'DISABLED' && value === 0) return null;
+        if ((state === 'DISABLED' || state === 'RESERVED') && value === 0) return null;
         return (
           <li key={state} className="flex items-center gap-1.5">
             <span

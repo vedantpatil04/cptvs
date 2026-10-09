@@ -43,6 +43,8 @@ export interface NewSessionInput {
   };
   /** The Park Now offer this session confirms, if any. */
   offerId?: string;
+  /** Reuse this opaque reference as the session QR (a visitor reservation keeps its QR). */
+  entryReference?: string;
   request: RequestMeta;
 }
 
@@ -63,7 +65,7 @@ export const createActiveSession = async (
   const session = await tx.parkingSession.create({
     data: {
       sessionNumber,
-      entryReference: newOpaqueReference(),
+      entryReference: input.entryReference ?? newOpaqueReference(),
       vehicleId: input.vehicle.id,
       slotId: input.slot.id,
       vehicleType: input.vehicleType,

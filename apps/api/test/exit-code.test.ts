@@ -84,6 +84,13 @@ describe('the 6-digit exit code', () => {
         where: { action: 'CHECKOUT_CODE_ENTERED', entityId: session.sessionNumber },
       }),
     ).toBe(1);
+
+    // Entering the code at the exit gate stops the timer, like a scan; entering it again does not move it.
+    const captured = await prisma.parkingSession.findUniqueOrThrow({
+      where: { sessionNumber: session.sessionNumber },
+    });
+    expect(captured.exitCapturedAt).not.toBeNull();
+    expect(body.exitAt).toBe(captured.exitCapturedAt?.toISOString());
   });
 
   it('stores only a keyed hash, never the code', async () => {

@@ -8,4 +8,5 @@ export const SLOT_TONE: Record<SlotStatus, StatusTone> = {
   OCCUPIED: 'danger',
   BLOCKED: 'neutral',
   HELD: 'warning',
+  RESERVED: 'info',
 };

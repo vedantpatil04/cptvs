@@ -58,13 +58,21 @@ const toManagedSlot = (slot: SlotRow, hour: number): ManagedSlot => {
 };
 
 const countsOf = (slots: ManagedSlot[]): SlotCounts => {
-  const counts: SlotCounts = { total: 0, available: 0, occupied: 0, blocked: 0, held: 0 };
+  const counts: SlotCounts = {
+    total: 0,
+    available: 0,
+    occupied: 0,
+    blocked: 0,
+    held: 0,
+    reserved: 0,
+  };
   for (const slot of slots) {
     if (!slot.isEnabled || slot.archivedAt) continue;
     counts.total += 1;
     if (slot.status === 'AVAILABLE') counts.available += 1;
     else if (slot.status === 'OCCUPIED') counts.occupied += 1;
     else if (slot.status === 'BLOCKED') counts.blocked += 1;
+    else if (slot.status === 'RESERVED') counts.reserved = (counts.reserved ?? 0) + 1;
     else counts.held += 1;
   }
   return counts;

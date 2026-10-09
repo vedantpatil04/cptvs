@@ -11,3 +11,5 @@ export * from './roles.js';
 export * from './shifts.js';
 export * from './users.js';
 export * from './validation.js';
+export * from './vip.js';
+export * from './visitor-parking.js';

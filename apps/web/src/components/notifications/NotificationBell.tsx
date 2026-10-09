@@ -205,7 +205,7 @@ function NotificationIcon({ kind }: { kind: NotificationKind }) {
       );
     case 'SHIFT_ASSIGNED':
       return (
-        <div className="flex size-7 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-600 shrink-0">
+        <div className="flex size-7 items-center justify-center rounded-full bg-brand/10 text-brand shrink-0">
           <Calendar className="size-4" />
         </div>
       );
@@ -230,7 +230,7 @@ function NotificationIcon({ kind }: { kind: NotificationKind }) {
     case 'PARKING_NOTICE':
     default:
       return (
-        <div className="flex size-7 items-center justify-center rounded-full bg-sky-500/10 text-sky-600 shrink-0">
+        <div className="flex size-7 items-center justify-center rounded-full bg-brand/10 text-brand shrink-0">
           <Info className="size-4" />
         </div>
       );

@@ -15,7 +15,7 @@ import { SLOT_STATE_STYLE, type SlotCountValues, type SlotTileState } from './sl
 import { SlotCountChips, SlotTile } from './SlotTile';
 
 const VEHICLE_ICON = { TWO_WHEELER: Bike, FOUR_WHEELER: Car } as const;
-const LEGEND: SlotTileState[] = ['AVAILABLE', 'HELD', 'OCCUPIED', 'BLOCKED'];
+const LEGEND: SlotTileState[] = ['AVAILABLE', 'HELD', 'OCCUPIED', 'RESERVED', 'BLOCKED'];
 
 export interface SelectedSlot {
   slot: ParkingMapSlot;
@@ -31,7 +31,11 @@ interface ParkingMapProps {
 }
 
 /** The server's per-zone counts, in the shape the count chips draw. */
-const countsOf = (zone: ParkingMapZone): SlotCountValues => ({ ...zone.counts, disabled: 0 });
+const countsOf = (zone: ParkingMapZone): SlotCountValues => ({
+  ...zone.counts,
+  reserved: zone.counts.reserved ?? 0,
+  disabled: 0,
+});
 
 const sum = (zones: ParkingMapZone[]): SlotCountValues =>
   zones.reduce<SlotCountValues>(
@@ -39,11 +43,12 @@ const sum = (zones: ParkingMapZone[]): SlotCountValues =>
       total: total.total + zone.counts.total,
       available: total.available + zone.counts.available,
       held: total.held + zone.counts.held,
+      reserved: total.reserved + (zone.counts.reserved ?? 0),
       occupied: total.occupied + zone.counts.occupied,
       blocked: total.blocked + zone.counts.blocked,
       disabled: 0,
     }),
-    { total: 0, available: 0, held: 0, occupied: 0, blocked: 0, disabled: 0 },
+    { total: 0, available: 0, held: 0, reserved: 0, occupied: 0, blocked: 0, disabled: 0 },
   );
 
 /**

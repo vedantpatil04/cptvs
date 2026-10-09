@@ -56,7 +56,7 @@ export function PortalParkingPage() {
               <Button asChild size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
                 <Link to="/portal/park-now">
                   <ParkingCircle className="size-4" />
-                  Park Now
+                  Park My Vehicle
                 </Link>
               </Button>
             )}
@@ -136,7 +136,7 @@ export function PortalParkingPage() {
               <Button asChild className="gap-2 shrink-0 bg-primary shadow-xs">
                 <Link to="/portal/park-now">
                   <ParkingCircle className="size-4" />
-                  Park Now
+                  Park My Vehicle
                 </Link>
               </Button>
             </Card>

@@ -8,6 +8,7 @@ import type {
 } from '@cpvts/shared';
 
 import type { ParkingBlock, Payment } from '../../generated/prisma/client.js';
+import { campusHour } from '../../lib/campus-time.js';
 import { calculateFee } from '../fees/fee-engine.js';
 import type { ReceiptWithRelations, SessionWithRelations } from './parking.repository.js';
 
@@ -40,7 +41,11 @@ export const toSessionView = (
   { currentHour, schedule }: LiveContext,
 ): ParkingSessionView => {
   const isActive = session.status === 'ACTIVE';
-  const liveDuration = isActive ? currentDuration(session.entryHour, currentHour) : null;
+  // Once Security has scanned the session at the exit gate the timer is stopped: the live values
+  // describe that captured instant, not the moment the view is read.
+  const frozenAt = isActive ? session.exitCapturedAt : null;
+  const effectiveHour = frozenAt ? campusHour(frozenAt) : currentHour;
+  const liveDuration = isActive ? currentDuration(session.entryHour, effectiveHour) : null;
 
   return {
     sessionNumber: session.sessionNumber,
@@ -56,12 +61,14 @@ export const toSessionView = (
     entryHour: session.entryHour,
     entryAt: session.entryAt.toISOString(),
     entryReference: isActive ? session.entryReference : null,
-    currentHour: isActive ? currentHour : null,
+    currentHour: isActive ? effectiveHour : null,
     currentDurationHours: liveDuration,
     estimatedFee:
       isActive && schedule && liveDuration !== null
         ? calculateFee(schedule, session.ownerCategory, session.vehicleType, liveDuration)
         : null,
+    exitCapturedAt: frozenAt?.toISOString() ?? null,
+    timeAdjusted: session.timeAdjustedAt !== null,
     exitHour: session.exitHour,
     exitAt: session.exitAt?.toISOString() ?? null,
     durationHours: session.durationHours,

@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { campusDateAt, campusHourAt, elapsedSeconds, formatClock } from './duration';
+import {
+  campusDateAt,
+  campusHourAt,
+  campusLocalToIso,
+  elapsedSeconds,
+  formatClock,
+  isoToCampusLocal,
+} from './duration';
 import { resetServerClock, serverNow, syncServerClock } from './server-clock';
 
 describe('elapsedSeconds / formatClock', () => {
@@ -67,5 +74,17 @@ describe('server clock', () => {
     syncServerClock('not a date', 0, 10);
     syncServerClock(new Date(Date.now() + 3_600_000).toUTCString(), 0, 60_000);
     expect(Math.abs(serverNow() - Date.now())).toBeLessThan(50);
+  });
+});
+
+describe('campus local time inputs', () => {
+  it('round-trips an instant through the campus datetime-local format', () => {
+    const iso = '2026-10-09T04:30:00.000Z'; // 10:00 in India
+    expect(isoToCampusLocal(iso, 'Asia/Kolkata')).toBe('2026-10-09T10:00');
+    expect(campusLocalToIso('2026-10-09T10:00', 'Asia/Kolkata')).toBe(iso);
+    expect(campusLocalToIso('2026-10-09T23:45', 'Asia/Kolkata')).toBe('2026-10-09T18:15:00.000Z');
+    expect(campusLocalToIso(isoToCampusLocal('2026-10-10T20:15:00.000Z', 'UTC'), 'UTC')).toBe(
+      '2026-10-10T20:15:00.000Z',
+    );
   });
 });

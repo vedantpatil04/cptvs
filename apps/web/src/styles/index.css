@@ -8,52 +8,57 @@
  * shadcn set for status badges and alerts.
  */
 :root {
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
-  --background: oklch(0.985 0.002 247.84);
-  --foreground: oklch(0.208 0.042 265.755);
+  /* Warm paper surfaces, graphite text. */
+  --background: oklch(0.975 0.005 85);
+  --foreground: oklch(0.21 0.008 70);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.208 0.042 265.755);
+  --card-foreground: oklch(0.21 0.008 70);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.21 0.008 70);
 
-  /* Brand: deep campus blue */
-  --primary: oklch(0.379 0.146 265.522);
-  --primary-foreground: oklch(0.985 0.002 247.84);
-  --secondary: oklch(0.951 0.023 255.09);
-  --secondary-foreground: oklch(0.379 0.146 265.522);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.504 0.043 257.417);
-  --accent: oklch(0.951 0.023 255.09);
-  --accent-foreground: oklch(0.279 0.077 262.02);
-  --destructive: oklch(0.577 0.245 27.325);
+  /* Primary: charcoal. Brand: emerald, used sparingly for the main action and live states. */
+  --primary: oklch(0.27 0.008 70);
+  --primary-foreground: oklch(0.985 0.004 85);
+  --brand: oklch(0.52 0.13 160);
+  --brand-foreground: oklch(0.99 0.005 160);
+  --secondary: oklch(0.945 0.008 85);
+  --secondary-foreground: oklch(0.27 0.008 70);
+  --muted: oklch(0.955 0.006 85);
+  --muted-foreground: oklch(0.5 0.012 75);
+  --accent: oklch(0.945 0.02 160);
+  --accent-foreground: oklch(0.3 0.06 160);
+  --destructive: oklch(0.55 0.2 27);
   --destructive-foreground: oklch(0.985 0 0);
 
-  --success: oklch(0.527 0.137 150.069);
+  /* Status colours stay recognisable and accessible; "info" is neutral graphite, not blue. */
+  --success: oklch(0.5 0.12 158);
   --success-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.666 0.157 58.318);
+  --warning: oklch(0.58 0.14 65);
   --warning-foreground: oklch(0.985 0 0);
-  --info: oklch(0.546 0.215 262.881);
+  --info: oklch(0.44 0.012 75);
+  /* A slot kept by Security for a VIP / emergency vehicle. */
+  --reserved: oklch(0.5 0.14 320);
   --info-foreground: oklch(0.985 0 0);
 
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.546 0.215 262.881);
+  --border: oklch(0.905 0.008 85);
+  --input: oklch(0.89 0.008 85);
+  --ring: oklch(0.6 0.12 160);
 
-  --sidebar: oklch(0.279 0.077 262.02);
-  --sidebar-foreground: oklch(0.929 0.013 255.508);
-  --sidebar-muted-foreground: oklch(0.704 0.04 256.788);
-  --sidebar-accent: oklch(0.379 0.146 265.522);
-  --sidebar-accent-foreground: oklch(1 0 0);
-  --sidebar-border: oklch(0.372 0.068 262.02);
+  --sidebar: oklch(0.2 0.006 70);
+  --sidebar-foreground: oklch(0.9 0.006 85);
+  --sidebar-muted-foreground: oklch(0.7 0.012 80);
+  --sidebar-accent: oklch(0.3 0.045 160);
+  --sidebar-accent-foreground: oklch(0.98 0.01 160);
+  --sidebar-border: oklch(0.3 0.006 70);
 
   /*
-   * Chart series, in fixed categorical order (validated for colour-vision
-   * deficiency on light surfaces). Series colours mark data only; text in and
+   * Chart series, in fixed categorical order. Series colours mark data only; text in and
    * around charts always uses the text tokens.
    */
-  --chart-1: #2a78d6;
-  --chart-2: #eb6834;
+  --chart-1: #2f9e6b;
+  --chart-2: #d98a2b;
 }
 
 @theme inline {
@@ -74,6 +79,9 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-brand: var(--brand);
+  --color-reserved: var(--reserved);
+  --color-brand-foreground: var(--brand-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);

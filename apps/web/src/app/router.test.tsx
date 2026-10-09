@@ -67,6 +67,22 @@ const overview: PublicOverviewResponse = {
       coordinates: null,
     },
   ],
+  blockAvailability: [
+    {
+      blockCode: 'BLOCK-2W',
+      blockName: 'Two-Wheeler Parking Block',
+      vehicleType: 'TWO_WHEELER',
+      totalSlots: 10,
+      availableSlots: 7,
+    },
+    {
+      blockCode: 'BLOCK-4W',
+      blockName: 'Four-Wheeler Parking Block',
+      vehicleType: 'FOUR_WHEELER',
+      totalSlots: 5,
+      availableSlots: 0,
+    },
+  ],
   feeSchedule: {
     currency: 'INR',
     rules: {
@@ -89,9 +105,21 @@ describe('public landing page', () => {
     vi.stubGlobal('fetch', fetchMock);
     const memoryRouter = renderAt('/');
 
-    expect(await screen.findByText('7')).toBeInTheDocument();
+    // The one primary action is "Park My Vehicle"; visitors need no account.
+    expect(
+      await screen.findByRole('heading', { name: 'Park on campus without choosing a slot.' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Park My Vehicle' })).toHaveAttribute(
+      'href',
+      '/visitor/park',
+    );
+
+    // Live free spaces come from the server: totals per category and a row per block.
+    expect((await screen.findAllByText('7')).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('of 10 spaces free')).toBeInTheDocument();
-    expect(screen.getByText('Full')).toBeInTheDocument();
+    expect(screen.getByText('Two-Wheeler Parking Block')).toBeInTheDocument();
+    expect(screen.getByText('free of 10')).toBeInTheDocument();
+    expect(screen.getByText('free of 5')).toBeInTheDocument();
     expect(screen.getByText('First 2 hours free, then ₹10 per hour')).toBeInTheDocument();
     expect(screen.getByText('₹40 per hour')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open in Google Maps/ })).toHaveAttribute(
@@ -99,7 +127,7 @@ describe('public landing page', () => {
       'https://www.google.com/maps/search/?api=1&query=15.85%2C74.5',
     );
     expect(screen.getByRole('button', { name: /Map location not configured yet/ })).toBeDisabled();
-    expect(screen.getAllByRole('link', { name: /Admin \/ Staff login/ })[0]).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: /sign in|login/i })[0]).toHaveAttribute(
       'href',
       '/login',
     );

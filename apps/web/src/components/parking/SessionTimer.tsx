@@ -1,5 +1,5 @@
 import type { ParkingSessionView } from '@cpvts/shared';
-import { Clock, Receipt } from 'lucide-react';
+import { Clock, Receipt, Square } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -40,22 +40,27 @@ interface SessionTimerProps {
  * The parking timer and the money that goes with it. While the session is active it counts up
  * from the authoritative entry instant and shows the estimated fee, clearly labelled as an
  * estimate; once completed it shows the exit time, the total time and the frozen final fee.
+ * Between the two — Security has scanned the session at the exit gate, payment is pending — the
+ * server has captured the exit instant: the timer is then stopped at it and no longer moves.
  */
 export function SessionTimer({ session, onStale, compact = false, className }: SessionTimerProps) {
   const { t } = useTranslation();
   const format = useFormatters();
   const active = session.status === 'ACTIVE';
-  const nowMs = useServerNow(active);
+  // Stopped at the exit gate: the clock reads the captured instant, whatever the time is now.
+  const stoppedAt = active && session.exitCapturedAt ? Date.parse(session.exitCapturedAt) : null;
+  const nowMs = useServerNow(active && stoppedAt === null);
 
   // The estimate is priced by the server in whole campus hours; refresh it when the hour turns.
   const clockHour = campusHourAt(nowMs);
   const requestedHour = useRef<number | null>(null);
   useEffect(() => {
-    if (!active || session.currentHour === null || clockHour === session.currentHour) return;
+    if (!active || stoppedAt !== null) return;
+    if (session.currentHour === null || clockHour === session.currentHour) return;
     if (requestedHour.current === clockHour) return;
     requestedHour.current = clockHour;
     onStale?.();
-  }, [active, clockHour, session.currentHour, onStale]);
+  }, [active, stoppedAt, clockHour, session.currentHour, onStale]);
 
   if (!active) {
     const exitAt = session.exitAt;
@@ -98,7 +103,7 @@ export function SessionTimer({ session, onStale, compact = false, className }: S
   }
 
   const estimate = session.estimatedFee;
-  const seconds = elapsedSeconds(session.entryAt, nowMs);
+  const seconds = elapsedSeconds(session.entryAt, stoppedAt ?? nowMs);
 
   if (compact) {
     return (
@@ -112,6 +117,9 @@ export function SessionTimer({ session, onStale, compact = false, className }: S
           >
             {formatClock(seconds)}
           </span>
+          {stoppedAt !== null && (
+            <span className="text-xs text-muted-foreground">({t('parking.timer.stopped')})</span>
+          )}
         </span>
         <span className="text-sm text-muted-foreground">
           {t('parking.timer.estimatedFeeShort')}:{' '}
@@ -124,22 +132,41 @@ export function SessionTimer({ session, onStale, compact = false, className }: S
   }
 
   return (
-    <div className={cn('rounded-xl border border-primary/20 bg-primary/5 p-4 sm:p-5', className)}>
+    <div
+      className={cn(
+        'rounded-xl border p-4 sm:p-5',
+        stoppedAt === null ? 'border-primary/20 bg-primary/5' : 'border-border bg-muted/40',
+        className,
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            <Clock className="size-4 text-primary" aria-hidden />
-            {t('parking.timer.elapsed')}
+            {stoppedAt === null ? (
+              <Clock className="size-4 text-primary" aria-hidden />
+            ) : (
+              <Square className="size-3.5 fill-current" aria-hidden />
+            )}
+            {stoppedAt === null ? t('parking.timer.elapsed') : t('parking.timer.stopped')}
           </p>
           <p
             role="timer"
             aria-label={t('parking.timer.elapsed')}
-            className="mt-1 font-mono text-4xl font-bold tabular-nums tracking-tight text-primary sm:text-5xl"
+            className={cn(
+              'mt-1 font-mono text-4xl font-bold tabular-nums tracking-tight sm:text-5xl',
+              stoppedAt === null && 'text-primary',
+            )}
           >
             {formatClock(seconds)}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             {t('parking.timer.entered')} {format.dateTime(session.entryAt)}
+            {session.exitCapturedAt && (
+              <>
+                {' · '}
+                {t('parking.timer.stoppedAt', { time: format.dateTime(session.exitCapturedAt) })}
+              </>
+            )}
           </p>
         </div>
       </div>

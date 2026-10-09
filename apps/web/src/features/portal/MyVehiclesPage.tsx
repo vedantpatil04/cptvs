@@ -261,7 +261,7 @@ export function MyVehiclesPage() {
                           >
                             <Link to="/portal/park-now">
                               <ParkingCircle className="size-3.5" />
-                              Park Now
+                              Park My Vehicle
                             </Link>
                           </Button>
                         )}

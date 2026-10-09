@@ -323,18 +323,22 @@ export const shiftService = {
 
       const startsAt = patch.startsAt ? new Date(patch.startsAt) : shift.startsAt;
       const endsAt = patch.endsAt ? new Date(patch.endsAt) : shift.endsAt;
-      if (patch.startsAt !== undefined && shift.status !== 'SCHEDULED') {
-        throw shiftErrors.invalidState(
-          'The start of a shift can only be corrected before check-in.',
-        );
-      }
-      if (
-        patch.endsAt !== undefined &&
-        !['SCHEDULED', 'CHECKED_IN', 'ACTIVE'].includes(shift.status)
-      ) {
-        throw shiftErrors.invalidState('A finished shift can no longer be extended or corrected.');
+      // The time of a shift can be switched at any point until it is finished — before it starts
+      // or while the guard is on duty — so the roster can follow reality.
+      const open = ['SCHEDULED', 'CHECKED_IN', 'ACTIVE'].includes(shift.status);
+      if ((patch.startsAt !== undefined || patch.endsAt !== undefined) && !open) {
+        throw shiftErrors.invalidState('A finished shift can no longer be changed.');
       }
       if (endsAt <= startsAt) throw badRequest('A shift must end after it starts.');
+      // A guard already on duty keeps a window that covers the present moment.
+      if (shift.status !== 'SCHEDULED' && open) {
+        const now = new Date();
+        if (startsAt > now || endsAt <= now) {
+          throw shiftErrors.invalidState(
+            'A shift that is on duty must keep covering the current time.',
+          );
+        }
+      }
 
       await lockStaff(tx, shift.staffId);
       if (patch.startsAt !== undefined || patch.endsAt !== undefined) {
@@ -381,15 +385,31 @@ export const shiftService = {
     return (await loadShiftView(id))!;
   },
 
-  /** Removes a shift nobody has started (it has no payments, so no history is lost). */
+  /**
+   * Removes a shift, also after it was allotted and even while the guard is on duty, as long as it
+   * has recorded nothing (no payments, no cash handover): then no history is lost. A shift that
+   * handled money or is finished is a record and is ended, not removed.
+   */
   async cancel(id: string, context: OperationContext): Promise<void> {
     await withTransaction(async (tx) => {
       const shift = await tx.securityShift.findUnique({ where: { id } });
       if (!shift) throw shiftErrors.notFound();
-      const { count } = await tx.securityShift.deleteMany({ where: { id, status: 'SCHEDULED' } });
-      if (count !== 1) {
-        throw shiftErrors.invalidState('Only a shift that has not started can be removed.');
+      if (!['SCHEDULED', 'CHECKED_IN', 'ACTIVE', 'MISSED'].includes(shift.status)) {
+        throw shiftErrors.invalidState('A finished shift is a record and can not be removed.');
       }
+      const [payments, handovers] = await Promise.all([
+        tx.payment.count({ where: { shiftId: id } }),
+        tx.cashHandover.count({ where: { shiftId: id } }),
+      ]);
+      if (payments > 0 || handovers > 0) {
+        throw shiftErrors.invalidState(
+          'This shift has recorded payments. End the shift instead of removing it.',
+        );
+      }
+      const { count } = await tx.securityShift.deleteMany({
+        where: { id, status: { in: ['SCHEDULED', 'CHECKED_IN', 'ACTIVE', 'MISSED'] } },
+      });
+      if (count !== 1) throw shiftErrors.invalidState();
       await audit(
         tx,
         context.actor.id,

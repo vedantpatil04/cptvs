@@ -102,6 +102,8 @@ enum SlotStatus {
   HELD
   OCCUPIED
   BLOCKED
+  /// Kept by Security for a VIP / emergency vehicle: never allocated automatically.
+  RESERVED
 
   @@map("slot_status")
 }
@@ -348,9 +350,11 @@ model ParkingSlot {
   createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  zone     ParkingZone      @relation(fields: [zoneId], references: [id], onDelete: Restrict)
-  sessions ParkingSession[]
-  offers   ParkNowOffer[]
+  zone                ParkingZone          @relation(fields: [zoneId], references: [id], onDelete: Restrict)
+  sessions            ParkingSession[]
+  offers              ParkNowOffer[]
+  visitorReservations VisitorReservation[]
+  vipReservations     SlotReservation[]
 
   @@index([zoneId, status])
   @@index([status])
@@ -386,51 +390,58 @@ model Vehicle {
 }
 
 model ParkingSession {
-  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   /// Unique, hard-to-guess Parking Session Number (Master Blueprint §30).
-  sessionNumber  String               @unique @map("session_number") @db.VarChar(32)
+  sessionNumber   String               @unique @map("session_number") @db.VarChar(32)
   /// Opaque reference encoded in the entry QR; validated server-side (Master Blueprint §31).
-  entryReference String               @unique @map("entry_reference") @db.VarChar(128)
-  vehicleId      String               @map("vehicle_id") @db.Uuid
-  slotId         String               @map("slot_id") @db.Uuid
+  entryReference  String               @unique @map("entry_reference") @db.VarChar(128)
+  vehicleId       String               @map("vehicle_id") @db.Uuid
+  slotId          String               @map("slot_id") @db.Uuid
   /// Snapshot of the vehicle type at check-in.
-  vehicleType    VehicleType          @map("vehicle_type")
-  ownerCategory  OwnerCategory        @map("owner_category")
-  status         ParkingSessionStatus @default(ACTIVE)
+  vehicleType     VehicleType          @map("vehicle_type")
+  ownerCategory   OwnerCategory        @map("owner_category")
+  status          ParkingSessionStatus @default(ACTIVE)
   /// Whole-hour competition input model (0–23).
-  entryHour      Int                  @map("entry_hour") @db.SmallInt
-  exitHour       Int?                 @map("exit_hour") @db.SmallInt
-  entryAt        DateTime             @map("entry_at") @db.Timestamptz(3)
-  exitAt         DateTime?            @map("exit_at") @db.Timestamptz(3)
-  durationHours  Int?                 @map("duration_hours")
+  entryHour       Int                  @map("entry_hour") @db.SmallInt
+  exitHour        Int?                 @map("exit_hour") @db.SmallInt
+  entryAt         DateTime             @map("entry_at") @db.Timestamptz(3)
+  exitAt          DateTime?            @map("exit_at") @db.Timestamptz(3)
+  durationHours   Int?                 @map("duration_hours")
   /// Authoritative fee from the single backend fee engine, in paise.
-  feeAmountPaise Int?                 @map("fee_amount_paise")
+  feeAmountPaise  Int?                 @map("fee_amount_paise")
   /// Fee breakdown (`FeeBreakdown` in @cpvts/shared) frozen at finalization.
-  feeBreakdown   Json?                @map("fee_breakdown")
-  checkedInById  String               @map("checked_in_by_id") @db.Uuid
-  checkedOutById String?              @map("checked_out_by_id") @db.Uuid
+  feeBreakdown    Json?                @map("fee_breakdown")
+  checkedInById   String               @map("checked_in_by_id") @db.Uuid
+  checkedOutById  String?              @map("checked_out_by_id") @db.Uuid
   /// Who finalized the session. Final checkout is gate-controlled, so new sessions are
   /// finalized by SECURITY only; SELF_SERVICE and VISITOR remain for sessions finalized
   /// before the gate-controlled model (a VISITOR checkout has no `checkedOutById`).
-  checkedOutVia  CheckoutChannel?     @map("checked_out_via")
+  checkedOutVia   CheckoutChannel?     @map("checked_out_via")
   /// The account that owned the vehicle when the session began (null for an unregistered
   /// vehicle). The owner sees exactly the sessions that carry their id, even after they
   /// release the vehicle; a later owner of the same plate never sees them.
-  ownerUserId    String?              @map("owner_user_id") @db.Uuid
+  ownerUserId     String?              @map("owner_user_id") @db.Uuid
   /// "Ready to leave": set by the owner or visitor from the app. It never releases the slot;
   /// only the gate checkout (payment, receipt) completes the session.
-  exitRequestedAt DateTime?           @map("exit_requested_at") @db.Timestamptz(3)
-  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  exitRequestedAt DateTime?            @map("exit_requested_at") @db.Timestamptz(3)
+  /// The authoritative exit instant, captured by the server when Security first scans the session
+  /// QR (or enters the exit code) at the exit gate. The timer stops here and stays stopped; a
+  /// repeated scan never moves it. Only an audited Security correction can change it.
+  exitCapturedAt  DateTime?            @map("exit_captured_at") @db.Timestamptz(3)
+  /// Set when Security corrected the entry and/or exit time (the audit log keeps the originals).
+  timeAdjustedAt  DateTime?            @map("time_adjusted_at") @db.Timestamptz(3)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  vehicle      Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  slot         ParkingSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
-  checkedInBy  User        @relation("SessionCheckedInBy", fields: [checkedInById], references: [id], onDelete: Restrict)
-  checkedOutBy User?       @relation("SessionCheckedOutBy", fields: [checkedOutById], references: [id], onDelete: Restrict)
-  owner        User?       @relation("SessionOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
-  payments     Payment[]
-  receipt      Receipt?
-  exitCodes    ExitCode[]
+  vehicle            Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  slot               ParkingSlot         @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  checkedInBy        User                @relation("SessionCheckedInBy", fields: [checkedInById], references: [id], onDelete: Restrict)
+  checkedOutBy       User?               @relation("SessionCheckedOutBy", fields: [checkedOutById], references: [id], onDelete: Restrict)
+  owner              User?               @relation("SessionOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  payments           Payment[]
+  receipt            Receipt?
+  exitCodes          ExitCode[]
+  visitorReservation VisitorReservation?
 
   /// Database-level guarantee: a vehicle can have at most one ACTIVE session.
   @@unique([vehicleId], map: "parking_sessions_one_active_per_vehicle", where: { status: "ACTIVE" })
@@ -551,6 +562,82 @@ model ParkNowOffer {
   @@index([status, expiresAt])
   @@index([slotId])
   @@map("park_now_offers")
+}
+
+enum SlotReservationStatus {
+  ACTIVE
+  RELEASED
+
+  @@map("slot_reservation_status")
+}
+
+/// A slot Security keeps for an official / VIP guest or an emergency. While ACTIVE the slot is
+/// RESERVED (or OCCUPIED by the VIP) and no automatic allocation can take it; only an explicit
+/// release by Security returns it to AVAILABLE. Who, when and why are kept for the audit history.
+model SlotReservation {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slotId         String                @map("slot_id") @db.Uuid
+  /// The designated vehicle, if known. Without it Security confirms the guest at arrival.
+  vehicleNumber  String?               @map("vehicle_number") @db.VarChar(20)
+  guestName      String                @map("guest_name") @db.VarChar(120)
+  reason         String                @db.VarChar(300)
+  status         SlotReservationStatus @default(ACTIVE)
+  reservedById   String                @map("reserved_by_id") @db.Uuid
+  reservedByName String                @map("reserved_by_name") @db.VarChar(120)
+  reservedAt     DateTime              @default(now()) @map("reserved_at") @db.Timestamptz(3)
+  releasedById   String?               @map("released_by_id") @db.Uuid
+  releasedByName String?               @map("released_by_name") @db.VarChar(120)
+  releasedAt     DateTime?             @map("released_at") @db.Timestamptz(3)
+  releaseNote    String?               @map("release_note") @db.VarChar(300)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  slot ParkingSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  /// Database-level guarantee: a slot has at most one active reservation.
+  @@unique([slotId], map: "slot_reservations_one_active_per_slot", where: { status: "ACTIVE" })
+  @@index([status, reservedAt])
+  @@index([slotId])
+  @@map("slot_reservations")
+}
+
+enum VisitorReservationStatus {
+  HELD
+  ACTIVATED
+  EXPIRED
+  CANCELLED
+
+  @@map("visitor_reservation_status")
+}
+
+/// A visitor's self-service request for a space: the server picked and HELD the slot, and the
+/// visitor holds the session QR (`reference`). Nothing is parked until Security verifies the
+/// arrival and activates it; that creates the real session, which keeps the same reference.
+model VisitorReservation {
+  id            String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Opaque reference in the session QR; becomes the session's entry reference on activation.
+  reference     String                   @unique @db.VarChar(128)
+  vehicleNumber String                   @map("vehicle_number") @db.VarChar(20)
+  vehicleType   VehicleType              @map("vehicle_type")
+  contactPhone  String                   @map("contact_phone") @db.VarChar(16)
+  slotId        String                   @map("slot_id") @db.Uuid
+  /// Secret of the slot hold backing this reservation (see ParkingSlot.holdToken).
+  holdToken     String                   @map("hold_token") @db.VarChar(64)
+  /// `AllocationExplanation` (@cpvts/shared) produced by the allocation engine.
+  allocation    Json
+  status        VisitorReservationStatus @default(HELD)
+  expiresAt     DateTime                 @map("expires_at") @db.Timestamptz(3)
+  sessionId     String?                  @unique @map("session_id") @db.Uuid
+  createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  slot    ParkingSlot     @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  session ParkingSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  /// Database-level guarantee: a vehicle has at most one open reservation.
+  @@unique([vehicleNumber], map: "visitor_reservations_one_held_per_vehicle", where: { status: "HELD" })
+  @@index([status, expiresAt])
+  @@index([slotId])
+  @@map("visitor_reservations")
 }
 
 // ---------------------------------------------------------------------------

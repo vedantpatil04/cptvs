@@ -43,6 +43,26 @@ export const parkingErrors = {
       'QR_SESSION_MISMATCH',
       'This QR code does not belong to the session being checked out.',
     ),
+  visitorVehicleRegistered: () =>
+    new AppError(
+      409,
+      'VISITOR_VEHICLE_REGISTERED',
+      'This vehicle is registered to a CPVTS account. Sign in and use Park My Vehicle.',
+    ),
+  reservationNotFound: () =>
+    new AppError(404, 'RESERVATION_NOT_FOUND', 'No matching parking reservation was found.'),
+  reservationExpired: () =>
+    new AppError(
+      409,
+      'RESERVATION_EXPIRED',
+      'This reservation has expired or was cancelled. The space was released.',
+    ),
+  reservationsBusy: () =>
+    new AppError(
+      409,
+      'RESERVATIONS_BUSY',
+      'Too many reservations are open right now. Please try again in a few minutes.',
+    ),
   invalidExitCode: () =>
     new AppError(400, 'INVALID_EXIT_CODE', 'This exit code is invalid, expired or already used.'),
   sessionInconsistent: () =>
@@ -81,4 +101,24 @@ export const parkingErrors = {
       'The payment amount no longer matches the calculated fee. Start checkout again.',
     ),
   receiptNotFound: () => new AppError(404, 'RECEIPT_NOT_FOUND', 'Receipt not found.'),
+  sessionTimeLocked: () =>
+    new AppError(
+      409,
+      'SESSION_TIME_LOCKED',
+      'The times of a completed session cannot be changed here. Ask an administrator for a correction.',
+    ),
+  timeRangeInvalid: (
+    code: 'ENTRY_AFTER_EXIT' | 'EXIT_IN_FUTURE' | 'TIME_RANGE_OVERNIGHT' | 'TIME_UNCHANGED',
+  ) =>
+    new AppError(
+      400,
+      code,
+      {
+        ENTRY_AFTER_EXIT: 'The entry time cannot be after the exit time.',
+        EXIT_IN_FUTURE: 'The exit time cannot be in the future.',
+        TIME_RANGE_OVERNIGHT:
+          'Entry and exit must be on the same campus day. Hourly fees cannot be calculated across midnight.',
+        TIME_UNCHANGED: 'The entry and exit times are unchanged.',
+      }[code],
+    ),
 };

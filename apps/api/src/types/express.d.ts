@@ -9,6 +9,7 @@ declare global {
       auth?: AuthContext;
       /** Present only after `authenticateVisitor` succeeds: the one session the visitor may use. */
       visitor?: { sessionId: string };
+      reservation?: { reservationId: string };
       /**
        * Present only after `resolveOperator`: who is operating the gate. `shift` is the duty
        * shift the operation is attributed to (null for administrators and when none applies);

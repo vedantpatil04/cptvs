@@ -107,8 +107,8 @@ export function VisitorCheckoutPage() {
       {quote && !loading && (
         <div className="space-y-6">
           {/* Gate-Controlled Operational Rule Notice */}
-          <Alert className="border-blue-500/30 bg-blue-500/10 text-blue-950 dark:text-blue-200">
-            <ShieldCheck className="size-4 text-blue-600 dark:text-blue-400" />
+          <Alert className="border-info/30 bg-info/5 text-foreground">
+            <ShieldCheck className="size-4 text-info" />
             <AlertTitle className="text-sm font-bold">Gate-Controlled Checkout</AlertTitle>
             <AlertDescription className="text-xs">
               Visitor checkout is finalized by Security Staff at the exit gate. Show your Parking QR code at the gate to complete checkout, pay, and obtain your receipt.

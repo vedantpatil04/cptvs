@@ -194,7 +194,7 @@ export function PortalHomePage() {
                   </div>
                   <h2 className="text-2xl font-bold tracking-tight">Need a Parking Space?</h2>
                   <p className="text-muted-foreground text-sm max-w-xl">
-                    Use Park Now to allocate the best available slot instantly. CPVTS automatically
+                    Use Park My Vehicle to allocate the best available slot instantly. CPVTS automatically
                     checks availability, zone rules, and holds your space.
                   </p>
                 </div>
@@ -206,7 +206,7 @@ export function PortalHomePage() {
                 >
                   <Link to="/portal/park-now">
                     <ParkingCircle className="size-5" />
-                    Park Now
+                    Park My Vehicle
                   </Link>
                 </Button>
               </div>
@@ -315,14 +315,14 @@ export function PortalHomePage() {
               <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <ParkingCircle className="size-5" />
               </div>
-              <span className="text-xs font-semibold">Park Now</span>
+              <span className="text-xs font-semibold">Park My Vehicle</span>
             </Link>
 
             <Link
               to="/portal/my-parking"
               className="flex flex-col items-center justify-center gap-2 rounded-xl border bg-card p-4 text-center transition-all hover:bg-muted/50 hover:shadow-sm"
             >
-              <div className="flex size-10 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-brand/10 text-brand">
                 <Compass className="size-5" />
               </div>
               <span className="text-xs font-semibold">My Parking</span>
@@ -332,7 +332,7 @@ export function PortalHomePage() {
               to="/portal/vehicles"
               className="flex flex-col items-center justify-center gap-2 rounded-xl border bg-card p-4 text-center transition-all hover:bg-muted/50 hover:shadow-sm"
             >
-              <div className="flex size-10 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-brand/10 text-brand">
                 <Car className="size-5" />
               </div>
               <span className="text-xs font-semibold">My Vehicles</span>

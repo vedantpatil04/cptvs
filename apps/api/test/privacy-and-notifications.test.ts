@@ -54,6 +54,7 @@ describe('public endpoints expose only safe aggregate information', () => {
     expect(overview.status).toBe(200);
     expect(Object.keys(overview.body as object).sort()).toEqual([
       'availability',
+      'blockAvailability',
       'feeSchedule',
       'generatedAt',
       'locations',

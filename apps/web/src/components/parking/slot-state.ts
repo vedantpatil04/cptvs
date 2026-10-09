@@ -1,5 +1,5 @@
 import type { SlotStatus } from '@cpvts/shared';
-import { Ban, Car, CircleCheck, Hourglass, PowerOff } from 'lucide-react';
+import { Ban, Car, CircleCheck, Crown, Hourglass, PowerOff } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /** Everything a slot can look like: the four backend states, plus "disabled by an admin". */
@@ -44,6 +44,12 @@ export const SLOT_STATE_STYLE: Record<SlotTileState, StateStyle> = {
     text: 'text-muted-foreground',
     swatch: 'border-muted-foreground bg-muted',
   },
+  RESERVED: {
+    icon: Crown,
+    tile: 'border-reserved/60 bg-reserved/10 hover:bg-reserved/15',
+    text: 'text-reserved',
+    swatch: 'border-reserved bg-reserved/20',
+  },
   DISABLED: {
     icon: PowerOff,
     tile: 'border-dashed border-muted-foreground/40 bg-muted/40 opacity-70 hover:bg-muted/60',
@@ -56,6 +62,7 @@ export interface SlotCountValues {
   total: number;
   available: number;
   held: number;
+  reserved: number;
   occupied: number;
   blocked: number;
   disabled: number;
@@ -67,6 +74,7 @@ export const countSlotStates = (states: SlotTileState[]): SlotCountValues => {
     total: states.length,
     available: 0,
     held: 0,
+    reserved: 0,
     occupied: 0,
     blocked: 0,
     disabled: 0,

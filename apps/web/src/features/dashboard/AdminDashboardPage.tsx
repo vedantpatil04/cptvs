@@ -29,6 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useCurrentUser } from '@/features/auth/use-auth';
+import { VipReservationsPanel } from '@/features/parking/VipReservationsPanel';
 import { AlertsPanel } from '@/features/operations/AlertsPanel';
 import { parkingApi } from '@/features/parking/parking-api';
 import { adminShiftsApi } from '@/features/shifts/shifts-api';
@@ -266,6 +267,9 @@ export function AdminDashboardPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* VIP / emergency reservations: status and history (Security manages them) */}
+        <VipReservationsPanel readOnly />
 
         {/* Real-time Alerts */}
         <AlertsPanel />

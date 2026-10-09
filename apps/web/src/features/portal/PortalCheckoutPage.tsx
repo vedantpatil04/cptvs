@@ -185,8 +185,8 @@ export function PortalCheckoutPage() {
           )}
 
           {/* Gate-Controlled Operational Rule Notice */}
-          <Alert className="border-blue-500/30 bg-blue-500/10 text-blue-950 dark:text-blue-200">
-            <ShieldCheck className="size-4 text-blue-600 dark:text-blue-400" />
+          <Alert className="border-info/30 bg-info/5 text-foreground">
+            <ShieldCheck className="size-4 text-info" />
             <AlertTitle className="text-sm font-bold">Gate-Controlled Checkout</AlertTitle>
             <AlertDescription className="text-xs">
               To guarantee parking safety and prevent unauthorized vehicle exit, checkout and payments are handled exclusively by Security Staff at the campus exit gate.

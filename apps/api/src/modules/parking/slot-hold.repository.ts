@@ -83,6 +83,10 @@ export const slotHoldRepository = {
       where: { status: 'OFFERED', expiresAt: { lte: now } },
       data: { status: 'EXPIRED' },
     });
+    await db.visitorReservation.updateMany({
+      where: { status: 'HELD', expiresAt: { lte: now } },
+      data: { status: 'EXPIRED' },
+    });
     return count;
   },
 };

@@ -11,6 +11,7 @@ import {
   Banknote,
   Camera,
   CircleAlert,
+  Clock,
   CircleCheck,
   CircleX,
   CreditCard,
@@ -22,7 +23,7 @@ import {
   Search,
   Smartphone,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
 
@@ -37,17 +38,18 @@ import { SessionDetails } from '@/components/parking/SessionDetails';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChoiceGroup, NativeSelect } from '@/components/ui/choice-group';
+import { ChoiceGroup } from '@/components/ui/choice-group';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { Label } from '@/components/ui/label';
 import { useCurrentUser } from '@/features/auth/use-auth';
 import { useFormatters } from '@/hooks/use-formatters';
-import { campusDateAt, campusHourAt } from '@/lib/duration';
+import { campusDateAt, elapsedSeconds, formatClock } from '@/lib/duration';
 import { errorMessage } from '@/lib/error-message';
-import { formatHour, HOURS } from '@/lib/format';
+import { formatHour } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { serverNow } from '@/lib/server-clock';
 
+import { AdjustTimeDialog } from './AdjustTimeDialog';
 import { parkingApi } from './parking-api';
 import { useVehicleSearch } from './use-vehicle-search';
 import { VehicleSearchForm } from './VehicleSearchForm';
@@ -79,7 +81,8 @@ const identifiersFrom = (found: ExitSessionResult) => ({
 /**
  * Security Staff checkout: identify the vehicle (Parking Session QR, or the 6-digit code when
  * the QR cannot be scanned, or a manual lookup as a last resort) → the server verifies the
- * session → confirm exit hour → fee preview → test payment → receipt. Identifying a vehicle
+ * session and captures the exit time, which stops the timer → review the stay and the estimated
+ * fee (Security can correct the times, audited) → test payment → receipt. Identifying a vehicle
  * never completes a checkout.
  */
 export function VehicleExitPage() {
@@ -264,51 +267,69 @@ export function VehicleExitPage() {
 function CheckoutFlow({ found, onReset }: { found: ExitSessionResult; onReset: () => void }) {
   const { t } = useTranslation();
   const format = useFormatters();
-  const { session } = found;
+  const scanned = found.session;
   const verifiedBy =
     found.matchedBy === 'ENTRY_QR' || found.matchedBy === 'EXIT_CODE' ? found.matchedBy : null;
-  // Start from the campus clock hour now (server-corrected), not from when the page was loaded.
-  const [exitHour, setExitHour] = useState(() =>
-    Math.max(session.entryHour, campusHourAt(serverNow())),
-  );
+  // The exit instant the server captured when the session was identified (scan or exit code), or,
+  // for a manual lookup, with the first quote. It never follows the clock afterwards.
+  const [exitAt, setExitAt] = useState<string | null>('exitAt' in found ? found.exitAt : null);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [method, setMethod] = useState<PaymentMethod>('UPI');
   const [step, setStep] = useState<Step>({ name: 'review' });
   const [error, setError] = useState<unknown>(null);
   const [quoting, setQuoting] = useState(false);
+  const [adjusting, setAdjusting] = useState(false);
+  // Blocks a second payment request while one is being started.
+  const submitting = useRef(false);
+  const requested = useRef(false);
 
-  if (session.status !== 'ACTIVE') {
-    return <CompletedSessionNotice receiptNumber={session.receiptNumber} onReset={onReset} />;
-  }
-
-  const identifiers = identifiersFrom(found);
-  // The whole-hour fee model measures one day (0-23); a stay across midnight cannot be priced
-  // by it, so the operator is told rather than silently charged for the wrong hours.
-  const crossedMidnight = campusDateAt(Date.parse(session.entryAt)) !== campusDateAt(serverNow());
-
-  const calculate = async () => {
+  // Price the stay as soon as the vehicle is identified: the server uses the captured exit time.
+  const calculate = useCallback(async () => {
     setError(null);
     setQuoting(true);
     try {
-      setQuote(
-        await parkingApi.quote({ sessionNumber: session.sessionNumber, exitHour, ...identifiers }),
-      );
+      const priced = await parkingApi.quote({
+        sessionNumber: found.session.sessionNumber,
+        ...identifiersFrom(found),
+      });
+      setQuote(priced);
+      setExitAt(priced.exitAt);
     } catch (caught) {
       setError(caught);
     } finally {
       setQuoting(false);
     }
-  };
+  }, [found]);
+
+  useEffect(() => {
+    if (requested.current || found.session.status !== 'ACTIVE') return;
+    requested.current = true;
+    void calculate();
+  }, [found, calculate]);
+
+  if (scanned.status !== 'ACTIVE') {
+    return <CompletedSessionNotice receiptNumber={scanned.receiptNumber} onReset={onReset} />;
+  }
+
+  // Once priced, show the session as the server sees it at the captured exit instant.
+  const session = quote?.session ?? scanned;
+  const identifiers = identifiersFrom(found);
+  // The whole-hour fee model measures one day (0-23); a stay across midnight cannot be priced
+  // by it, so the operator is told rather than silently charged for the wrong hours.
+  const crossedMidnight =
+    campusDateAt(Date.parse(session.entryAt)) !==
+    campusDateAt(exitAt ? Date.parse(exitAt) : serverNow());
 
   const pay = async (outcome: 'SUCCESS' | 'FAILURE') => {
-    if (!quote) return;
+    if (!quote || submitting.current) return;
+    submitting.current = true;
     setError(null);
     const chosen: PaymentMethod = quote.fee.totalPaise === 0 ? 'NO_CHARGE' : method;
     setStep({ name: 'paying', stage: 'creating', payment: null });
     try {
+      // No exit hour and no amount are sent: the server prices the times it holds for the session.
       const { payment } = await parkingApi.createPayment({
         sessionNumber: session.sessionNumber,
-        exitHour: quote.exitHour,
         method: chosen,
         ...identifiers,
       });
@@ -323,6 +344,8 @@ function CheckoutFlow({ found, onReset }: { found: ExitSessionResult; onReset: (
     } catch (caught) {
       setError(caught);
       setStep({ name: 'review' });
+    } finally {
+      submitting.current = false;
     }
   };
 
@@ -372,28 +395,27 @@ function CheckoutFlow({ found, onReset }: { found: ExitSessionResult; onReset: (
             </Alert>
           )}
           <SessionDetails session={session} />
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="exit-hour">{t('parking.common.exitHour')}</Label>
-              <NativeSelect
-                id="exit-hour"
-                className="w-40"
-                value={String(exitHour)}
-                onChange={(event) => {
-                  setExitHour(Number(event.target.value));
-                  setQuote(null);
-                }}
-              >
-                {HOURS.map((hour) => (
-                  <option key={hour} value={hour} disabled={hour < session.entryHour}>
-                    {formatHour(hour)}
-                  </option>
-                ))}
-              </NativeSelect>
-            </div>
-            <Button onClick={() => void calculate()} disabled={quoting}>
-              {quoting && <LoaderCircle className="animate-spin" aria-hidden />}
-              {t('parking.exit.calculate')}
+          <div className="flex flex-wrap items-center gap-3">
+            {quote === null && error !== null && (
+              <Button onClick={() => void calculate()} disabled={quoting}>
+                {quoting && <LoaderCircle className="animate-spin" aria-hidden />}
+                {t('common.retry')}
+              </Button>
+            )}
+            {quoting && quote === null && error === null && (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                {t('parking.exit.pricing')}
+              </p>
+            )}
+            <Button
+              variant="outline"
+              className="h-11"
+              disabled={quoting}
+              onClick={() => setAdjusting(true)}
+            >
+              <Clock aria-hidden />
+              {t('parking.adjust.open')}
             </Button>
             <Button variant="ghost" onClick={onReset}>
               {t('parking.exit.changeVehicle')}
@@ -412,12 +434,46 @@ function CheckoutFlow({ found, onReset }: { found: ExitSessionResult; onReset: (
         <Card>
           <CardHeader>
             <CardTitle>{t('parking.exit.feePreviewTitle')}</CardTitle>
-            <CardDescription>
-              {formatHour(session.entryHour)} → {formatHour(quote.exitHour)} ·{' '}
-              {t('parking.common.hours', { count: quote.durationHours })}
-            </CardDescription>
+            <CardDescription>{t('parking.exit.estimateNote')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            <DescriptionList>
+              <DescriptionItem label={t('parking.exit.entryTime')}>
+                {format.dateTime(quote.session.entryAt)}
+              </DescriptionItem>
+              <DescriptionItem label={t('parking.exit.exitTime')}>
+                {format.dateTime(quote.exitAt)}{' '}
+                {quote.timeAdjusted && (
+                  <StatusBadge tone="warning">{t('parking.adjust.adjustedBadge')}</StatusBadge>
+                )}
+              </DescriptionItem>
+              <DescriptionItem label={t('parking.timer.totalTime')}>
+                <span className="font-mono font-semibold tabular-nums">
+                  {formatClock(elapsedSeconds(quote.session.entryAt, Date.parse(quote.exitAt)))}
+                </span>
+              </DescriptionItem>
+              <DescriptionItem label={t('parking.timer.billedHours')}>
+                {formatHour(quote.session.entryHour)} → {formatHour(quote.exitHour)} ·{' '}
+                {t('parking.common.hours', { count: quote.durationHours })}
+              </DescriptionItem>
+              <DescriptionItem label="Free hours">
+                {quote.fee.rule.type === 'FREE_HOURS_THEN_HOURLY'
+                  ? t('parking.common.hours', { count: quote.fee.rule.freeHours })
+                  : quote.fee.rule.type === 'FREE'
+                    ? 'All'
+                    : '0 hours'}
+              </DescriptionItem>
+              <DescriptionItem label="Hourly rate">
+                {quote.fee.rule.type === 'FREE'
+                  ? 'Free'
+                  : `${format.paise(quote.fee.rule.hourlyRatePaise)} / hr`}
+              </DescriptionItem>
+              <DescriptionItem label={t('parking.common.estimatedFee')}>
+                <span className="text-lg font-bold text-primary">
+                  {format.paise(quote.fee.totalPaise)}
+                </span>
+              </DescriptionItem>
+            </DescriptionList>
             <FeeBreakdownView fee={quote.fee} />
 
             <Alert variant="info">
@@ -445,19 +501,34 @@ function CheckoutFlow({ found, onReset }: { found: ExitSessionResult; onReset: (
             )}
 
             <div className="flex flex-col gap-2">
-              <Button size="lg" onClick={() => void pay('SUCCESS')}>
+              <Button size="lg" disabled={quoting} onClick={() => void pay('SUCCESS')}>
                 {chargeable
                   ? t('parking.payment.pay', { amount: format.paise(quote.fee.totalPaise) })
                   : t('parking.payment.completeNoCharge')}
               </Button>
               {chargeable && (
-                <Button variant="link" size="sm" onClick={() => void pay('FAILURE')}>
+                <Button variant="link" size="sm" disabled={quoting} onClick={() => void pay('FAILURE')}>
                   {t('parking.payment.simulateDecline')}
                 </Button>
               )}
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {adjusting && (
+        <AdjustTimeDialog
+          sessionNumber={session.sessionNumber}
+          entryAt={quote?.session.entryAt ?? session.entryAt}
+          exitAt={exitAt ?? new Date(serverNow()).toISOString()}
+          onClose={() => setAdjusting(false)}
+          onAdjusted={(priced) => {
+            setQuote(priced);
+            setExitAt(priced.exitAt);
+            setError(null);
+            setAdjusting(false);
+          }}
+        />
       )}
     </div>
   );

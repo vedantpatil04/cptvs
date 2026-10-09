@@ -74,6 +74,27 @@ export const exitCodeRateLimiter = createExitCodeRateLimiter({
   limit: config.rateLimit.login.max,
 });
 
+/**
+ * Limits visitor reservations per client IP (the same hourly budget as registrations): the
+ * public form must not be a way to hoard slots.
+ */
+export const visitorReservationRateLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  limit: config.rateLimit.registrationPerHour,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const body: ApiErrorBody = {
+      error: {
+        code: 'RATE_LIMITED',
+        message: 'Too many parking requests from this network. Please try again later.',
+        requestId: req.id,
+      },
+    };
+    res.status(429).json(body);
+  },
+});
+
 /** Limits account creation per client IP. */
 export const registrationRateLimiter = rateLimit({
   windowMs: 60 * 60_000,
