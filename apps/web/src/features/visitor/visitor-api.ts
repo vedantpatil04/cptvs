@@ -1,6 +1,7 @@
 import type {
   CheckoutQuote,
   CreatePaymentResponse,
+  ExitCodeResponse,
   ExitRequestState,
   MOCK_PAYMENT_OUTCOMES,
   ParkingMapResponse,
@@ -26,14 +27,11 @@ export const visitorApi = {
       authenticated: false,
     }),
 
-  session: (token: string) =>
-    apiRequest<ParkingSessionView>('/visitor/session', { token }),
+  session: (token: string) => apiRequest<ParkingSessionView>('/visitor/session', { token }),
 
-  layout: (token: string) =>
-    apiRequest<ParkingMapResponse>('/visitor/layout', { token }),
+  layout: (token: string) => apiRequest<ParkingMapResponse>('/visitor/layout', { token }),
 
-  timeline: (token: string) =>
-    apiRequest<SessionTimelineResponse>('/visitor/timeline', { token }),
+  timeline: (token: string) => apiRequest<SessionTimelineResponse>('/visitor/timeline', { token }),
 
   quote: (token: string) =>
     apiRequest<CheckoutQuote>('/visitor/checkout/quote', {
@@ -43,6 +41,12 @@ export const visitorApi = {
 
   requestExit: (token: string) =>
     apiRequest<ExitRequestState>('/visitor/exit-request', {
+      method: 'POST',
+      token,
+    }),
+
+  issueExitCode: (token: string) =>
+    apiRequest<ExitCodeResponse>('/visitor/exit-code', {
       method: 'POST',
       token,
     }),
@@ -60,11 +64,7 @@ export const visitorApi = {
       token,
     }),
 
-  processPayment: (
-    token: string,
-    paymentId: string,
-    outcome: MockPaymentOutcome = 'SUCCESS',
-  ) =>
+  processPayment: (token: string, paymentId: string, outcome: MockPaymentOutcome = 'SUCCESS') =>
     apiRequest<ProcessPaymentResponse>(`/visitor/checkout/payments/${paymentId}/process`, {
       method: 'POST',
       body: { outcome },
@@ -77,6 +77,5 @@ export const visitorApi = {
       token,
     }),
 
-  receipt: (token: string) =>
-    apiRequest<ReceiptView>('/visitor/receipt', { token }),
+  receipt: (token: string) => apiRequest<ReceiptView>('/visitor/receipt', { token }),
 };

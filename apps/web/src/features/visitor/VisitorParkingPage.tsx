@@ -1,7 +1,4 @@
-import {
-  CreditCard,
-  RefreshCw,
-} from 'lucide-react';
+import { CreditCard, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
@@ -9,12 +6,12 @@ import { Link, useNavigate } from 'react-router';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { BlockMapLink } from '@/components/parking/BlockMapLink';
+import { SessionTimer } from '@/components/parking/SessionTimer';
 import { VisualParkingLayout } from '@/components/parking/VisualParkingLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useApiQuery } from '@/hooks/use-api-query';
-import { useFormatters } from '@/hooks/use-formatters';
 import { errorMessage } from '@/lib/error-message';
 
 import { visitorApi } from './visitor-api';
@@ -22,20 +19,16 @@ import { visitorSessionStore } from './visitor-session';
 
 export function VisitorParkingPage() {
   const { t } = useTranslation();
-  const format = useFormatters();
   const navigate = useNavigate();
 
   const token = visitorSessionStore.get();
 
-  const fetcher = useCallback(
-    () => {
-      if (!token) {
-        return Promise.reject(new Error('No visitor token'));
-      }
-      return Promise.all([visitorApi.session(token), visitorApi.layout(token)]);
-    },
-    [token],
-  );
+  const fetcher = useCallback(() => {
+    if (!token) {
+      return Promise.reject(new Error('No visitor token'));
+    }
+    return Promise.all([visitorApi.session(token), visitorApi.layout(token)]);
+  }, [token]);
   const query = useApiQuery(fetcher, { refreshIntervalMs: 15_000 });
 
   useEffect(() => {
@@ -111,39 +104,18 @@ export function VisitorParkingPage() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-lg border bg-background/80 p-3">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                      Entry Time
-                    </span>
-                    <p className="text-sm font-bold mt-1">{format.time(session.entryAt)}</p>
-                  </div>
-                  <div className="rounded-lg border bg-background/80 p-3">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                      Duration
-                    </span>
-                    <p className="text-sm font-bold mt-1">
-                      {session.currentDurationHours ?? 0} hr(s)
-                    </p>
-                  </div>
-                  <div className="rounded-lg border bg-background/80 p-3">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                      Current Fee
-                    </span>
-                    <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                      {session.estimatedFee
-                        ? format.paise(session.estimatedFee.totalPaise)
-                        : '₹0'}
-                    </p>
-                  </div>
-                </div>
+                <SessionTimer session={session} onStale={query.reload} />
               </div>
 
               <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 shrink-0">
                 {session.block.coordinates && (
                   <BlockMapLink coordinates={session.block.coordinates} />
                 )}
-                <Button asChild size="lg" className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
+                <Button
+                  asChild
+                  size="lg"
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                >
                   <Link to="/visitor/checkout">
                     <CreditCard className="size-4" />
                     Check Out & Pay

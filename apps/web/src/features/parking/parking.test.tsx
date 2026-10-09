@@ -54,7 +54,10 @@ beforeEach(async () => {
   localStorage.clear();
   await i18n.changeLanguage('en');
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('vehicle entry', () => {
   it('validates input, checks the vehicle in and explains the allocation', async () => {
@@ -179,6 +182,9 @@ describe('vehicle exit', () => {
         paidAt: new Date().toISOString(),
       },
     };
+    // 13:30 on the campus clock (IST): the exit hour is pre-selected from the campus clock.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-09T08:00:00Z'));
     const quoteHandler = vi.fn(() => quote);
     mockApi({
       ...signInAs('SECURITY_STAFF'),
@@ -192,6 +198,10 @@ describe('vehicle exit', () => {
     });
     renderAt('/staff/exit');
 
+    // Manual lookup is the last resort, so it starts collapsed.
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Look up by vehicle number or slot/ }),
+    );
     await userEvent.type(
       await screen.findByLabelText('Vehicle number, slot ID, session number or entry QR'),
       'KA22AB1234',
@@ -275,11 +285,13 @@ describe('live parking map', () => {
     });
     renderAt('/admin/live?slot=T-04');
 
-    const occupied = await screen.findByRole('button', { name: 'T-04, Occupied, KA22AB1234' });
+    const occupied = await screen.findByRole('button', {
+      name: 'T-04, Two-wheeler, Occupied, KA22AB1234',
+    });
     expect(occupied).toHaveAttribute('aria-current', 'location');
-    expect(screen.getByRole('button', { name: 'T-02, Blocked' })).not.toHaveAttribute(
-      'aria-current',
-    );
+    expect(
+      screen.getByRole('button', { name: 'T-02, Two-wheeler, Blocked, Maintenance' }),
+    ).not.toHaveAttribute('aria-current');
     expect(screen.getByText('1 of 3 available')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open in Google Maps/ })).toBeInTheDocument();
 

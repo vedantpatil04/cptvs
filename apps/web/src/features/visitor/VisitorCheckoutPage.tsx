@@ -1,5 +1,4 @@
 import type { CheckoutQuote } from '@cpvts/shared';
-import { entryQrPayload } from '@cpvts/shared';
 import {
   ArrowLeft,
   FileCheck,
@@ -15,7 +14,7 @@ import { Link, useNavigate } from 'react-router';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { QrCode } from '@/components/parking/QrCode';
+import { ExitPass } from '@/components/parking/ExitPass';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -86,10 +85,6 @@ export function VisitorCheckoutPage() {
 
   if (!token) return null;
 
-  const qrValue = quote?.session.entryReference
-    ? entryQrPayload(quote.session.entryReference)
-    : quote?.session.sessionNumber ?? '';
-
   return (
     <div className="max-w-2xl mx-auto py-8 px-4 sm:px-6 space-y-6">
       <div className="mb-2">
@@ -152,13 +147,12 @@ export function VisitorCheckoutPage() {
             <CardContent className="pt-6 space-y-6">
               {/* QR Display */}
               <div className="flex flex-col sm:flex-row items-center gap-6 justify-center p-4 bg-muted/10 rounded-xl border">
-                <div className="p-3 bg-white rounded-xl shadow-xs border">
-                  <QrCode
-                    value={qrValue}
-                    label={`Visitor Parking Session QR for ${quote.session.vehicleNumber}`}
-                    size={190}
-                  />
-                </div>
+                <ExitPass
+                  entryReference={quote.session.entryReference}
+                  issueCode={() => visitorApi.issueExitCode(token)}
+                  qrSize={190}
+                  className="w-full sm:w-64"
+                />
 
                 <div className="space-y-3 text-center sm:text-left max-w-sm">
                   <div className="flex items-center justify-center sm:justify-start gap-2 text-primary font-semibold text-sm">

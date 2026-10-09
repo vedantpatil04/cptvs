@@ -8,6 +8,7 @@ interface ImportMetaEnv {
   readonly VITE_BRAND_INSTITUTION_NAME: string;
   readonly VITE_BRAND_SHOW_DEMO_NOTICE: string;
   readonly VITE_DEFAULT_LOCALE?: string;
+  readonly VITE_CAMPUS_TIMEZONE?: string;
 }
 
 interface ImportMeta {

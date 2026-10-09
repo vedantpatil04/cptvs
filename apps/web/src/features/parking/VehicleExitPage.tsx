@@ -15,12 +15,14 @@ import {
   CircleX,
   CreditCard,
   FlaskConical,
+  KeyRound,
   LoaderCircle,
   ReceiptText,
+  ScanLine,
   Search,
   Smartphone,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
 
@@ -28,7 +30,8 @@ import { areaPaths } from '@/app/paths';
 import { StatusBadge } from '@/components/feedback/StatusBadge';
 import { LoadingState } from '@/components/feedback/LoadingState';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { CameraQrScanner } from '@/components/parking/CameraQrScanner';
+import { ExitCodeEntry } from '@/components/parking/ExitCodeEntry';
+import { QrScanner } from '@/components/parking/QrScanner';
 import { FeeBreakdownView } from '@/components/parking/FeeBreakdownView';
 import { SessionDetails } from '@/components/parking/SessionDetails';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -39,8 +42,11 @@ import { DescriptionItem, DescriptionList } from '@/components/ui/description-li
 import { Label } from '@/components/ui/label';
 import { useCurrentUser } from '@/features/auth/use-auth';
 import { useFormatters } from '@/hooks/use-formatters';
+import { campusDateAt, campusHourAt } from '@/lib/duration';
 import { errorMessage } from '@/lib/error-message';
 import { formatHour, HOURS } from '@/lib/format';
+import { cn } from '@/lib/utils';
+import { serverNow } from '@/lib/server-clock';
 
 import { parkingApi } from './parking-api';
 import { useVehicleSearch } from './use-vehicle-search';
@@ -70,40 +76,52 @@ const identifiersFrom = (found: ExitSessionResult) => ({
     : {}),
 });
 
-/** Security Staff checkout: identify (Camera QR / manual search) → exit hour → fee preview → test payment → receipt. */
+/**
+ * Security Staff checkout: identify the vehicle (Parking Session QR, or the 6-digit code when
+ * the QR cannot be scanned, or a manual lookup as a last resort) → the server verifies the
+ * session → confirm exit hour → fee preview → test payment → receipt. Identifying a vehicle
+ * never completes a checkout.
+ */
 export function VehicleExitPage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const [initialSession] = useState(() => params.get('session'));
   const { state: search, search: runSearch, clear: clearSearch } = useVehicleSearch(initialSession);
 
-  const [inputMode, setInputMode] = useState<'scan' | 'manual'>(() => {
-    const tab = params.get('tab') || params.get('mode');
-    return tab === 'scan' ? 'scan' : 'manual';
-  });
-  const [scannedResult, setScannedResult] = useState<ScanCheckoutResponse | null>(null);
-  const [scanLoading, setScanLoading] = useState(false);
-  const [scanError, setScanError] = useState<unknown>(null);
+  const [scanning, setScanning] = useState(
+    () => (params.get('tab') ?? params.get('mode')) === 'scan',
+  );
+  const [showManual, setShowManual] = useState(() => initialSession !== null);
+  const [focusCode, setFocusCode] = useState(0);
+  const [verified, setVerified] = useState<ScanCheckoutResponse | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<{ via: 'qr' | 'code'; error: unknown } | null>(null);
+  // Blocks a second request while one is in flight (the camera can read the same QR twice).
+  const inFlight = useRef(false);
 
   const found: ExitSessionResult | null =
-    scannedResult ?? (search.status === 'found' ? search.result : null);
+    verified ?? (search.status === 'found' ? search.result : null);
 
   const handleReset = () => {
     clearSearch();
-    setScannedResult(null);
-    setScanError(null);
+    setVerified(null);
+    setCheckError(null);
   };
 
-  const handleScanQr = async (qrData: string) => {
-    setScanLoading(true);
-    setScanError(null);
+  const verify = async (via: 'qr' | 'code', value: string) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setChecking(true);
+    setCheckError(null);
     try {
-      const result = await parkingApi.scanCheckout(qrData);
-      setScannedResult(result);
-    } catch (err) {
-      setScanError(err);
+      setVerified(
+        via === 'qr' ? await parkingApi.scanCheckout(value) : await parkingApi.codeCheckout(value),
+      );
+    } catch (error) {
+      setCheckError({ via, error });
     } finally {
-      setScanLoading(false);
+      inFlight.current = false;
+      setChecking(false);
     }
   };
 
@@ -112,62 +130,94 @@ export function VehicleExitPage() {
       <PageHeader title={t('parking.exit.title')} description={t('parking.exit.description')} />
       <div className="space-y-6">
         {!found && (
-          <div className="max-w-3xl space-y-4">
-            {/* Mode selection tabs */}
-            <div className="flex border-b">
-              <button
-                type="button"
-                onClick={() => setInputMode('scan')}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
-                  inputMode === 'scan'
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Camera className="size-4" />
-                Scan Parking Session QR
-              </button>
-              <button
-                type="button"
-                onClick={() => setInputMode('manual')}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
-                  inputMode === 'manual'
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Search className="size-4" />
-                Manual Lookup
-              </button>
-            </div>
-
-            {/* Mode 1: Real Camera QR Scanner */}
-            {inputMode === 'scan' && (
-              <div className="space-y-4">
-                <CameraQrScanner
-                  onScan={(qr) => void handleScanQr(qr)}
-                  onManualFallback={() => setInputMode('manual')}
-                />
-              </div>
-            )}
-
-            {/* Mode 2: Manual Search Form */}
-            {inputMode === 'manual' && (
+          <div className="max-w-5xl space-y-4">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
               <Card>
-                <CardContent className="pt-6">
-                  <VehicleSearchForm
-                    onSearch={(query) => void runSearch(query)}
-                    searching={search.status === 'searching'}
-                    initialValue={initialSession ?? ''}
-                    submitLabel={t('parking.exit.find')}
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ScanLine className="size-5 text-primary" aria-hidden />
+                    {t('parking.scan.title')}
+                  </CardTitle>
+                  <CardDescription>{t('parking.scan.description')}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {scanning ? (
+                    <QrScanner
+                      onScan={(value) => {
+                        setScanning(false);
+                        void verify('qr', value);
+                      }}
+                      onCancel={() => setScanning(false)}
+                      onUseCode={() => {
+                        setScanning(false);
+                        setFocusCode((value) => value + 1);
+                      }}
+                    />
+                  ) : (
+                    <Button
+                      size="lg"
+                      className="h-14 w-full text-base"
+                      disabled={checking}
+                      onClick={() => {
+                        setCheckError(null);
+                        setScanning(true);
+                      }}
+                    >
+                      <Camera className="size-5" aria-hidden />
+                      {t('parking.scan.start')}
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <KeyRound className="size-5 text-primary" aria-hidden />
+                    {t('parking.exitCode.title')}
+                  </CardTitle>
+                  <CardDescription>{t('parking.exitCode.description')}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ExitCodeEntry
+                    busy={checking}
+                    focusSignal={focusCode}
+                    onSubmit={(code) => void verify('code', code)}
                   />
                 </CardContent>
               </Card>
-            )}
+            </div>
+
+            <div>
+              <Button
+                variant="ghost"
+                className="h-11 gap-2 text-muted-foreground"
+                aria-expanded={showManual}
+                onClick={() => setShowManual((value) => !value)}
+              >
+                <Search aria-hidden />
+                {t('parking.exitCode.manualToggle')}
+              </Button>
+              {showManual && (
+                <Card className="mt-2">
+                  <CardContent className="pt-6">
+                    <p className="mb-3 text-sm text-muted-foreground">
+                      {t('parking.exitCode.manualHint')}
+                    </p>
+                    <VehicleSearchForm
+                      onSearch={(query) => void runSearch(query)}
+                      searching={search.status === 'searching'}
+                      initialValue={initialSession ?? ''}
+                      submitLabel={t('parking.exit.find')}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
         )}
 
-        {(search.status === 'searching' || scanLoading) && <LoadingState />}
+        {(search.status === 'searching' || checking) && <LoadingState />}
 
         {search.status === 'error' && (
           <Alert variant="destructive" className="max-w-3xl">
@@ -176,20 +226,36 @@ export function VehicleExitPage() {
           </Alert>
         )}
 
-        {scanError !== null && (
+        {checkError !== null && (
           <Alert variant="destructive" className="max-w-3xl">
             <CircleAlert aria-hidden />
-            <AlertTitle>QR Code Check Failed</AlertTitle>
+            <AlertTitle>
+              {checkError.via === 'qr'
+                ? t('parking.scan.failedTitle')
+                : t('parking.exitCode.failedTitle')}
+            </AlertTitle>
             <AlertDescription className="space-y-2">
-              <p>{errorMessage(t, scanError)}</p>
-              <Button size="sm" variant="outline" onClick={() => setScanError(null)} className="mt-2 bg-background">
-                Scan Again
-              </Button>
+              <p>{errorMessage(t, checkError.error)}</p>
+              {checkError.via === 'qr' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-10 bg-background"
+                  onClick={() => {
+                    setCheckError(null);
+                    setScanning(true);
+                  }}
+                >
+                  {t('parking.scan.scanAgain')}
+                </Button>
+              )}
             </AlertDescription>
           </Alert>
         )}
 
-        {found && <CheckoutFlow key={found.session.sessionNumber} found={found} onReset={handleReset} />}
+        {found && (
+          <CheckoutFlow key={found.session.sessionNumber} found={found} onReset={handleReset} />
+        )}
       </div>
     </>
   );
@@ -199,9 +265,11 @@ function CheckoutFlow({ found, onReset }: { found: ExitSessionResult; onReset: (
   const { t } = useTranslation();
   const format = useFormatters();
   const { session } = found;
-  const isQrVerified = found.matchedBy === 'ENTRY_QR';
+  const verifiedBy =
+    found.matchedBy === 'ENTRY_QR' || found.matchedBy === 'EXIT_CODE' ? found.matchedBy : null;
+  // Start from the campus clock hour now (server-corrected), not from when the page was loaded.
   const [exitHour, setExitHour] = useState(() =>
-    Math.max(session.entryHour, session.currentHour ?? session.entryHour),
+    Math.max(session.entryHour, campusHourAt(serverNow())),
   );
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [method, setMethod] = useState<PaymentMethod>('UPI');
@@ -214,6 +282,9 @@ function CheckoutFlow({ found, onReset }: { found: ExitSessionResult; onReset: (
   }
 
   const identifiers = identifiersFrom(found);
+  // The whole-hour fee model measures one day (0-23); a stay across midnight cannot be priced
+  // by it, so the operator is told rather than silently charged for the wrong hours.
+  const crossedMidnight = campusDateAt(Date.parse(session.entryAt)) !== campusDateAt(serverNow());
 
   const calculate = async () => {
     setError(null);
@@ -270,18 +341,35 @@ function CheckoutFlow({ found, onReset }: { found: ExitSessionResult; onReset: (
   const chargeable = quote !== null && quote.fee.totalPaise > 0;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+    <div
+      className={cn(
+        'grid gap-6',
+        quote ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]' : 'max-w-3xl',
+      )}
+    >
       <Card>
         <CardHeader>
           <CardTitle>{t('parking.exit.vehicleTitle')}</CardTitle>
           <CardDescription>{session.block.name}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {isQrVerified && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              <CircleCheck className="size-4" />
-              <span>Verified Parking Session QR · Server Integrity Checks Passed</span>
-            </div>
+          {verifiedBy && (
+            <Alert variant="success">
+              <CircleCheck aria-hidden />
+              <AlertTitle>
+                {verifiedBy === 'ENTRY_QR'
+                  ? t('parking.exit.verifiedQr')
+                  : t('parking.exit.verifiedCode')}
+              </AlertTitle>
+              <AlertDescription>{t('parking.exit.verifiedNote')}</AlertDescription>
+            </Alert>
+          )}
+          {crossedMidnight && (
+            <Alert variant="warning">
+              <CircleAlert aria-hidden />
+              <AlertTitle>{t('parking.exit.overnightTitle')}</AlertTitle>
+              <AlertDescription>{t('parking.exit.overnightBody')}</AlertDescription>
+            </Alert>
           )}
           <SessionDetails session={session} />
           <div className="flex flex-wrap items-end gap-3">
