@@ -8,6 +8,7 @@ import {
 
 import type { VehicleType as DbVehicleType } from '../../generated/prisma/client.js';
 import { feeScheduleService } from '../fees/fee-schedule.service.js';
+import { slotHoldRepository } from '../parking/slot-hold.repository.js';
 import { publicRepository } from './public.repository.js';
 
 // Compile-time guarantee that the database enum and the shared contract agree.
@@ -16,15 +17,17 @@ const vehicleTypesMatch: Equals<DbVehicleType, SharedVehicleType> = true;
 void vehicleTypesMatch;
 
 const getAvailability = async (): Promise<PublicAvailability[]> => {
+  // A hold that lapsed (an unconfirmed Park Now offer, a crashed request) must not read as "taken".
+  await slotHoldRepository.releaseExpired();
   const counts = await publicRepository.countSlotsByVehicleTypeAndStatus();
-  return VEHICLE_TYPES.map((vehicleType) => {
+  return VEHICLE_TYPES.map((vehicleType: SharedVehicleType) => {
     const forType = counts.filter((entry) => entry.vehicleType === vehicleType);
     return {
       vehicleType,
-      totalSlots: forType.reduce((sum, entry) => sum + entry.count, 0),
+      totalSlots: forType.reduce((sum: number, entry) => sum + entry.count, 0),
       availableSlots: forType
         .filter((entry) => entry.status === 'AVAILABLE')
-        .reduce((sum, entry) => sum + entry.count, 0),
+        .reduce((sum: number, entry) => sum + entry.count, 0),
     };
   });
 };

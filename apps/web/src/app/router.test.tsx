@@ -89,7 +89,7 @@ describe('public landing page', () => {
     vi.stubGlobal('fetch', fetchMock);
     const memoryRouter = renderAt('/');
 
-    expect((await screen.findAllByText('7')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('7')).toBeInTheDocument();
     expect(screen.getByText('of 10 spaces free')).toBeInTheDocument();
     expect(screen.getByText('Full')).toBeInTheDocument();
     expect(screen.getByText('First 2 hours free, then ₹10 per hour')).toBeInTheDocument();
@@ -99,18 +99,9 @@ describe('public landing page', () => {
       'https://www.google.com/maps/search/?api=1&query=15.85%2C74.5',
     );
     expect(screen.getByRole('button', { name: /Map location not configured yet/ })).toBeDisabled();
-    // Sign in leads to the Student / Staff door; Admin and Security have their own link.
-    expect(screen.getAllByRole('link', { name: /^Sign in$/ })[0]).toHaveAttribute(
-      'href',
-      '/user/login',
-    );
-    expect(screen.getByRole('link', { name: 'Admin / Security sign-in' })).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: /Admin \/ Staff login/ })[0]).toHaveAttribute(
       'href',
       '/login',
-    );
-    expect(screen.getAllByRole('link', { name: /Visitor parking/ })[0]).toHaveAttribute(
-      'href',
-      '/visitor',
     );
     expect(memoryRouter.state.location.pathname).toBe('/');
 
@@ -197,7 +188,7 @@ describe('protected routes', () => {
     await userEvent.type(await screen.findByLabelText('Username'), 'demo');
     await userEvent.type(screen.getByLabelText('Password'), 'wrong');
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(await screen.findByText('The sign-in details are incorrect.')).toBeInTheDocument();
+    expect(await screen.findByText('The username or password is incorrect.')).toBeInTheDocument();
   });
 
   it('denies security staff access to admin pages', async () => {

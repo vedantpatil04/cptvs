@@ -13,13 +13,27 @@ import type {
   ProcessPaymentResponse,
   ReceiptVerificationResponse,
   ReceiptView,
+  ScanCheckoutResponse,
   TrackingResponse,
+  VehicleLookupResponse,
 } from '@cpvts/shared';
 
 import { apiRequest } from '@/lib/api-client';
 
 /** Thin client for the parking endpoints. All calculations happen on the server. */
 export const parkingApi = {
+  scanCheckout: (qr: string) =>
+    apiRequest<ScanCheckoutResponse>('/parking/checkouts/scan', {
+      method: 'POST',
+      body: { qr },
+    }),
+
+  lookup: (vehicleNumber: string, signal?: AbortSignal) =>
+    apiRequest<VehicleLookupResponse>(
+      `/parking/vehicle-lookup?vehicleNumber=${encodeURIComponent(vehicleNumber)}`,
+      { signal },
+    ),
+
   checkIn: (body: CheckInRequest) =>
     apiRequest<CheckInResponse>('/parking/check-ins', { method: 'POST', body }),
 

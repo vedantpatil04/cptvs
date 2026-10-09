@@ -38,6 +38,12 @@ export const accountErrors = {
       'This vehicle is already registered to an account.',
     ),
   vehicleNotFound: () => new AppError(404, 'VEHICLE_NOT_FOUND', 'Vehicle not found.'),
+  vehicleParked: () =>
+    new AppError(
+      409,
+      'VEHICLE_PARKED',
+      'A vehicle that is parked right now cannot be removed. Check it out first.',
+    ),
   vehicleIdentityLocked: () =>
     new AppError(
       409,

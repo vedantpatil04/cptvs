@@ -16,8 +16,10 @@ type Handler = unknown | ((body: unknown) => Response | unknown);
  * without the query string). Unknown routes fail the request with 404.
  */
 export const mockApi = (routes: Record<string, Handler>) => {
-  const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
-    const url = new URL(input);
+  const fetchMock = vi.fn(async (input: RequestInfo | URL | string, init?: RequestInit) => {
+    const rawUrl =
+      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const url = new URL(rawUrl, 'http://localhost');
     const key = `${init?.method ?? 'GET'} ${url.pathname.replace('/api/v1', '')}`;
     if (!(key in routes)) return jsonResponse(404, { error: { code: 'NOT_FOUND', message: key } });
     const handler = routes[key];
@@ -33,22 +35,24 @@ export const mockApi = (routes: Record<string, Handler>) => {
   return fetchMock;
 };
 
-export const testUser = (
-  role: UserRole,
-  parkingUser: AuthUser['parkingUser'] = role === 'PARKING_USER'
-    ? { category: 'STUDENT', verificationStatus: 'VERIFIED' }
-    : null,
-): AuthUser => ({
+export const testUser = (role: UserRole): AuthUser => ({
   id: 'u1',
   username: 'demo',
   fullName: 'Demo User',
   role,
   lastLoginAt: null,
-  parkingUser,
+  parkingUser:
+    role === 'PARKING_USER'
+      ? {
+          category: 'STUDENT',
+          verificationStatus: 'VERIFIED',
+          parkNow: { eligible: true, blockedBy: null },
+        }
+      : null,
 });
 
 /** Stores a valid session so the app starts signed in (verified via GET /auth/me). */
-export const signInAs = (role: UserRole, parkingUser?: AuthUser['parkingUser']) => {
+export const signInAs = (role: UserRole) => {
   localStorage.setItem(
     'cpvts.session',
     JSON.stringify({
@@ -56,7 +60,7 @@ export const signInAs = (role: UserRole, parkingUser?: AuthUser['parkingUser']) 
       expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
     }),
   );
-  return { 'GET /auth/me': { user: testUser(role, parkingUser) } };
+  return { 'GET /auth/me': { user: testUser(role) } };
 };
 
 export const renderAt = (path: string) => {

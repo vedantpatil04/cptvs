@@ -27,10 +27,7 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Attach the stored access token (default true). */
   authenticated?: boolean;
-  /**
-   * Use this bearer token instead of the signed-in account's (visitor access).
-   * A 401 for such a request does not end the account session.
-   */
+  /** Explicit token override (e.g. for visitor session tokens). */
   token?: string | null;
 }
 
@@ -64,22 +61,27 @@ const parseJson = async (response: Response): Promise<unknown> => {
   }
 };
 
-const send = async (
-  path: string,
-  { method = 'GET', body, signal, authenticated = true, token: explicitToken }: RequestOptions,
-  accept: string,
-): Promise<Response> => {
+/** Safely joins base URL and endpoint path without duplicate slashes or missing slashes. */
+export const joinUrl = (baseUrl: string, endpointPath: string): string => {
+  const cleanBase = baseUrl.replace(/\/+$/, '');
+  const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+  return `${cleanBase}${cleanPath}`;
+};
+
+const send = async (path: string, options: RequestOptions, accept: string): Promise<Response> => {
+  const { method = 'GET', body, signal, authenticated = true, token: explicitToken } = options;
   const headers = new Headers({ Accept: accept, 'Accept-Language': i18n.language });
   if (body !== undefined) headers.set('Content-Type', 'application/json');
 
-  const accountToken = authenticated && explicitToken === undefined ? getAccessToken() : null;
-  const token = explicitToken ?? accountToken;
+  const token =
+    explicitToken !== undefined ? explicitToken : authenticated ? getAccessToken() : null;
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   let response: Response;
+  const targetUrl = joinUrl(appConfig.apiBaseUrl, path);
   try {
-    response = await fetch(`${appConfig.apiBaseUrl}${path}`, {
+    response = await fetch(targetUrl, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -91,7 +93,7 @@ const send = async (
   }
 
   if (!response.ok) {
-    if (response.status === 401 && accountToken) onUnauthorized();
+    if (response.status === 401 && token) onUnauthorized();
     const payload = await parseJson(response);
     if (isApiErrorBody(payload)) {
       const { code, message, details } = payload.error;

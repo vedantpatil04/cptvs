@@ -3,6 +3,7 @@ import type {
   LoginResponse,
   ParkingUserCategory,
   RegistrationRequest,
+  StudentRegistrationRequest,
   UserLoginRequest,
 } from '@cpvts/shared';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -72,38 +73,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [expiresAt, endSession]);
 
-  const beginSession = useCallback((result: LoginResponse) => {
+  const setSession = useCallback((result: LoginResponse) => {
     const session = { accessToken: result.accessToken, expiresAt: result.expiresAt };
     sessionRef.current = session;
     sessionStore.write(session);
     setState({ status: 'authenticated', user: result.user, expiresAt: result.expiresAt });
-    return result.user;
   }, []);
 
-  const login = useCallback(
-    async (credentials: LoginRequest) => beginSession(await authApi.login(credentials)),
-    [beginSession],
+  const login = useCallback(async (credentials: LoginRequest) => {
+    const result = await authApi.login(credentials);
+    setSession(result);
+    return result.user;
+  }, [setSession]);
+
+  const userLogin = useCallback(async (credentials: UserLoginRequest) => {
+    const result = await authApi.userLogin(credentials);
+    setSession(result);
+    return result.user;
+  }, [setSession]);
+
+  const register = useCallback(
+    async (
+      category: ParkingUserCategory,
+      data: StudentRegistrationRequest | RegistrationRequest,
+    ) => {
+      const result =
+        category === 'STUDENT'
+          ? await authApi.registerStudent(data as StudentRegistrationRequest)
+          : await authApi.registerStaff(data as RegistrationRequest);
+      setSession(result);
+      return result.user;
+    },
+    [setSession],
   );
 
-  const loginUser = useCallback(
-    async (credentials: UserLoginRequest) => beginSession(await authApi.userLogin(credentials)),
-    [beginSession],
-  );
-
-  const registerUser = useCallback(
-    async (category: ParkingUserCategory, body: RegistrationRequest) =>
-      beginSession(await authApi.register(category, body)),
-    [beginSession],
-  );
-
-  const refresh = useCallback(async () => {
+  const refreshUser = useCallback(async () => {
     const stored = sessionRef.current;
-    if (!stored) return;
+    if (!stored) return null;
     try {
       const { user } = await authApi.me();
       setState({ status: 'authenticated', user, expiresAt: stored.expiresAt });
+      return user;
     } catch {
-      // A failed refresh keeps the current state; real session loss arrives as a 401.
+      return null;
     }
   }, []);
 
@@ -123,8 +135,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ state, login, loginUser, registerUser, refresh, logout, retry }),
-    [state, login, loginUser, registerUser, refresh, logout, retry],
+    () => ({
+      state,
+      login,
+      userLogin,
+      register,
+      logout,
+      retry,
+      refreshUser,
+      setSession,
+    }),
+    [state, login, userLogin, register, logout, retry, refreshUser, setSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

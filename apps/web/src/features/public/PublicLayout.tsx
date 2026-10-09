@@ -1,4 +1,4 @@
-import { CircleHelp, LayoutDashboard, LogIn, Ticket } from 'lucide-react';
+import { CircleHelp, LayoutDashboard, LogIn } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, Outlet } from 'react-router';
 
@@ -44,12 +44,6 @@ export function PublicLayout() {
                 <span className="hidden md:inline">{t('nav.help')}</span>
               </Link>
             </Button>
-            <Button asChild variant="ghost" size="sm" aria-label={t('public.visitorButton')}>
-              <Link to={PATHS.visitor.root}>
-                <Ticket aria-hidden />
-                <span className="hidden md:inline">{t('public.visitorButton')}</span>
-              </Link>
-            </Button>
             <LanguageSwitcher />
             {state.status === 'authenticated' ? (
               <Button asChild size="sm">
@@ -60,7 +54,7 @@ export function PublicLayout() {
               </Button>
             ) : (
               <Button asChild size="sm">
-                <Link to={PATHS.userLogin}>
+                <Link to={PATHS.login}>
                   <LogIn aria-hidden />
                   <span className="sm:hidden">{t('public.loginShort')}</span>
                   <span className="hidden sm:inline">{t('public.loginButton')}</span>
@@ -76,11 +70,8 @@ export function PublicLayout() {
       </main>
 
       <footer className="bg-sidebar text-sidebar-muted-foreground">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 sm:px-6 md:flex-row md:items-end md:justify-between">
+        <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
           <InstitutionNotice />
-          <Link to={PATHS.login} className="text-xs underline-offset-4 hover:underline md:shrink-0">
-            {t('public.operationalLogin')}
-          </Link>
         </div>
       </footer>
     </div>

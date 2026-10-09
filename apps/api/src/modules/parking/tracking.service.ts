@@ -15,12 +15,22 @@ import {
 
 import { campusHour } from '../../lib/campus-time.js';
 import { AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
-import { liveContext } from './live-context.js';
+import { feeScheduleService } from '../fees/fee-schedule.service.js';
 import { auditRejection, type OperationContext } from './operation-context.js';
 import { parkingErrors } from './parking.errors.js';
-import { currentDuration, toBlockSummary, toSessionView } from './parking.mappers.js';
+import {
+  currentDuration,
+  toBlockSummary,
+  toSessionView,
+  type LiveContext,
+} from './parking.mappers.js';
 import { parkingRepository, type SessionWithRelations } from './parking.repository.js';
 import { slotHoldRepository } from './slot-hold.repository.js';
+
+export const liveContext = async (): Promise<LiveContext> => ({
+  currentHour: campusHour(),
+  schedule: await feeScheduleService.find(),
+});
 
 const found = async (
   matchedBy: TrackingResponse['matchedBy'],
@@ -100,9 +110,10 @@ export const trackingService = {
     return toSessionView(session, await liveContext());
   },
 
-  async listActive(): Promise<ActiveSessionsResponse> {
+  /** Everyone parked now; `exitRequested` narrows it to those who said they are ready to leave. */
+  async listActive({ exitRequested = false } = {}): Promise<ActiveSessionsResponse> {
     const [sessions, context] = await Promise.all([
-      parkingRepository.listActiveSessions(),
+      parkingRepository.listActiveSessions({ exitRequested }),
       liveContext(),
     ]);
     return {
@@ -123,9 +134,13 @@ export const trackingService = {
       blocks: blocks.map((block) => ({
         ...toBlockSummary(block),
         description: block.description,
+        isActive: block.isActive,
         zones: block.zones.map((zone) => {
           const counts: SlotCounts = { total: 0, available: 0, occupied: 0, blocked: 0, held: 0 };
-          const slots = zone.slots.map((slot) => {
+          const live = block.isActive && zone.isActive;
+          // A disabled zone shows only the vehicles still parked in it.
+          const shown = live ? zone.slots : zone.slots.filter((slot) => slot.status === 'OCCUPIED');
+          const slots = shown.map((slot) => {
             counts.total += 1;
             if (slot.status === 'AVAILABLE') counts.available += 1;
             else if (slot.status === 'OCCUPIED') counts.occupied += 1;
@@ -149,7 +164,14 @@ export const trackingService = {
                 : null,
             };
           });
-          return { code: zone.code, name: zone.name, vehicleType: zone.vehicleType, counts, slots };
+          return {
+            code: zone.code,
+            name: zone.name,
+            vehicleType: zone.vehicleType,
+            isActive: live,
+            counts,
+            slots,
+          };
         }),
       })),
     };

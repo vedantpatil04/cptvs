@@ -1,6 +1,7 @@
 import type {
   CheckInResponse,
   CheckoutQuote,
+  FeeBreakdown,
   ParkingMapResponse,
   ParkingSessionView,
   PaymentView,
@@ -16,6 +17,8 @@ import { jsonResponse, mockApi, renderAt, signInAs } from '@/test/utils';
 const session: ParkingSessionView = {
   sessionNumber: 'CPVTS-P-7K4M92QX',
   status: 'ACTIVE',
+  lifecycle: 'ACTIVE',
+  exitRequestedAt: null,
   vehicleNumber: 'KA22AB1234',
   vehicleType: 'TWO_WHEELER',
   ownerCategory: 'STUDENT',
@@ -35,14 +38,14 @@ const session: ParkingSessionView = {
   receiptNumber: null,
 };
 
-const fee = {
-  ownerCategory: 'STUDENT' as const,
-  vehicleType: 'TWO_WHEELER' as const,
+const fee: FeeBreakdown = {
+  ownerCategory: 'STUDENT',
+  vehicleType: 'TWO_WHEELER',
   durationHours: 4,
-  rule: { type: 'FREE_HOURS_THEN_HOURLY' as const, freeHours: 2, hourlyRatePaise: 1000 },
+  rule: { type: 'FREE_HOURS_THEN_HOURLY', freeHours: 2, hourlyRatePaise: 1000 },
   lines: [
-    { kind: 'FREE' as const, hours: 2 },
-    { kind: 'CHARGED' as const, hours: 2, ratePaise: 1000, amountPaise: 2000 },
+    { kind: 'FREE', hours: 2 },
+    { kind: 'CHARGED', hours: 2, ratePaise: 1000, amountPaise: 2000 },
   ],
   totalPaise: 2000,
 };
@@ -57,6 +60,7 @@ describe('vehicle entry', () => {
   it('validates input, checks the vehicle in and explains the allocation', async () => {
     const checkIn: CheckInResponse = {
       session,
+      categorySource: 'OPERATOR',
       allocation: {
         slotCode: 'T-04',
         zoneName: 'Two-Wheeler Zone',
@@ -73,7 +77,6 @@ describe('vehicle entry', () => {
           'FINAL_AVAILABILITY_VERIFIED',
         ],
       },
-      categorySource: 'OPERATOR',
     };
     const sent = vi.fn((_body: unknown) => checkIn);
     mockApi({ ...signInAs('SECURITY_STAFF'), 'POST /parking/check-ins': sent });
@@ -153,7 +156,29 @@ describe('vehicle exit', () => {
       paidAt: null,
       createdAt: new Date().toISOString(),
     };
-    const receipt = { receiptNumber: 'CPVTS-R-2026-8F3K2Q9M' } as ReceiptView;
+    const receipt: ReceiptView = {
+      receiptNumber: 'CPVTS-R-2026-8F3K2Q9M',
+      verificationReference: 'VR-2026-8F3K2Q9M-SECURE',
+      issuedAt: new Date().toISOString(),
+      sessionNumber: session.sessionNumber,
+      vehicleNumber: session.vehicleNumber,
+      vehicleType: session.vehicleType,
+      ownerCategory: session.ownerCategory,
+      block: session.block,
+      slotCode: session.slotCode,
+      entryHour: session.entryHour,
+      exitHour: 13,
+      durationHours: 4,
+      fee,
+      totalPaise: 2000,
+      payment: {
+        status: 'PAID',
+        method: 'UPI',
+        transactionId: pending.transactionId,
+        isSimulated: true,
+        paidAt: new Date().toISOString(),
+      },
+    };
     const quoteHandler = vi.fn(() => quote);
     mockApi({
       ...signInAs('SECURITY_STAFF'),
@@ -213,11 +238,13 @@ describe('live parking map', () => {
           name: 'Two-Wheeler Parking Block',
           description: null,
           coordinates: { latitude: 15.85, longitude: 74.5 },
+          isActive: true,
           zones: [
             {
               code: 'ZONE-2W',
               name: 'Two-Wheeler Zone',
               vehicleType: 'TWO_WHEELER',
+              isActive: true,
               counts: { total: 3, available: 1, occupied: 1, blocked: 1, held: 0 },
               slots: [
                 { code: 'T-01', status: 'AVAILABLE', blockedReason: null, occupant: null },

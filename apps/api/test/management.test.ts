@@ -9,6 +9,7 @@ import type {
   Page,
   SessionTimelineResponse,
 } from '@cpvts/shared';
+import { INTEGRITY_CHECKS } from '@cpvts/shared';
 import request from 'supertest';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -98,8 +99,7 @@ describe('slot management', () => {
       status: 'BLOCKED',
       priority: 0,
       blockedReason: 'Maintenance',
-      isActive: true,
-      occupant: null,
+      isEnabled: true,
     });
     expect((await staff.checkInOk('KA01AB0001')).session.slotCode).toBe('T-02');
 
@@ -182,6 +182,9 @@ describe('slot management', () => {
       status: 'BLOCKED',
       priority: 0,
       blockedReason: 'Repairs',
+      isEnabled: true,
+      archivedAt: null,
+      occupant: null,
     });
   });
 });
@@ -437,7 +440,7 @@ describe('integrity engine', () => {
     const report = (await admin.get('/integrity')).body as IntegrityReport;
     expect(report.healthy).toBe(true);
     expect(report.checks.every((check) => check.passed)).toBe(true);
-    expect(report.checks).toHaveLength(8);
+    expect(report.checks.map((check) => check.code).sort()).toEqual([...INTEGRITY_CHECKS].sort());
   });
 
   it('detects inconsistent records', async () => {

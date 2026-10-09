@@ -1,8 +1,10 @@
 import type {
   AuthUser,
   LoginRequest,
+  LoginResponse,
   ParkingUserCategory,
   RegistrationRequest,
+  StudentRegistrationRequest,
   UserLoginRequest,
 } from '@cpvts/shared';
 import { createContext } from 'react';
@@ -18,17 +20,18 @@ export type AuthState =
 
 export interface AuthContextValue {
   state: AuthState;
-  /** Administrator / Security Staff sign-in (username + password). */
   login: (credentials: LoginRequest) => Promise<AuthUser>;
-  /** Student / Campus Staff sign-in (e-mail + password). */
-  loginUser: (credentials: UserLoginRequest) => Promise<AuthUser>;
-  /** Creates a Student or Campus Staff account and signs it in (verification stays pending). */
-  registerUser: (category: ParkingUserCategory, body: RegistrationRequest) => Promise<AuthUser>;
-  /** Reloads the signed-in user (e.g. after an administrator decides a verification). */
-  refresh: () => Promise<void>;
+  userLogin: (credentials: UserLoginRequest) => Promise<AuthUser>;
+  register: (
+    category: ParkingUserCategory,
+    data: StudentRegistrationRequest | RegistrationRequest,
+  ) => Promise<AuthUser>;
   logout: () => Promise<void>;
   /** Re-attempts session restoration after a network failure. */
   retry: () => void;
+  /** Refreshes current user profile (e.g. after verification decision/resubmission). */
+  refreshUser: () => Promise<AuthUser | null>;
+  setSession: (response: LoginResponse) => void;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

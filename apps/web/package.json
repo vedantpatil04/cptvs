@@ -6,8 +6,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "npm run build -w @cpvts/shared",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "pretypecheck": "npm run build -w @cpvts/shared",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -38,6 +40,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "i18next": "^26.4.2",
+    "jsqr": "^1.4.0",
     "lucide-react": "^1.53.0",
     "qrcode": "^1.5.4",
     "radix-ui": "^1.7.0",

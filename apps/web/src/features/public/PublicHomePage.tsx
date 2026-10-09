@@ -1,29 +1,29 @@
-import type { PublicAvailability } from '@cpvts/shared';
 import {
+  ArrowDown,
   ArrowRight,
   CircleHelp,
-  ClipboardCheck,
-  LogIn,
-  MapPinned,
+  Languages,
+  ParkingCircle,
+  QrCode,
   Receipt,
   RefreshCw,
+  Scale,
   ShieldCheck,
-  Ticket,
-  UserPlus,
+  Sparkles,
+  UserCheck,
   Wallet,
-  type LucideIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
-import { PATHS, registerPath } from '@/app/paths';
-import { ImageSlot } from '@/components/branding/ImageSlot';
+import { PATHS } from '@/app/paths';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { LoadingState } from '@/components/feedback/LoadingState';
+import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { H2, Muted } from '@/components/ui/typography';
 import { branding } from '@/config/branding';
 import { useAuth } from '@/features/auth/use-auth';
@@ -31,7 +31,6 @@ import { useApiQuery } from '@/hooks/use-api-query';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { errorMessage } from '@/lib/error-message';
-import type { TranslationCatalogue } from '@/i18n/resources';
 
 import { AvailabilityCard } from './AvailabilityCard';
 import { FeeTable } from './FeeTable';
@@ -52,7 +51,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className="space-y-5">
+    <section aria-labelledby={id} className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <H2 id={id}>{title}</H2>
@@ -65,51 +64,16 @@ function Section({
   );
 }
 
-type FaqKey = keyof TranslationCatalogue['help']['questions'];
-const HOME_FAQ: FaqKey[] = ['availability', 'fees', 'vehicle'];
-
-const STEPS: { key: 'register' | 'park' | 'find' | 'leave'; icon: LucideIcon }[] = [
-  { key: 'register', icon: ClipboardCheck },
-  { key: 'park', icon: Ticket },
-  { key: 'find', icon: MapPinned },
-  { key: 'leave', icon: Receipt },
-];
-
-/** Compact live figures on the hero photo. Counts only, as everywhere on the public page. */
-function HeroAvailability({ availability }: { availability: PublicAvailability[] }) {
-  const { t } = useTranslation();
-  const format = useFormatters();
-  return (
-    <dl className="grid grid-cols-2 divide-x rounded-xl border bg-background/95 shadow-sm backdrop-blur">
-      {availability.map((entry) => (
-        <div key={entry.vehicleType} className="px-4 py-3">
-          <dt className="text-xs text-muted-foreground">
-            {t(`vehicleTypes.${entry.vehicleType}`)}
-          </dt>
-          <dd className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-bold tabular-nums">
-              {entry.totalSlots > 0 ? format.number(entry.availableSlots) : '—'}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {t('user.availability.available')}
-            </span>
-          </dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 /**
- * Public landing page. Shows only aggregate and general information: free
- * space counts, parking blocks, fee rules and help. No vehicle, slot,
- * session, payment or other operational records are requested or shown.
+ * Public landing page. Communicates CPVTS as a real, complete campus parking product.
+ * Aggregate-only data: spaces available, locations, fees, how it works, and key benefits.
+ * No private user or vehicle data is exposed.
  */
 export function PublicHomePage() {
   const { t } = useTranslation();
   const format = useFormatters();
   const { state } = useAuth();
-  const overview = useApiQuery(fetchPublicOverview, { refreshIntervalMs: 60_000 });
+  const overview = useApiQuery(fetchPublicOverview);
   useDocumentTitle(branding.productName);
 
   const pending = overview.status === 'loading';
@@ -117,62 +81,106 @@ export function PublicHomePage() {
     overview.status === 'error' ? (
       <ErrorState description={errorMessage(t, overview.error)} onRetry={overview.refetch} />
     ) : null;
-  const signedIn = state.status === 'authenticated';
 
   return (
-    <>
-      {/* Hero */}
-      <section className="border-b bg-secondary/40">
-        <div className="mx-auto grid w-full max-w-6xl items-center gap-8 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-14 lg:py-16">
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <p className="text-sm font-semibold tracking-widest text-primary uppercase">
-                {branding.shortName} · {branding.institutionName}
-              </p>
-              <h1 className="text-4xl leading-[1.1] font-bold tracking-tight text-balance sm:text-5xl">
-                {t('public.hero.title')}
-              </h1>
-              <p className="max-w-xl text-lg text-muted-foreground">{t('public.tagline')}</p>
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden bg-gradient-to-b from-sidebar via-sidebar to-sidebar/95 text-sidebar-foreground border-b border-sidebar-border">
+        {/* Subtle grid accent */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
+
+        <div className="relative mx-auto w-full max-w-6xl space-y-8 px-4 py-12 sm:px-6 sm:py-20">
+          <div className="space-y-4 max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-sidebar-border bg-sidebar-accent/30 px-3 py-1 text-xs font-semibold text-sidebar-accent-foreground backdrop-blur-xs">
+              <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{branding.shortName} · Smart Campus Parking Platform</span>
             </div>
-            <div className="flex flex-wrap gap-3">
-              {!signedIn && (
-                <>
-                  <Button asChild size="lg">
-                    <Link to={PATHS.userLogin}>
-                      <LogIn aria-hidden />
-                      {t('public.loginButton')}
-                    </Link>
-                  </Button>
-                  <Button asChild size="lg" variant="outline">
-                    <Link to={registerPath('student')}>
-                      <UserPlus aria-hidden />
-                      {t('public.register')}
-                    </Link>
-                  </Button>
-                </>
-              )}
-              <Button asChild size="lg" variant="outline">
-                <Link to={PATHS.visitor.root}>
-                  <Ticket aria-hidden />
-                  {t('public.visitorButton')}
-                </Link>
-              </Button>
-            </div>
+
+            <h1 className="text-4xl leading-tight font-extrabold tracking-tight text-balance text-sidebar-accent-foreground sm:text-6xl">
+              {branding.productName}
+            </h1>
+
+            <p className="text-xl font-medium text-sidebar-foreground/90">
+              {branding.institutionName}
+            </p>
+
+            <p className="text-base text-sidebar-muted-foreground leading-relaxed sm:text-lg">
+              {t('public.tagline')}
+            </p>
           </div>
-          <div className="relative">
-            <div className="aspect-[4/3] overflow-hidden rounded-2xl border shadow-sm">
-              <ImageSlot slot="hero" alt={t('public.hero.imageAlt')} />
-            </div>
-            {overview.status === 'success' && (
-              <div className="absolute inset-x-4 -bottom-5 sm:inset-x-8">
-                <HeroAvailability availability={overview.data.availability} />
+
+          {/* Quick Action Navigation Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2">
+            <a
+              href="#availability"
+              className="flex items-center justify-between p-4 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/20 hover:bg-sidebar-accent/40 text-sidebar-foreground transition-all hover:scale-[1.01] group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-primary/20 text-primary">
+                  <ArrowDown className="size-5" />
+                </div>
+                <div>
+                  <span className="text-sm font-bold block">{t('public.checkAvailability')}</span>
+                  <span className="text-xs text-sidebar-muted-foreground">Live bay status</span>
+                </div>
               </div>
-            )}
+              <ArrowRight className="size-4 text-sidebar-muted-foreground group-hover:translate-x-1 transition-transform" />
+            </a>
+
+            <Link
+              to={state.status === 'authenticated' ? PATHS.portal.root : PATHS.login}
+              className="flex items-center justify-between p-4 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/20 hover:bg-sidebar-accent/40 text-sidebar-foreground transition-all hover:scale-[1.01] group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-emerald-500/20 text-emerald-400">
+                  <UserCheck className="size-5" />
+                </div>
+                <div>
+                  <span className="text-sm font-bold block">{t('public.portalLogin')}</span>
+                  <span className="text-xs text-sidebar-muted-foreground">Students & Staff</span>
+                </div>
+              </div>
+              <ArrowRight className="size-4 text-sidebar-muted-foreground group-hover:translate-x-1 transition-transform" />
+            </Link>
+
+            <Link
+              to={PATHS.visitor.root}
+              className="flex items-center justify-between p-4 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/20 hover:bg-sidebar-accent/40 text-sidebar-foreground transition-all hover:scale-[1.01] group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-amber-500/20 text-amber-400">
+                  <ParkingCircle className="size-5" />
+                </div>
+                <div>
+                  <span className="text-sm font-bold block">{t('public.visitorAccess')}</span>
+                  <span className="text-xs text-sidebar-muted-foreground">Slip & QR Pass</span>
+                </div>
+              </div>
+              <ArrowRight className="size-4 text-sidebar-muted-foreground group-hover:translate-x-1 transition-transform" />
+            </Link>
+
+            <Link
+              to={PATHS.login}
+              className="flex items-center justify-between p-4 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/20 hover:bg-sidebar-accent/40 text-sidebar-foreground transition-all hover:scale-[1.01] group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-sky-500/20 text-sky-400">
+                  <ShieldCheck className="size-5" />
+                </div>
+                <div>
+                  <span className="text-sm font-bold block">{t('public.adminStaffLogin')}</span>
+                  <span className="text-xs text-sidebar-muted-foreground">Security & Gate</span>
+                </div>
+              </div>
+              <ArrowRight className="size-4 text-sidebar-muted-foreground group-hover:translate-x-1 transition-transform" />
+            </Link>
           </div>
         </div>
       </section>
 
-      <div className="mx-auto w-full max-w-6xl space-y-16 px-4 py-14 sm:px-6">
+      {/* Main Content Area */}
+      <main className="flex-1 mx-auto w-full max-w-6xl space-y-16 px-4 py-12 sm:px-6">
+        {/* Section 1: Live Parking Availability */}
         <Section
           id="availability"
           title={t('public.availability.title')}
@@ -204,6 +212,73 @@ export function PublicHomePage() {
           )}
         </Section>
 
+        {/* Section 2: How CPVTS Works */}
+        <section aria-labelledby="how-it-works" className="space-y-6">
+          <div className="space-y-1 text-center max-w-2xl mx-auto">
+            <H2 id="how-it-works">{t('public.howItWorksTitle')}</H2>
+            <Muted>{t('public.howItWorksSubtitle')}</Muted>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+            <Card className="border-border shadow-xs hover:border-primary/50 transition-colors">
+              <CardHeader className="pb-2">
+                <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary mb-2">
+                  <UserCheck className="size-5" />
+                </div>
+                <CardTitle className="text-base font-bold">{t('public.step1Title')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {t('public.step1Desc')}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border shadow-xs hover:border-primary/50 transition-colors">
+              <CardHeader className="pb-2">
+                <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 mb-2">
+                  <Sparkles className="size-5" />
+                </div>
+                <CardTitle className="text-base font-bold">{t('public.step2Title')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {t('public.step2Desc')}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border shadow-xs hover:border-primary/50 transition-colors">
+              <CardHeader className="pb-2">
+                <div className="flex size-10 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 mb-2">
+                  <QrCode className="size-5" />
+                </div>
+                <CardTitle className="text-base font-bold">{t('public.step3Title')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {t('public.step3Desc')}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border shadow-xs hover:border-primary/50 transition-colors">
+              <CardHeader className="pb-2">
+                <div className="flex size-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 mb-2">
+                  <Receipt className="size-5" />
+                </div>
+                <CardTitle className="text-base font-bold">{t('public.step4Title')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {t('public.step4Desc')}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        {/* Section 3: Parking Locations & Blocks */}
         <Section
           id="locations"
           title={t('public.locations.title')}
@@ -216,6 +291,7 @@ export function PublicHomePage() {
           )}
         </Section>
 
+        {/* Section 4: Official Fee Table */}
         <Section
           id="fees"
           title={t('public.fees.title')}
@@ -235,78 +311,107 @@ export function PublicHomePage() {
             ))}
         </Section>
 
-        <Section id="how" title={t('public.how.title')} description={t('public.how.description')}>
-          <ol className="grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-2 lg:grid-cols-4">
-            {STEPS.map(({ key, icon: Icon }, index) => (
-              <li key={key} className="space-y-3 bg-card p-5">
-                <div className="flex items-center gap-3">
-                  <span className="grid size-8 place-items-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-                    {index + 1}
-                  </span>
-                  <Icon className="size-5 text-muted-foreground" aria-hidden />
-                </div>
-                <h3 className="font-semibold">{t(`public.how.steps.${key}.title`)}</h3>
-                <p className="text-sm text-muted-foreground">{t(`public.how.steps.${key}.text`)}</p>
-              </li>
-            ))}
-          </ol>
-        </Section>
-
-        <section
-          aria-labelledby="visitor-parking"
-          className="grid gap-6 rounded-2xl bg-sidebar p-6 text-sidebar-foreground sm:p-8 md:grid-cols-[1fr_auto] md:items-center"
-        >
-          <div className="space-y-2">
-            <h2
-              id="visitor-parking"
-              className="text-xl font-semibold text-sidebar-accent-foreground"
-            >
-              {t('public.visitor.title')}
-            </h2>
-            <p className="max-w-2xl text-sidebar-muted-foreground">{t('public.visitor.text')}</p>
+        {/* Section 5: Key Platform Benefits */}
+        <section aria-labelledby="key-benefits" className="space-y-6">
+          <div className="space-y-1 text-center max-w-2xl mx-auto">
+            <H2 id="key-benefits">{t('public.benefitsTitle')}</H2>
+            <Muted>{t('public.benefitsSubtitle')}</Muted>
           </div>
-          <Button asChild size="lg" variant="inverse">
-            <Link to={PATHS.visitor.root}>
-              {t('public.visitorButton')}
-              <ArrowRight aria-hidden />
-            </Link>
-          </Button>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+            <div className="rounded-xl border bg-card p-5 space-y-2">
+              <Scale className="size-6 text-primary" />
+              <h4 className="font-bold text-sm">{t('public.b1Title')}</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">{t('public.b1Desc')}</p>
+            </div>
+
+            <div className="rounded-xl border bg-card p-5 space-y-2">
+              <ShieldCheck className="size-6 text-emerald-600" />
+              <h4 className="font-bold text-sm">{t('public.b2Title')}</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">{t('public.b2Desc')}</p>
+            </div>
+
+            <div className="rounded-xl border bg-card p-5 space-y-2">
+              <Wallet className="size-6 text-amber-600" />
+              <h4 className="font-bold text-sm">{t('public.b3Title')}</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">{t('public.b3Desc')}</p>
+            </div>
+
+            <div className="rounded-xl border bg-card p-5 space-y-2">
+              <Languages className="size-6 text-sky-600" />
+              <h4 className="font-bold text-sm">{t('public.b4Title')}</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">{t('public.b4Desc')}</p>
+            </div>
+          </div>
         </section>
 
-        <Section id="faq" title={t('help.title')} description={t('help.description')}>
-          <div className="divide-y rounded-xl border bg-card">
-            {HOME_FAQ.map((key) => (
-              <details
-                key={key}
-                className="group px-5 py-4 [&_summary::-webkit-details-marker]:hidden"
-              >
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  {t(`help.questions.${key}.question`)}
-                  <ArrowRight
-                    className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
-                    aria-hidden
-                  />
-                </summary>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  {t(`help.questions.${key}.answer`)}
-                </p>
-              </details>
-            ))}
+        {/* Section 6: Help & Privacy */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CircleHelp className="size-5 text-primary" aria-hidden />
+                {t('public.helpCard.title')}
+              </CardTitle>
+              <CardDescription>{t('public.helpCard.description')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="outline">
+                <Link to={PATHS.help}>{t('public.helpCard.action')}</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <div className="flex items-start gap-3 rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+            <ShieldCheck className="size-5 shrink-0 text-success" aria-hidden />
+            <p>{t('public.privacyNote')}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <Button asChild variant="outline">
-              <Link to={PATHS.help}>
-                <CircleHelp aria-hidden />
-                {t('public.helpCard.action')}
+        </div>
+      </main>
+
+      {/* Product Footer */}
+      <footer className="border-t bg-muted/30 mt-16 text-xs text-muted-foreground">
+        <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-6">
+            <div className="space-y-1">
+              <span className="font-bold text-sm text-foreground">{branding.productName}</span>
+              <p className="text-xs">{branding.institutionName} · {t('public.footerTagline')}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <LanguageSwitcher />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-4 text-[11px]">
+            <div className="flex flex-wrap gap-4">
+              <a href="#availability" className="hover:text-foreground">
+                {t('public.availability.title')}
+              </a>
+              <a href="#locations" className="hover:text-foreground">
+                {t('public.locations.title')}
+              </a>
+              <a href="#fees" className="hover:text-foreground">
+                {t('public.fees.title')}
+              </a>
+              <Link to={PATHS.visitor.root} className="hover:text-foreground">
+                {t('public.visitorAccess')}
               </Link>
-            </Button>
-            <p className="flex items-start gap-2 text-sm text-muted-foreground">
-              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
-              {t('public.privacyNote')}
-            </p>
+              <Link to={PATHS.help} className="hover:text-foreground">
+                {t('nav.help')}
+              </Link>
+              <Link to={PATHS.login} className="hover:text-foreground">
+                {t('auth.signIn')}
+              </Link>
+              <Link to={PATHS.register.student} className="hover:text-foreground">
+                Register Student
+              </Link>
+            </div>
+            <span>
+              © {new Date().getFullYear()} {branding.institutionName}. {t('public.footerCopyright')}
+            </span>
           </div>
-        </Section>
-      </div>
-    </>
+        </div>
+      </footer>
+    </div>
   );
 }

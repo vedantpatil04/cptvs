@@ -1,15 +1,15 @@
 import {
+  notificationListQuerySchema,
   paginationSchema,
-  parkCancelRequestSchema,
-  parkConfirmRequestSchema,
-  parkProposalRequestSchema,
+  parkNowDecisionRequestSchema,
+  parkNowStartRequestSchema,
   portalHistoryQuerySchema,
   profileUpdateSchema,
   registerVehicleRequestSchema,
-  selfPaymentRequestSchema,
-  selfProcessPaymentSchema,
+  selfCheckoutQuoteRequestSchema,
   sessionNumberSchema,
   updateVehicleRequestSchema,
+  type VehiclesResponse,
   verificationResubmissionSchema,
   VALIDATION_MESSAGES,
 } from '@cpvts/shared';
@@ -19,55 +19,64 @@ import { z } from 'zod';
 import { requestMeta, requireAuth } from '../../lib/request-context.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { authorize } from '../../middleware/authorize.js';
-import { requireVerified } from '../../middleware/require-verified.js';
 import { validate } from '../../middleware/validate.js';
+import { accountStateService } from '../accounts/account-state.js';
 import { registrationService } from '../accounts/registration.service.js';
+import { parkingErrors } from '../parking/parking.errors.js';
 import { notificationService } from '../notifications/notification.service.js';
 import type { OperationContext } from '../parking/operation-context.js';
-import { selfCheckoutService, type SessionAccess } from '../parking/self-checkout.service.js';
-import { portalParkingService } from './park.service.js';
+import { parkNowService } from './park-now.service.js';
+import { requireVerified } from './portal-access.js';
 import { portalService } from './portal.service.js';
+import { profileService } from './profile.service.js';
+import { selfCheckoutService } from './self-checkout.service.js';
 import { vehicleService } from './vehicle.service.js';
 
 const context = (req: Request): OperationContext => ({
   actor: requireAuth(req).user,
   request: requestMeta(req),
 });
+
 const userId = (req: Request): string => requireAuth(req).user.id;
 
-/** A parking user may act only on sessions of their own vehicles. */
-const ownSession =
-  (req: Request): SessionAccess =>
-  async (sessionNumber) => {
-    await portalService.getSession(userId(req), sessionNumber);
-  };
-
-const sessionParams = z.object({ sessionNumber: sessionNumberSchema });
-const receiptParams = z.object({ receiptNumber: z.string().trim().toUpperCase().min(1).max(32) });
+const idParams = z.object({ id: z.uuid({ error: VALIDATION_MESSAGES.required }) });
 const vehicleParams = z.object({ vehicleId: z.uuid({ error: VALIDATION_MESSAGES.required }) });
-const paymentParams = z.object({ paymentId: z.uuid({ error: VALIDATION_MESSAGES.required }) });
-const notificationParams = z.object({
-  notificationId: z.uuid({ error: VALIDATION_MESSAGES.required }),
+const sessionParams = z.object({ sessionNumber: sessionNumberSchema });
+const receiptParams = z.object({
+  receiptNumber: z.string().trim().toUpperCase().min(1).max(32),
 });
 
 /**
- * Student / Campus Staff portal. Every route needs a parking-user token.
- * Profile, re-submission and notifications work while verification is pending
- * or rejected; everything that shows parking data, parks a vehicle or pays
- * needs an approved account.
+ * Student / Campus Staff self-service API. Every route requires a
+ * `PARKING_USER` account; everything except the account state, profile, verification
+ * and notifications also requires approved identity verification (decided from the
+ * database on each request, never from the token). All data is scoped to the signed-in
+ * user's own vehicles and sessions on the server.
+ *
+ * Checkout is gate-controlled: from here a user can preview the amount due and say they are
+ * ready to leave, but the payment and the completion of the session happen at the exit
+ * through Security Staff.
  */
 export const portalRouter = Router();
 
 portalRouter.use(authenticate, authorize('PARKING_USER'));
 
-// --- Available to every parking user ----------------------------------------
+// --- Available while verification is pending or rejected -------------------
+
+/**
+ * The one authoritative answer to "what may this account do right now?": verification,
+ * Park Now eligibility and academic details, read from the database on this request.
+ */
+portalRouter.get('/account', async (req, res) => {
+  res.status(200).json(await accountStateService.get(userId(req)));
+});
 
 portalRouter.get('/profile', async (req, res) => {
-  res.status(200).json(await portalService.getProfile(userId(req)));
+  res.status(200).json(await profileService.get(userId(req)));
 });
 
 portalRouter.patch('/profile', validate({ body: profileUpdateSchema }), async (req, res) => {
-  res.status(200).json(await portalService.updateProfile(req.body, context(req)));
+  res.status(200).json(await profileService.update(req.body, context(req)));
 });
 
 portalRouter.post(
@@ -75,39 +84,50 @@ portalRouter.post(
   validate({ body: verificationResubmissionSchema }),
   async (req, res) => {
     await registrationService.resubmit(req.body, context(req));
-    res.status(200).json(await portalService.getProfile(userId(req)));
+    res.status(200).json(await profileService.get(userId(req)));
   },
 );
 
-portalRouter.get('/notifications', async (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  res.status(200).json(await notificationService.list(userId(req)));
-});
+portalRouter.get(
+  '/notifications',
+  validate({ query: notificationListQuerySchema }),
+  async (req, res) => {
+    res
+      .status(200)
+      .json(
+        await notificationService.list(
+          userId(req),
+          req.query as unknown as { unreadOnly: boolean; limit: number },
+        ),
+      );
+  },
+);
 
 portalRouter.post('/notifications/read-all', async (req, res) => {
-  await notificationService.markAllRead(userId(req));
-  res.status(204).end();
+  res.status(200).json(await notificationService.markAllRead(userId(req)));
 });
 
-portalRouter.post(
-  '/notifications/:notificationId/read',
-  validate({ params: notificationParams }),
-  async (req, res) => {
-    await notificationService.markRead(userId(req), String(req.params.notificationId));
-    res.status(204).end();
-  },
-);
+portalRouter.post('/notifications/:id/read', validate({ params: idParams }), async (req, res) => {
+  res.status(200).json(await notificationService.markRead(userId(req), String(req.params.id)));
+});
 
 // --- Verified accounts only -------------------------------------------------
 
 portalRouter.use(requireVerified);
 
 portalRouter.get('/overview', async (req, res) => {
-  res.status(200).json(await portalService.getOverview(userId(req)));
+  res.status(200).json(await portalService.overview(userId(req)));
 });
 
+portalRouter.get('/layout', async (req, res) => {
+  res.status(200).json(await portalService.layout(userId(req)));
+});
+
+// Vehicles
+
 portalRouter.get('/vehicles', async (req, res) => {
-  res.status(200).json(await vehicleService.list(userId(req)));
+  const body: VehiclesResponse = { vehicles: await vehicleService.list(userId(req)) };
+  res.status(200).json(body);
 });
 
 portalRouter.post(
@@ -128,6 +148,15 @@ portalRouter.patch(
   },
 );
 
+/** Removes the vehicle from the account (not while it is parked). */
+portalRouter.delete(
+  '/vehicles/:vehicleId',
+  validate({ params: vehicleParams }),
+  async (req, res) => {
+    res.status(200).json(await vehicleService.remove(String(req.params.vehicleId), context(req)));
+  },
+);
+
 portalRouter.post(
   '/vehicles/:vehicleId/primary',
   validate({ params: vehicleParams }),
@@ -138,40 +167,44 @@ portalRouter.post(
   },
 );
 
-// --- Park now: the allocation engine proposes, the user confirms ------------
+// Park Now
+
+portalRouter.get('/park-now/offer', async (req, res) => {
+  res.status(200).json(await parkNowService.current(context(req)));
+});
 
 portalRouter.post(
-  '/parking/proposals',
-  validate({ body: parkProposalRequestSchema }),
+  '/park-now/offers',
+  validate({ body: parkNowStartRequestSchema }),
   async (req, res) => {
-    const { vehicleId } = req.body as { vehicleId: string };
-    res.set('Cache-Control', 'no-store');
-    res.status(201).json(await portalParkingService.propose(vehicleId, context(req)));
+    const { vehicleId } = req.body as z.infer<typeof parkNowStartRequestSchema>;
+    res.status(201).json(await parkNowService.start(vehicleId, context(req)));
   },
 );
 
 portalRouter.post(
-  '/parking/confirm',
-  validate({ body: parkConfirmRequestSchema }),
+  '/park-now/confirm',
+  validate({ body: parkNowDecisionRequestSchema }),
   async (req, res) => {
-    res.set('Cache-Control', 'no-store');
-    res.status(201).json(await portalParkingService.confirm(req.body, context(req)));
+    const { offerId } = req.body as z.infer<typeof parkNowDecisionRequestSchema>;
+    res.status(201).json(await parkNowService.confirm(offerId, context(req)));
   },
 );
 
 portalRouter.post(
-  '/parking/cancel',
-  validate({ body: parkCancelRequestSchema }),
+  '/park-now/cancel',
+  validate({ body: parkNowDecisionRequestSchema }),
   async (req, res) => {
-    await portalParkingService.cancel(req.body, context(req));
+    const { offerId } = req.body as z.infer<typeof parkNowDecisionRequestSchema>;
+    await parkNowService.cancel(offerId, context(req));
     res.status(204).end();
   },
 );
 
-// --- Sessions, checkout and payment ------------------------------------------
+// Sessions
 
-portalRouter.get('/sessions/current', async (req, res) => {
-  res.status(200).json(await portalService.listActiveSessions(userId(req)));
+portalRouter.get('/sessions/active', async (req, res) => {
+  res.status(200).json(await portalService.activeSessions(userId(req)));
 });
 
 portalRouter.get(
@@ -180,7 +213,7 @@ portalRouter.get(
   async (req, res) => {
     res
       .status(200)
-      .json(await portalService.getSession(userId(req), String(req.params.sessionNumber)));
+      .json(await portalService.session(userId(req), String(req.params.sessionNumber)));
   },
 );
 
@@ -190,86 +223,75 @@ portalRouter.get(
   async (req, res) => {
     res
       .status(200)
-      .json(await portalService.getTimeline(userId(req), String(req.params.sessionNumber)));
+      .json(await portalService.timeline(userId(req), String(req.params.sessionNumber)));
   },
 );
 
+// Preparing to leave. Checkout itself is gate-controlled.
+
+/** A read-only preview of the amount due if the vehicle left now. Nothing is recorded or reserved. */
 portalRouter.post(
-  '/sessions/:sessionNumber/checkout',
+  '/checkout/quote',
+  validate({ body: selfCheckoutQuoteRequestSchema }),
+  async (req, res) => {
+    const { sessionNumber } = req.body as z.infer<typeof selfCheckoutQuoteRequestSchema>;
+    res.status(200).json(await selfCheckoutService.quote(sessionNumber, context(req)));
+  },
+);
+
+/** "I am ready to leave": tells the gate. The slot stays occupied until the gate checkout. */
+portalRouter.post(
+  '/sessions/:sessionNumber/exit-request',
+  validate({ params: sessionParams }),
+  async (req, res) => {
+    res
+      .status(200)
+      .json(await selfCheckoutService.requestExit(String(req.params.sessionNumber), context(req)));
+  },
+);
+
+portalRouter.delete(
+  '/sessions/:sessionNumber/exit-request',
   validate({ params: sessionParams }),
   async (req, res) => {
     res
       .status(200)
       .json(
-        await selfCheckoutService.quote(
-          String(req.params.sessionNumber),
-          ownSession(req),
-          context(req),
-        ),
+        await selfCheckoutService.cancelExitRequest(String(req.params.sessionNumber), context(req)),
       );
   },
 );
 
-portalRouter.post(
-  '/sessions/:sessionNumber/payments',
-  validate({ params: sessionParams, body: selfPaymentRequestSchema }),
-  async (req, res) => {
-    const { method } = req.body as z.infer<typeof selfPaymentRequestSchema>;
-    res
-      .status(201)
-      .json(
-        await selfCheckoutService.createPayment(
-          String(req.params.sessionNumber),
-          method,
-          ownSession(req),
-          context(req),
-        ),
-      );
-  },
-);
-
-portalRouter.post(
-  '/payments/:paymentId/process',
-  validate({ params: paymentParams, body: selfProcessPaymentSchema }),
-  async (req, res) => {
-    const { outcome } = req.body as z.infer<typeof selfProcessPaymentSchema>;
-    res
-      .status(200)
-      .json(
-        await selfCheckoutService.processPayment(
-          String(req.params.paymentId),
-          outcome,
-          ownSession(req),
-          context(req),
-        ),
-      );
-  },
-);
-
-portalRouter.post(
-  '/payments/:paymentId/cancel',
-  validate({ params: paymentParams }),
-  async (req, res) => {
-    const payment = await selfCheckoutService.cancelPayment(
-      String(req.params.paymentId),
-      ownSession(req),
-      context(req),
-    );
-    res.status(200).json({ payment });
-  },
-);
-
-portalRouter.get('/layout', async (req, res) => {
-  res.status(200).json(await portalService.getLayout(userId(req)));
+/**
+ * There is no self-service payment or finalization: a session is completed only by the exit
+ * gate's checkout. A client still calling the old payment routes gets a clear, stable answer.
+ */
+portalRouter.all('/checkout/payments{/*splat}', () => {
+  throw parkingErrors.gateCheckoutRequired();
 });
 
+// History and receipts
+
 portalRouter.get('/history', validate({ query: portalHistoryQuerySchema }), async (req, res) => {
-  res.status(200).json(await portalService.listHistory(userId(req), req.query));
+  res
+    .status(200)
+    .json(
+      await portalService.history(
+        userId(req),
+        req.query as unknown as z.infer<typeof portalHistoryQuerySchema>,
+      ),
+    );
 });
 
 portalRouter.get('/receipts', validate({ query: paginationSchema }), async (req, res) => {
-  const { page, pageSize } = req.query as unknown as z.infer<typeof paginationSchema>;
-  res.status(200).json(await portalService.listReceipts(userId(req), page, pageSize));
+  res
+    .status(200)
+    .json(
+      await portalService.receipts(
+        userId(req),
+        req.query as unknown as z.infer<typeof paginationSchema>,
+      ),
+    );
 });
 
 portalRouter.get(
@@ -278,6 +300,6 @@ portalRouter.get(
   async (req, res) => {
     res
       .status(200)
-      .json(await portalService.getReceipt(userId(req), String(req.params.receiptNumber)));
+      .json(await portalService.receipt(userId(req), String(req.params.receiptNumber)));
   },
 );

@@ -1,31 +1,38 @@
-import type {
-  RegisteredVehicle,
-  RegisterVehicleRequest,
-  UpdateVehicleRequest,
-  VehicleType,
+import {
+  MAX_VEHICLES_PER_USER,
+  type RegisteredVehicle,
+  type RegisterVehicleRequest,
+  type UpdateVehicleRequest,
+  type VehicleReleaseResult,
 } from '@cpvts/shared';
 
+import type { DbClient } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
+import { prisma } from '../../db/prisma.js';
 import { withTransaction } from '../../db/transaction.js';
-import { accountErrors } from '../accounts/accounts.errors.js';
+import type { Prisma } from '../../generated/prisma/client.js';
+import { AppError } from '../../lib/errors.js';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';
+import { accountErrors } from '../accounts/accounts.errors.js';
 import type { OperationContext } from '../parking/operation-context.js';
 import { parkingErrors } from '../parking/parking.errors.js';
-import { portalRepository, type PortalVehicleRow } from './portal.repository.js';
+import { cancelOffersForVehicle } from './park-now.service.js';
 
-/** Parsed vehicle bodies (normalised by the shared schemas). */
-interface NewVehicle {
-  vehicleNumber: string;
-  vehicleType: VehicleType;
-  label?: string | null;
-}
-type VehicleChanges = Partial<NewVehicle>;
+/** A registered vehicle with its live parking state. */
+export const VEHICLE_VIEW_INCLUDE = {
+  sessions: {
+    where: { status: 'ACTIVE' },
+    include: { slot: { include: { zone: { include: { block: true } } } } },
+    take: 1,
+  },
+  _count: { select: { sessions: true } },
+} as const satisfies Prisma.VehicleInclude;
 
-export const toRegisteredVehicle = (vehicle: PortalVehicleRow): RegisteredVehicle => {
-  const active = vehicle.sessions.find(
-    (session) => !vehicle.ownerSince || session.entryAt >= vehicle.ownerSince,
-  );
+type VehicleRow = Prisma.VehicleGetPayload<{ include: typeof VEHICLE_VIEW_INCLUDE }>;
+
+export const toRegisteredVehicle = (vehicle: VehicleRow): RegisteredVehicle => {
+  const active = vehicle.sessions[0];
   return {
     id: vehicle.id,
     vehicleNumber: vehicle.vehicleNumber,
@@ -33,6 +40,7 @@ export const toRegisteredVehicle = (vehicle: PortalVehicleRow): RegisteredVehicl
     label: vehicle.label,
     isPrimary: vehicle.isPrimary,
     registeredAt: (vehicle.ownerSince ?? vehicle.createdAt).toISOString(),
+    // Parking history is tied to the plate and type, so they are fixed once it exists.
     identityEditable: vehicle._count.sessions === 0,
     activeSession: active
       ? {
@@ -46,156 +54,270 @@ export const toRegisteredVehicle = (vehicle: PortalVehicleRow): RegisteredVehicl
   };
 };
 
-const NUMBER_CONSTRAINT = 'vehicles_vehicle_number_key';
+export const listVehiclesOf = async (
+  userId: string,
+  db: DbClient = prisma,
+): Promise<RegisteredVehicle[]> => {
+  const vehicles = await db.vehicle.findMany({
+    where: { ownerUserId: userId },
+    include: VEHICLE_VIEW_INCLUDE,
+    orderBy: [{ isPrimary: 'desc' }, { ownerSince: 'asc' }, { vehicleNumber: 'asc' }],
+  });
+  return vehicles.map(toRegisteredVehicle);
+};
 
+const loadOwned = async (userId: string, vehicleId: string, db: DbClient): Promise<VehicleRow> => {
+  const vehicle = await db.vehicle.findFirst({
+    where: { id: vehicleId, ownerUserId: userId },
+    include: VEHICLE_VIEW_INCLUDE,
+  });
+  if (!vehicle) throw accountErrors.vehicleNotFound();
+  return vehicle;
+};
+
+const mapVehicleViolation = (error: unknown): never => {
+  if (isUniqueViolation(error, 'vehicles_vehicle_number_key')) {
+    throw accountErrors.vehicleAlreadyRegistered();
+  }
+  if (isUniqueViolation(error, 'vehicles_one_primary_per_owner')) {
+    throw new AppError(
+      409,
+      'CONFLICT',
+      'The primary vehicle was changed at the same time. Try again.',
+    );
+  }
+  throw error;
+};
+
+/**
+ * Ends an account's ownership of a vehicle — by the owner, or by an administrator when the
+ * owner cannot. A parked vehicle cannot be removed. A vehicle that never parked is deleted; one
+ * with parking history keeps its sessions (they stay with the account that owned it) and the
+ * plate becomes free for another account to register. One plate is never actively owned by
+ * two accounts: the database allows a single owner per plate.
+ */
+export const releaseVehicleOwnership = async (
+  vehicleId: string,
+  context: OperationContext,
+  scope: { ownerUserId?: string } = {},
+): Promise<VehicleReleaseResult> =>
+  withTransaction(async (tx) => {
+    const vehicle = await tx.vehicle.findFirst({
+      where: {
+        id: vehicleId,
+        ownerUserId: scope.ownerUserId ?? { not: null },
+      },
+      include: {
+        _count: { select: { sessions: true } },
+        sessions: { where: { status: 'ACTIVE' }, select: { id: true }, take: 1 },
+      },
+    });
+    if (!vehicle || !vehicle.ownerUserId) throw accountErrors.vehicleNotFound();
+    if (vehicle.sessions.length > 0) throw accountErrors.vehicleParked();
+
+    const ownerId = vehicle.ownerUserId;
+    // A slot held for this vehicle's Park Now offer goes back to the pool.
+    await cancelOffersForVehicle(vehicle.id, tx);
+
+    let outcome: VehicleReleaseResult['outcome'];
+    if (vehicle._count.sessions === 0) {
+      await tx.vehicle.delete({ where: { id: vehicle.id } });
+      outcome = 'DELETED';
+    } else {
+      await tx.vehicle.update({
+        where: { id: vehicle.id },
+        data: { ownerUserId: null, ownerSince: null, isPrimary: false, label: null },
+      });
+      outcome = 'RELEASED';
+    }
+
+    // The account keeps exactly one primary vehicle while it has any.
+    if (vehicle.isPrimary) {
+      const next = await tx.vehicle.findFirst({
+        where: { ownerUserId: ownerId },
+        orderBy: [{ ownerSince: 'asc' }, { vehicleNumber: 'asc' }],
+        select: { id: true },
+      });
+      if (next) await tx.vehicle.update({ where: { id: next.id }, data: { isPrimary: true } });
+    }
+
+    await auditRepository.record(
+      {
+        action: AUDIT_ACTIONS.vehicleReleased,
+        actorId: context.actor.id,
+        entityType: AUDIT_ENTITY_TYPES.vehicle,
+        entityId: vehicle.vehicleNumber,
+        metadata: {
+          outcome,
+          ownerUserId: ownerId,
+          by: context.actor.id === ownerId ? 'OWNER' : 'ADMIN',
+        },
+        request: context.request,
+      },
+      tx,
+    );
+    return { vehicleNumber: vehicle.vehicleNumber, outcome };
+  });
+
+/** A user's own vehicles. Only the owner can see or change them; anyone else gets "not found". */
 export const vehicleService = {
-  async list(userId: string): Promise<RegisteredVehicle[]> {
-    const vehicles = await portalRepository.listVehicles(userId);
-    return vehicles.map(toRegisteredVehicle);
+  list: listVehiclesOf,
+
+  /** The owner removes a vehicle from their account. */
+  remove(vehicleId: string, context: OperationContext): Promise<VehicleReleaseResult> {
+    return releaseVehicleOwnership(vehicleId, context, { ownerUserId: context.actor.id });
   },
 
-  async get(userId: string, vehicleId: string): Promise<RegisteredVehicle> {
-    const vehicles = await portalRepository.listVehicles(userId);
-    const vehicle = vehicles.find((entry) => entry.id === vehicleId);
-    if (!vehicle) throw accountErrors.vehicleNotFound();
-    return toRegisteredVehicle(vehicle);
-  },
-
-  /**
-   * Registers a vehicle to the user. An unowned vehicle that has parked before
-   * (for example as a visitor) can be claimed, but only its future sessions
-   * become visible to the new owner. Owner category, fees, slots and sessions
-   * are never taken from the request.
-   */
   async register(
     input: RegisterVehicleRequest,
     context: OperationContext,
   ): Promise<RegisteredVehicle> {
     const userId = context.actor.id;
-    const { vehicleNumber, vehicleType, label } = input as NewVehicle;
-
+    const vehicleNumber = input.vehicleNumber.trim().toUpperCase();
     try {
-      const vehicleId = await withTransaction(async (tx) => {
-        const existing = await tx.vehicle.findUnique({ where: { vehicleNumber } });
-        if (existing?.ownerUserId) throw accountErrors.vehicleAlreadyRegistered();
-        if (existing && existing.vehicleType !== vehicleType) {
-          throw parkingErrors.vehicleTypeMismatch();
+      const id = await withTransaction(async (tx) => {
+        const owned = await tx.vehicle.count({ where: { ownerUserId: userId } });
+        if (owned >= MAX_VEHICLES_PER_USER) {
+          throw new AppError(
+            409,
+            'VEHICLE_LIMIT_REACHED',
+            `You can register at most ${MAX_VEHICLES_PER_USER} vehicles.`,
+          );
         }
 
-        const isFirst = (await tx.vehicle.count({ where: { ownerUserId: userId } })) === 0;
-        const ownership = {
-          ownerUserId: userId,
-          ownerSince: new Date(),
-          label: label ?? null,
-          isPrimary: isFirst,
-        };
-        const vehicle = existing
-          ? await tx.vehicle.update({ where: { id: existing.id }, data: ownership })
-          : await tx.vehicle.create({ data: { vehicleNumber, vehicleType, ...ownership } });
+        const now = new Date();
+        const label = input.label ?? null;
+        const existing = await tx.vehicle.findUnique({ where: { vehicleNumber } });
+        let vehicleId: string;
+        if (existing) {
+          // A plate the security desk has seen before can be claimed once, if it is
+          // unowned and of the same type. History from before the claim stays hidden.
+          if (existing.ownerUserId) throw accountErrors.vehicleAlreadyRegistered();
+          if (existing.vehicleType !== input.vehicleType) throw parkingErrors.vehicleTypeMismatch();
+          const claimed = await tx.vehicle.updateMany({
+            where: { id: existing.id, ownerUserId: null },
+            data: { ownerUserId: userId, ownerSince: now, label, isPrimary: owned === 0 },
+          });
+          if (claimed.count !== 1) throw accountErrors.vehicleAlreadyRegistered();
+          vehicleId = existing.id;
+        } else {
+          const created = await tx.vehicle.create({
+            data: {
+              vehicleNumber,
+              vehicleType: input.vehicleType,
+              ownerUserId: userId,
+              ownerSince: now,
+              label,
+              isPrimary: owned === 0,
+            },
+            select: { id: true },
+          });
+          vehicleId = created.id;
+        }
 
         await auditRepository.record(
           {
             action: AUDIT_ACTIONS.vehicleRegistered,
             actorId: userId,
             entityType: AUDIT_ENTITY_TYPES.vehicle,
-            entityId: vehicle.vehicleNumber,
-            metadata: { vehicleType, claimedExisting: Boolean(existing) },
+            entityId: vehicleNumber,
+            metadata: { vehicleType: input.vehicleType, claimedExisting: Boolean(existing) },
             request: context.request,
           },
           tx,
         );
-        return vehicle.id;
+        return vehicleId;
       });
-      return await this.get(userId, vehicleId);
+      return await loadOwned(userId, id, prisma).then(toRegisteredVehicle);
     } catch (error) {
-      if (isUniqueViolation(error, NUMBER_CONSTRAINT)) {
-        throw accountErrors.vehicleAlreadyRegistered();
-      }
-      throw error;
+      return mapVehicleViolation(error);
     }
   },
 
-  /** Label always; number and type only while the vehicle has no parking history. */
+  /**
+   * Label is always editable. Number and type only while the vehicle has no
+   * parking history; category, verification, fees, sessions, payments and
+   * receipts are not vehicle fields a user can touch at all.
+   */
   async update(
     vehicleId: string,
-    input: UpdateVehicleRequest,
+    patch: UpdateVehicleRequest,
     context: OperationContext,
   ): Promise<RegisteredVehicle> {
     const userId = context.actor.id;
-    const changes = input as VehicleChanges;
-
     try {
       await withTransaction(async (tx) => {
-        const vehicle = await portalRepository.findOwnedVehicle(userId, vehicleId, tx);
-        if (!vehicle) throw accountErrors.vehicleNotFound();
-
-        const numberChanges =
-          changes.vehicleNumber !== undefined && changes.vehicleNumber !== vehicle.vehicleNumber;
+        const vehicle = await loadOwned(userId, vehicleId, tx);
+        const number = patch.vehicleNumber?.trim().toUpperCase();
+        const numberChanges = number !== undefined && number !== vehicle.vehicleNumber;
         const typeChanges =
-          changes.vehicleType !== undefined && changes.vehicleType !== vehicle.vehicleType;
+          patch.vehicleType !== undefined && patch.vehicleType !== vehicle.vehicleType;
         if ((numberChanges || typeChanges) && vehicle._count.sessions > 0) {
           throw accountErrors.vehicleIdentityLocked();
         }
-        if (numberChanges) {
-          const taken = await tx.vehicle.findUnique({
-            where: { vehicleNumber: changes.vehicleNumber },
-            select: { id: true },
-          });
-          if (taken) throw accountErrors.vehicleAlreadyRegistered();
-        }
 
-        await tx.vehicle.update({
-          where: { id: vehicle.id },
-          data: {
-            ...(numberChanges ? { vehicleNumber: changes.vehicleNumber } : {}),
-            ...(typeChanges ? { vehicleType: changes.vehicleType } : {}),
-            ...(changes.label !== undefined ? { label: changes.label } : {}),
-          },
-        });
+        const data: Prisma.VehicleUpdateInput = {};
+        const changed: string[] = [];
+        if (numberChanges) {
+          data.vehicleNumber = number;
+          changed.push('vehicleNumber');
+        }
+        if (typeChanges) {
+          data.vehicleType = patch.vehicleType;
+          changed.push('vehicleType');
+        }
+        if (patch.label !== undefined && (patch.label ?? null) !== vehicle.label) {
+          data.label = patch.label ?? null;
+          changed.push('label');
+        }
+        if (changed.length === 0) return;
+
+        await tx.vehicle.update({ where: { id: vehicle.id }, data });
         await auditRepository.record(
           {
             action: AUDIT_ACTIONS.vehicleUpdated,
             actorId: userId,
             entityType: AUDIT_ENTITY_TYPES.vehicle,
-            entityId: numberChanges ? changes.vehicleNumber : vehicle.vehicleNumber,
-            metadata: { numberChanged: numberChanges, typeChanged: typeChanges },
+            entityId: number ?? vehicle.vehicleNumber,
+            metadata: { fields: changed },
             request: context.request,
           },
           tx,
         );
       });
     } catch (error) {
-      if (isUniqueViolation(error, NUMBER_CONSTRAINT)) {
-        throw accountErrors.vehicleAlreadyRegistered();
-      }
-      throw error;
+      mapVehicleViolation(error);
     }
-    return this.get(userId, vehicleId);
+    return toRegisteredVehicle(await loadOwned(userId, vehicleId, prisma));
   },
 
   async setPrimary(vehicleId: string, context: OperationContext): Promise<RegisteredVehicle> {
     const userId = context.actor.id;
-    await withTransaction(async (tx) => {
-      const vehicle = await portalRepository.findOwnedVehicle(userId, vehicleId, tx);
-      if (!vehicle) throw accountErrors.vehicleNotFound();
-      // Clear first: the database allows one primary vehicle per owner.
-      await tx.vehicle.updateMany({
-        where: { ownerUserId: userId, isPrimary: true },
-        data: { isPrimary: false },
+    try {
+      await withTransaction(async (tx) => {
+        const vehicle = await loadOwned(userId, vehicleId, tx);
+        if (vehicle.isPrimary) return;
+        // Clear the old primary first: the database allows only one per owner.
+        await tx.vehicle.updateMany({
+          where: { ownerUserId: userId, isPrimary: true },
+          data: { isPrimary: false },
+        });
+        await tx.vehicle.update({ where: { id: vehicle.id }, data: { isPrimary: true } });
+        await auditRepository.record(
+          {
+            action: AUDIT_ACTIONS.vehicleUpdated,
+            actorId: userId,
+            entityType: AUDIT_ENTITY_TYPES.vehicle,
+            entityId: vehicle.vehicleNumber,
+            metadata: { fields: ['isPrimary'] },
+            request: context.request,
+          },
+          tx,
+        );
       });
-      await tx.vehicle.update({ where: { id: vehicle.id }, data: { isPrimary: true } });
-      await auditRepository.record(
-        {
-          action: AUDIT_ACTIONS.vehicleUpdated,
-          actorId: userId,
-          entityType: AUDIT_ENTITY_TYPES.vehicle,
-          entityId: vehicle.vehicleNumber,
-          metadata: { primary: true },
-          request: context.request,
-        },
-        tx,
-      );
-    });
-    return this.get(userId, vehicleId);
+    } catch (error) {
+      mapVehicleViolation(error);
+    }
+    return toRegisteredVehicle(await loadOwned(userId, vehicleId, prisma));
   },
 };

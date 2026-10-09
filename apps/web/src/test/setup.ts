@@ -9,4 +9,10 @@ afterEach(cleanup);
 
 // jsdom does not implement scrolling.
 Element.prototype.scrollIntoView = () => {};
-window.scrollTo = () => {};
+
+if (!window.URL.createObjectURL) {
+  window.URL.createObjectURL = (blob: Blob) => `blob:mock-${blob.size}`;
+}
+if (!window.URL.revokeObjectURL) {
+  window.URL.revokeObjectURL = () => {};
+}

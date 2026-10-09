@@ -5,7 +5,6 @@ import type {
   HistoryItem,
   IntegrityReport,
   ManagedLayout,
-  ManagedSlot,
   Page,
   ParkingSessionView,
   SessionTimelineResponse,
@@ -120,20 +119,15 @@ describe('parking history', () => {
 });
 
 describe('slot management', () => {
-  const managedSlot = (overrides: Partial<ManagedSlot>): ManagedSlot => ({
-    code: 'T-01',
-    status: 'AVAILABLE',
-    priority: 0,
+  const slotDefaults = {
     blockedReason: null,
-    label: null,
-    isActive: true,
-    sessionCount: 0,
+    isEnabled: true,
+    archivedAt: null,
+    sortOrder: 0,
+    holdExpiresAt: null,
+    hasHistory: false,
     occupant: null,
-    createdAt: '2026-10-01T00:00:00.000Z',
-    updatedAt: '2026-10-01T00:00:00.000Z',
-    ...overrides,
-  });
-
+  } as const;
   const layout: ManagedLayout = {
     blocks: [
       {
@@ -142,21 +136,26 @@ describe('slot management', () => {
         description: 'Near the main gate',
         coordinates: null,
         isActive: true,
+        sortOrder: 0,
         zones: [
           {
             code: 'ZONE-2W',
             name: 'Two-Wheeler Zone',
             vehicleType: 'TWO_WHEELER',
             isActive: true,
+            sortOrder: 0,
+            counts: { total: 3, available: 1, occupied: 1, blocked: 1, held: 0 },
+            disabledSlots: 0,
             slots: [
-              managedSlot({ code: 'T-01', status: 'AVAILABLE' }),
-              managedSlot({ code: 'T-02', status: 'OCCUPIED' }),
-              managedSlot({
+              { ...slotDefaults, code: 'T-01', status: 'AVAILABLE', priority: 0 },
+              { ...slotDefaults, code: 'T-02', status: 'OCCUPIED', priority: 0 },
+              {
+                ...slotDefaults,
                 code: 'T-03',
                 status: 'BLOCKED',
                 priority: 5,
                 blockedReason: 'Repair',
-              }),
+              },
             ],
           },
         ],
@@ -439,6 +438,8 @@ describe('alerts and session timeline', () => {
     const session: ParkingSessionView = {
       sessionNumber: 'CPVTS-P-7K4M92QX',
       status: 'COMPLETED',
+      lifecycle: 'COMPLETED',
+      exitRequestedAt: null,
       vehicleNumber: 'KA22AB1234',
       vehicleType: 'TWO_WHEELER',
       ownerCategory: 'STUDENT',
@@ -464,12 +465,14 @@ describe('alerts and session timeline', () => {
           at: new Date().toISOString(),
           action: 'SLOT_ASSIGNED',
           actor: { fullName: 'Gate Guard', role: 'SECURITY_STAFF' },
+          channel: 'SECURITY',
           details: { slotCode: 'T-04', score: -3 },
         },
         {
           at: new Date().toISOString(),
           action: 'PAYMENT_SUCCEEDED',
           actor: { fullName: 'Gate Guard', role: 'SECURITY_STAFF' },
+          channel: 'SECURITY',
           details: { amountPaise: 2000, method: 'UPI', transactionId: 'TXN-8F3K2Q9MZA' },
         },
       ],

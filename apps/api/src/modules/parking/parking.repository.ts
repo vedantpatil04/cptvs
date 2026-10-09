@@ -1,6 +1,7 @@
 import type { DbClient } from '../../db/client.js';
 import { prisma } from '../../db/prisma.js';
 import type { Prisma, VehicleType } from '../../generated/prisma/client.js';
+import { ACTIVE_ZONE, IN_SERVICE } from './slot-filters.js';
 
 /** Everything needed to present a parking session. */
 export const SESSION_INCLUDE = {
@@ -21,8 +22,6 @@ export const RECEIPT_INCLUDE = {
 } as const satisfies Prisma.ReceiptInclude;
 
 export type ReceiptWithRelations = Prisma.ReceiptGetPayload<{ include: typeof RECEIPT_INCLUDE }>;
-
-const ACTIVE_ZONE = { isActive: true, block: { isActive: true } } as const;
 
 export const parkingRepository = {
   /** The vehicle with its registered owner's account state, if any. */
@@ -67,9 +66,9 @@ export const parkingRepository = {
     });
   },
 
-  listActiveSessions(db: DbClient = prisma) {
+  listActiveSessions({ exitRequested = false } = {}, db: DbClient = prisma) {
     return db.parkingSession.findMany({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', ...(exitRequested ? { exitRequestedAt: { not: null } } : {}) },
       include: SESSION_INCLUDE,
       orderBy: [{ entryAt: 'asc' }, { sessionNumber: 'asc' }],
     });
@@ -82,7 +81,7 @@ export const parkingRepository = {
    */
   findSlotsForVehicleType(vehicleType: VehicleType, db: DbClient = prisma) {
     return db.parkingSlot.findMany({
-      where: { isActive: true, zone: { ...ACTIVE_ZONE, vehicleType } },
+      where: { zone: { ...ACTIVE_ZONE, vehicleType }, ...IN_SERVICE },
       include: { zone: { include: { block: true } } },
       orderBy: [
         { zone: { block: { sortOrder: 'asc' } } },
@@ -106,18 +105,23 @@ export const parkingRepository = {
     return new Map(groups.map((group) => [group.slotId, group._count._all]));
   },
 
-  /** Active blocks → active zones → slots, with the active session of occupied slots. */
+  /**
+   * Active blocks → active zones → slots, with the active session of occupied slots. A disabled
+   * block or zone is included only while vehicles are still parked in it (they carry on until
+   * they check out), so they stay visible on the map.
+   */
   findMapLayout(db: DbClient = prisma) {
+    const hasParkedVehicle = { slots: { some: { status: 'OCCUPIED' as const, ...IN_SERVICE } } };
     return db.parkingBlock.findMany({
-      where: { isActive: true },
+      where: { OR: [{ isActive: true }, { zones: { some: hasParkedVehicle } }] },
       orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
       include: {
         zones: {
-          where: { isActive: true },
+          where: { OR: [{ isActive: true }, hasParkedVehicle] },
           orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
           include: {
             slots: {
-              where: { isActive: true },
+              where: IN_SERVICE,
               orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
               include: {
                 sessions: { where: { status: 'ACTIVE' }, include: { vehicle: true }, take: 1 },

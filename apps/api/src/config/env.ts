@@ -19,7 +19,22 @@ const originList = z
       Boolean,
     ),
   )
-  .pipe(z.array(z.url({ protocol: /^https?$/ })));
+  .pipe(
+    z.array(
+      z
+        .string()
+        .refine(
+          (origin) =>
+            origin !== '*' &&
+            (/^capacitor:\/\/[a-z0-9.-]+$/i.test(origin) ||
+              /^https?:\/\/[a-z0-9*.-]+(:\d+)?$/i.test(origin)),
+          {
+            message:
+              'Invalid origin format. Must be an http(s) or capacitor URL (wildcard subdomains allowed).',
+          },
+        ),
+    ),
+  );
 
 /** Comma-separated e-mail domains, e.g. `college.edu.in,staff.college.edu.in`. */
 const domainList = z
@@ -63,10 +78,10 @@ const envSchema = z
     /** Lifetime of a temporary slot hold during allocation, in seconds. */
     SLOT_HOLD_SECONDS: z.coerce.number().int().min(2).max(120).default(15),
     /**
-     * How long a slot proposed to a student by "Park now" stays held while they confirm,
-     * in seconds. Not a reservation: it lapses on its own and a user holds at most one.
+     * How long a Park Now allocation stays held while the user reads it and
+     * confirms, in seconds. After that the slot returns to the pool.
      */
-    PARK_PROPOSAL_SECONDS: z.coerce.number().int().min(15).max(600).default(90),
+    PARK_NOW_HOLD_SECONDS: z.coerce.number().int().min(10).max(600).default(90),
     /** A zone at or above this occupancy (percent of usable slots) raises a warning. */
     ALERT_NEARLY_FULL_PERCENT: z.coerce.number().int().min(50).max(99).default(90),
     /** An active session parked at least this many hours raises a long-duration alert. */
@@ -82,6 +97,16 @@ const envSchema = z
     REGISTRATION_RATE_LIMIT_PER_HOUR: z.coerce.number().int().min(1).max(1000).default(10),
     /** Lifetime of a visitor's access to one parking session, in hours. */
     VISITOR_ACCESS_HOURS: z.coerce.number().int().min(1).max(48).default(12),
+    /**
+     * `required`: Security Staff need a checked-in shift for gate operations (vehicle entry,
+     * checkout payments). `optional`: they may work without one, and what they do is still
+     * attributed to their shift when they have one. Administrators can always act (override).
+     */
+    SHIFT_ENFORCEMENT: z.enum(['required', 'optional']).default('required'),
+    /** Minutes before a shift starts that its Security Staff member may check in. */
+    SHIFT_EARLY_CHECK_IN_MINUTES: z.coerce.number().int().min(0).max(240).default(60),
+    /** Minutes after a shift's end during which the guard can still finish at the gate. */
+    SHIFT_OVERRUN_MINUTES: z.coerce.number().int().min(0).max(240).default(30),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && !env.CORS_ORIGINS?.length && !env.FRONTEND_URL) {

@@ -1,11 +1,14 @@
-import type {
-  CheckoutQuote,
-  CreatePaymentResponse,
-  PaymentMethod,
-  PaymentView,
-  ProcessPaymentResponse,
+import {
+  OPAQUE_REFERENCE_PATTERN,
+  parseEntryQrPayload,
+  type CheckoutQuote,
+  type CreatePaymentResponse,
+  type PaymentMethod,
+  type PaymentView,
+  type ProcessPaymentResponse,
 } from '@cpvts/shared';
 
+import { config } from '../../config/index.js';
 import { withTransaction } from '../../db/transaction.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { campusHour, campusYear } from '../../lib/campus-time.js';
@@ -14,10 +17,11 @@ import { newOpaqueReference, newReceiptNumber, newTransactionId } from '../../li
 import { logger } from '../../lib/logger.js';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';
+import { notificationService } from '../notifications/notification.service.js';
 import { calculateDurationHours, calculateFee } from '../fees/fee-engine.js';
 import { feeScheduleService } from '../fees/fee-schedule.service.js';
-import { notificationService } from '../notifications/notification.service.js';
-import { auditRejection, type CheckoutContext } from './operation-context.js';
+import { shiftErrors } from '../shifts/shift.errors.js';
+import { auditRejection, channelMetadata, type ActorContext } from './operation-context.js';
 import { parkingErrors } from './parking.errors.js';
 import { toPaymentView, toReceiptView, toSessionView } from './parking.mappers.js';
 import {
@@ -32,6 +36,8 @@ export interface CheckoutRequest {
   /** Optional identifiers the operator used; each must match the session. */
   vehicleNumber?: string;
   slotCode?: string;
+  /** The scanned session QR (or its bare reference); it must belong to this session. */
+  entryReference?: string;
 }
 
 interface PreparedCheckout {
@@ -40,12 +46,29 @@ interface PreparedCheckout {
 }
 
 /**
+ * Checkout is gate-controlled: only the operational workflow (Security Staff, or an
+ * administrator overriding) may start a payment or finalize a session. A Student, Campus
+ * Staff member or Visitor acts through the SELF_SERVICE / VISITOR channels, which can see a
+ * preview of the amount but never reach a payment — this guard makes that a hard rule of
+ * the service itself, not only of the routes in front of it.
+ */
+const assertGateChannel = (context: ActorContext): void => {
+  if (context.channel || !context.actor) throw parkingErrors.gateCheckoutRequired();
+};
+
+/** The reference carried by a scanned QR text, or null if it is not a CPVTS session QR. */
+const referenceOf = (scanned: string): string | null => {
+  const text = scanned.trim();
+  return parseEntryQrPayload(text) ?? (OPAQUE_REFERENCE_PATTERN.test(text) ? text : null);
+};
+
+/**
  * Verifies the session and the operator's identifiers, validates the exit hour
  * and prices the stay with the authoritative fee engine. No state changes.
  */
 const prepareCheckout = async (
   request: CheckoutRequest,
-  context: CheckoutContext,
+  context: ActorContext,
 ): Promise<PreparedCheckout> => {
   const session = await parkingRepository.findSessionByNumber(request.sessionNumber);
   if (!session) throw parkingErrors.sessionNotFound();
@@ -72,6 +95,21 @@ const prepareCheckout = async (
       ...subject,
       metadata: { providedSlotCode: request.slotCode },
     });
+  }
+  if (request.entryReference !== undefined) {
+    const reference = referenceOf(request.entryReference);
+    if (!reference) {
+      throw await auditRejection(parkingErrors.invalidQrReference(), context, {
+        ...subject,
+        metadata: { source: 'ENTRY_QR' },
+      });
+    }
+    if (reference !== session.entryReference) {
+      throw await auditRejection(parkingErrors.qrSessionMismatch(), context, {
+        ...subject,
+        metadata: { source: 'ENTRY_QR' },
+      });
+    }
   }
 
   let durationHours: number;
@@ -116,32 +154,45 @@ const uniqueValue = async (
 };
 
 export const checkoutService = {
-  /** Step 1: fee preview with a transparent breakdown. */
-  async quote(request: CheckoutRequest, context: CheckoutContext): Promise<CheckoutQuote> {
+  /**
+   * Step 1: fee preview with a transparent breakdown. The gate records it (an audit entry);
+   * a user's or visitor's own "what would I owe" preview passes `record: false` and leaves
+   * no trace — it is not the start of a checkout.
+   */
+  async quote(
+    request: CheckoutRequest,
+    context: ActorContext,
+    { record = true }: { record?: boolean } = {},
+  ): Promise<CheckoutQuote> {
     const { session, quote } = await prepareCheckout(request, context);
-    await auditRepository.record({
-      action: AUDIT_ACTIONS.checkoutInitiated,
-      actorId: context.actor?.id ?? null,
-      entityType: AUDIT_ENTITY_TYPES.parkingSession,
-      entityId: session.sessionNumber,
-      metadata: {
-        exitHour: quote.exitHour,
-        durationHours: quote.durationHours,
-        totalPaise: quote.fee.totalPaise,
-      },
-      request: context.request,
-    });
+    if (record) {
+      await auditRepository.record({
+        action: AUDIT_ACTIONS.checkoutInitiated,
+        actorId: context.actor?.id,
+        entityType: AUDIT_ENTITY_TYPES.parkingSession,
+        entityId: session.sessionNumber,
+        metadata: {
+          exitHour: quote.exitHour,
+          durationHours: quote.durationHours,
+          totalPaise: quote.fee.totalPaise,
+          ...channelMetadata(context),
+        },
+        request: context.request,
+      });
+    }
     return quote;
   },
 
   /**
    * Step 2: creates a PENDING simulated payment for the authoritative amount.
-   * Any earlier pending attempt for the session is cancelled.
+   * Any earlier pending attempt for the session is cancelled. The payment belongs to the
+   * operator's duty shift from this moment, so cash taken is the shift's responsibility.
    */
   async createPayment(
     request: CheckoutRequest & { method: PaymentMethod },
-    context: CheckoutContext,
+    context: ActorContext,
   ): Promise<CreatePaymentResponse> {
+    assertGateChannel(context);
     const { session, quote } = await prepareCheckout(request, context);
     if (!allowedMethod(quote.fee.totalPaise, request.method)) {
       throw parkingErrors.invalidPaymentMethod();
@@ -168,12 +219,13 @@ export const checkoutService = {
           amountPaise: quote.fee.totalPaise,
           exitHour: quote.exitHour,
           isSimulated: true,
+          shiftId: context.shiftId ?? null,
         },
       });
       await auditRepository.record(
         {
           action: AUDIT_ACTIONS.paymentInitiated,
-          actorId: context.actor?.id ?? null,
+          actorId: context.actor?.id,
           entityType: AUDIT_ENTITY_TYPES.payment,
           entityId: created.transactionId,
           metadata: {
@@ -181,6 +233,7 @@ export const checkoutService = {
             method: created.method,
             amountPaise: created.amountPaise,
             simulated: true,
+            ...channelMetadata(context),
           },
           request: context.request,
         },
@@ -194,15 +247,24 @@ export const checkoutService = {
 
   /**
    * Step 3: runs the simulated provider and, on success, finalizes the
-   * transaction atomically: payment PAID, session COMPLETED with frozen
-   * duration/fee, receipt issued, slot released. Any failure rolls back.
+   * transaction atomically: payment PAID (by this operator, in this shift), session
+   * COMPLETED with frozen duration/fee, receipt issued, slot released. Any failure rolls back.
+   * A shift that ends while the payment is open does not stop it from completing.
    */
   async processPayment(
     paymentId: string,
     request: { sessionNumber: string; outcome: 'SUCCESS' | 'FAILURE' },
-    context: CheckoutContext,
+    context: ActorContext,
   ): Promise<ProcessPaymentResponse> {
+    assertGateChannel(context);
     const payment = await loadPaymentForSession(paymentId, request.sessionNumber, context);
+
+    // Accountability: Security Staff finalize under a shift (the payment's own, or their active
+    // one). The payment's shift stays valid after the shift's end so an in-flight transaction
+    // is never broken; an administrator override needs none.
+    if (!context.override && config.shifts.enforcement === 'required') {
+      if (!(payment.shiftId ?? context.shiftId)) throw shiftErrors.required();
+    }
 
     // PENDING → PROCESSING is the lock against double processing.
     const claimed = await withTransaction((tx) =>
@@ -242,8 +304,9 @@ export const checkoutService = {
   async cancelPayment(
     paymentId: string,
     sessionNumber: string,
-    context: CheckoutContext,
+    context: ActorContext,
   ): Promise<PaymentView> {
+    assertGateChannel(context);
     const payment = await loadPaymentForSession(paymentId, sessionNumber, context);
     const cancelled = await withTransaction(async (tx) => {
       const { count } = await tx.payment.updateMany({
@@ -254,10 +317,10 @@ export const checkoutService = {
       await auditRepository.record(
         {
           action: AUDIT_ACTIONS.paymentCancelled,
-          actorId: context.actor?.id ?? null,
+          actorId: context.actor?.id,
           entityType: AUDIT_ENTITY_TYPES.payment,
           entityId: payment.transactionId,
-          metadata: { sessionNumber },
+          metadata: { sessionNumber, ...channelMetadata(context) },
           request: context.request,
         },
         tx,
@@ -272,7 +335,7 @@ export const checkoutService = {
 const loadPaymentForSession = async (
   paymentId: string,
   sessionNumber: string,
-  context: CheckoutContext,
+  context: ActorContext,
 ) => {
   const payment = await parkingRepository.findPaymentWithSessionNumber(paymentId);
   if (!payment) throw parkingErrors.paymentNotFound();
@@ -286,7 +349,7 @@ const loadPaymentForSession = async (
   return payment;
 };
 
-const markFailed = async (paymentId: string, reason: string, context: CheckoutContext) =>
+const markFailed = async (paymentId: string, reason: string, context: ActorContext) =>
   withTransaction(async (tx) => {
     await tx.payment.updateMany({
       where: { id: paymentId, status: 'PROCESSING' },
@@ -299,10 +362,15 @@ const markFailed = async (paymentId: string, reason: string, context: CheckoutCo
     await auditRepository.record(
       {
         action: AUDIT_ACTIONS.paymentFailed,
-        actorId: context.actor?.id ?? null,
+        actorId: context.actor?.id,
         entityType: AUDIT_ENTITY_TYPES.payment,
         entityId: failed.transactionId,
-        metadata: { sessionNumber: failed.session.sessionNumber, reason, simulated: true },
+        metadata: {
+          sessionNumber: failed.session.sessionNumber,
+          reason,
+          simulated: true,
+          ...channelMetadata(context),
+        },
         request: context.request,
       },
       tx,
@@ -315,17 +383,27 @@ const markFailed = async (paymentId: string, reason: string, context: CheckoutCo
  * conditional update; if any precondition no longer holds, an error is thrown
  * and the whole transaction rolls back.
  */
-const finalize = async (
-  tx: Prisma.TransactionClient,
-  paymentId: string,
-  context: CheckoutContext,
-) => {
+const finalize = async (tx: Prisma.TransactionClient, paymentId: string, context: ActorContext) => {
+  const operatorId = context.actor?.id;
+  if (!operatorId) throw parkingErrors.gateCheckoutRequired();
+
   const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
   const session = await tx.parkingSession.findUniqueOrThrow({
     where: { id: payment.sessionId },
     include: { slot: true },
   });
   if (session.status !== 'ACTIVE') throw parkingErrors.sessionNotActive();
+
+  // The payment belongs to the shift it was created in, unless it had none; a reconciled
+  // (closed) shift's cash can no longer change.
+  const shiftId = payment.shiftId ?? context.shiftId ?? null;
+  if (shiftId) {
+    const shift = await tx.securityShift.findUnique({
+      where: { id: shiftId },
+      select: { status: true },
+    });
+    if (!shift || shift.status === 'CLOSED') throw shiftErrors.invalidState();
+  }
 
   // Re-price with the authoritative engine; it must equal the amount being paid.
   const schedule = await feeScheduleService.require();
@@ -337,7 +415,7 @@ const finalize = async (
 
   const paid = await tx.payment.updateMany({
     where: { id: payment.id, status: 'PROCESSING', sessionId: session.id },
-    data: { status: 'PAID', paidAt: now },
+    data: { status: 'PAID', paidAt: now, processedById: operatorId, shiftId },
   });
   if (paid.count !== 1) throw parkingErrors.paymentNotPending();
 
@@ -350,7 +428,8 @@ const finalize = async (
       durationHours,
       feeAmountPaise: fee.totalPaise,
       feeBreakdown: fee as unknown as Prisma.InputJsonObject,
-      checkedOutById: context.actor?.id ?? null,
+      checkedOutById: operatorId,
+      checkedOutVia: 'SECURITY',
     },
   });
   if (completed.count !== 1) throw parkingErrors.sessionNotActive();
@@ -381,17 +460,6 @@ const finalize = async (
     include: RECEIPT_INCLUDE,
   });
 
-  // Tell the vehicle's owner (if registered, and only for parking since they took ownership).
-  const vehicle = await tx.vehicle.findUniqueOrThrow({ where: { id: session.vehicleId } });
-  if (vehicle.ownerUserId && vehicle.ownerSince && session.entryAt >= vehicle.ownerSince) {
-    await notificationService.notify(tx, vehicle.ownerUserId, 'RECEIPT_GENERATED', {
-      receiptNumber: receipt.receiptNumber,
-      amountPaise: receipt.amountPaise,
-      vehicleNumber: vehicle.vehicleNumber,
-      sessionNumber: session.sessionNumber,
-    });
-  }
-
   const audit = (
     action: (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS],
     entityType: (typeof AUDIT_ENTITY_TYPES)[keyof typeof AUDIT_ENTITY_TYPES],
@@ -401,10 +469,10 @@ const finalize = async (
     auditRepository.record(
       {
         action,
-        actorId: context.actor?.id ?? null,
+        actorId: operatorId,
         entityType,
         entityId,
-        metadata,
+        metadata: { ...metadata, ...channelMetadata({ ...context, shiftId }) },
         request: context.request,
       },
       tx,
@@ -436,6 +504,20 @@ const finalize = async (
     await audit(AUDIT_ACTIONS.slotReleased, AUDIT_ENTITY_TYPES.parkingSlot, session.slot.code, {
       sessionNumber: session.sessionNumber,
     });
+  }
+
+  // Tell the account that owned the vehicle for this session that the receipt is ready.
+  if (session.ownerUserId) {
+    await notificationService.notify(
+      session.ownerUserId,
+      'RECEIPT_GENERATED',
+      {
+        receiptNumber: receipt.receiptNumber,
+        sessionNumber: session.sessionNumber,
+        amountPaise: receipt.amountPaise,
+      },
+      tx,
+    );
   }
 
   return receipt;

@@ -1,11 +1,10 @@
 import type { CheckInResponse } from '@cpvts/shared';
-import { BadgeCheck, CircleCheck, MapPinned, Plus, ScrollText } from 'lucide-react';
+import { CircleCheck, MapPinned, Plus, ScrollText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { areaPaths } from '@/app/paths';
 import { QrCode } from '@/components/parking/QrCode';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
@@ -52,17 +51,6 @@ export function AllocationResult({
               </p>
             </div>
           </div>
-
-          {result.categorySource === 'ACCOUNT' && (
-            <Alert variant="info">
-              <BadgeCheck aria-hidden />
-              <AlertDescription>
-                {t('parking.entry.categoryFromAccount', {
-                  category: t(`ownerCategories.${session.ownerCategory}`),
-                })}
-              </AlertDescription>
-            </Alert>
-          )}
 
           <section aria-labelledby="allocation-title" className="rounded-lg bg-muted/60 p-4">
             <h3

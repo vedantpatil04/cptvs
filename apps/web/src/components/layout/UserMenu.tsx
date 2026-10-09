@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import { NAVIGATION } from '@/app/navigation';
-import { PATHS } from '@/app/paths';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,14 +31,7 @@ export function UserMenu() {
   const { t } = useTranslation();
   const { user } = useCurrentUser();
   const [signOutOpen, setSignOutOpen] = useState(false);
-  const accountPath =
-    user.role === 'PARKING_USER'
-      ? PATHS.user.profile
-      : NAVIGATION[user.role].find((item) => item.labelKey === 'nav.account')?.to;
-  // Parking users sign in with an e-mail address; their internal username is not shown.
-  const secondary = user.parkingUser
-    ? t(`ownerCategories.${user.parkingUser.category}`)
-    : `@${user.username}`;
+  const accountPath = NAVIGATION[user.role].find((item) => item.labelKey === 'nav.account')?.to;
 
   return (
     <>
@@ -52,9 +44,7 @@ export function UserMenu() {
             <span className="hidden max-w-40 flex-col items-start leading-tight md:flex">
               <span className="truncate text-sm font-medium">{user.fullName}</span>
               <span className="truncate text-xs text-muted-foreground">
-                {user.parkingUser
-                  ? t(`ownerCategories.${user.parkingUser.category}`)
-                  : t(`roles.${user.role}`)}
+                {t(`roles.${user.role}`)}
               </span>
             </span>
           </Button>
@@ -63,18 +53,31 @@ export function UserMenu() {
           <DropdownMenuLabel className="font-normal">
             <p className="text-xs text-muted-foreground">{t('userMenu.signedInAs')}</p>
             <p className="truncate font-medium">{user.fullName}</p>
-            <p className="truncate text-xs text-muted-foreground">{secondary}</p>
+            <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            {accountPath && (
+            {user.role === 'PARKING_USER' ? (
+              <DropdownMenuItem asChild>
+                <Link to="/portal/profile">
+                  <UserRound aria-hidden />
+                  {t('nav.profile')}
+                </Link>
+              </DropdownMenuItem>
+            ) : accountPath ? (
               <DropdownMenuItem asChild>
                 <Link to={accountPath}>
                   <UserRound aria-hidden />
                   {t('nav.account')}
                 </Link>
               </DropdownMenuItem>
-            )}
+            ) : null}
+            <DropdownMenuItem asChild>
+              <Link to="/help">
+                <span className="size-4 flex items-center justify-center font-bold text-xs border rounded-full">?</span>
+                {t('nav.help')}
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onSelect={() => setSignOutOpen(true)}>
               <LogOut aria-hidden />
               {t('auth.signOut')}

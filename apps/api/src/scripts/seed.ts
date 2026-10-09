@@ -8,6 +8,8 @@
  *    all AVAILABLE) — only when no parking block exists yet. GPS coordinates are
  *    left empty: real coordinates must be collected, never invented (§7).
  * 3. The official fee schedule (Master Blueprint §16) — only if not configured.
+ * 4. Starter shift templates (Morning 08:00–16:00, Evening 16:00–00:00, Night 00:00–08:00) —
+ *    only when no template exists; Admin can edit, add or retire them.
  *
  * Development: `npm run db:seed` (TypeScript via tsx).
  * Production:  `npm run db:seed:deploy` (compiled JavaScript, no dev dependencies).
@@ -143,6 +145,24 @@ const seedParkingLayout = async (): Promise<void> => {
   console.info(`- Parking layout: created ${BASELINE_LAYOUT.length} blocks with ${slots} slots`);
 };
 
+/** Editable starting shift patterns (Admin can change, add or retire them). */
+const BASELINE_SHIFT_TEMPLATES = [
+  { name: 'Morning', startMinute: 8 * 60, endMinute: 16 * 60 },
+  { name: 'Evening', startMinute: 16 * 60, endMinute: 0 },
+  { name: 'Night', startMinute: 0, endMinute: 8 * 60 },
+] as const;
+
+const seedShiftTemplates = async (): Promise<void> => {
+  if ((await prisma.shiftTemplate.count()) > 0) {
+    console.info('- Shift templates: already configured, left unchanged');
+    return;
+  }
+  await prisma.shiftTemplate.createMany({ data: [...BASELINE_SHIFT_TEMPLATES] });
+  console.info(
+    `- Shift templates: created ${BASELINE_SHIFT_TEMPLATES.map((template) => template.name).join(', ')}`,
+  );
+};
+
 const seedFeeSchedule = async (): Promise<void> => {
   const created = await settingRepository.createIfAbsent(
     SETTING_KEYS.feeSchedule,
@@ -158,6 +178,7 @@ try {
   console.info('Seeding CPVTS…');
   for (const account of ACCOUNTS) await seedAccount(account);
   await seedParkingLayout();
+  await seedShiftTemplates();
   await seedFeeSchedule();
   console.info('Seed complete.');
 } catch (error) {

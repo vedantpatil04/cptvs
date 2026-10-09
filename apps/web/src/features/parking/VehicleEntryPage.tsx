@@ -3,16 +3,26 @@ import {
   OWNER_CATEGORIES,
   VEHICLE_TYPES,
   type CheckInResponse,
+  type VehicleLookupResponse,
 } from '@cpvts/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Bike, Car, CircleAlert, LoaderCircle } from 'lucide-react';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import {
+  AlertTriangle,
+  Bike,
+  Car,
+  CheckCircle2,
+  CircleAlert,
+  LoaderCircle,
+  ShieldCheck,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import type { z } from 'zod';
 
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ChoiceGroup, NativeSelect } from '@/components/ui/choice-group';
@@ -35,11 +45,13 @@ type EntryForm = z.input<typeof checkInRequestSchema>;
 
 const VEHICLE_ICONS = { TWO_WHEELER: Bike, FOUR_WHEELER: Car } as const;
 
-/** Security Staff check-in. Validation is repeated and enforced on the server. */
+/** Security Staff check-in. Authoritative account lookup determines category. */
 export function VehicleEntryPage() {
   const { t } = useTranslation();
   const [result, setResult] = useState<CheckInResponse | null>(null);
   const [submitError, setSubmitError] = useState<unknown>(null);
+  const [lookup, setLookup] = useState<VehicleLookupResponse | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
 
   const form = useForm<EntryForm>({
     resolver: zodResolver(checkInRequestSchema),
@@ -50,6 +62,47 @@ export function VehicleEntryPage() {
       entryHour: new Date().getHours(),
     },
   });
+
+  const vehicleNumber = useWatch({ control: form.control, name: 'vehicleNumber' });
+
+  // Debounce lookup when vehicle number is typed
+  useEffect(() => {
+    const trimmed = vehicleNumber ? vehicleNumber.trim() : '';
+    if (trimmed.length < 4) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => {
+      setLookupLoading(true);
+      parkingApi
+        .lookup(trimmed, abortController.signal)
+        .then((res) => {
+          setLookup(res);
+          if (res.accountCategory) {
+            form.setValue('ownerCategory', res.accountCategory);
+          }
+          if (res.vehicleType && !form.getValues('vehicleType')) {
+            form.setValue('vehicleType', res.vehicleType);
+          }
+        })
+        .catch(() => {
+          // Ignore abort or network errors in background lookup
+        })
+        .finally(() => {
+          setLookupLoading(false);
+        });
+    }, 400);
+
+    return () => {
+      clearTimeout(timeout);
+      abortController.abort();
+    };
+  }, [vehicleNumber, form]);
+
+  const activeLookup = vehicleNumber && vehicleNumber.trim().length >= 4 ? lookup : null;
+  const categoryLocked =
+    activeLookup?.accountCategory !== undefined && activeLookup.accountCategory !== null;
 
   const onSubmit = async (values: EntryForm) => {
     setSubmitError(null);
@@ -62,6 +115,7 @@ export function VehicleEntryPage() {
 
   const reset = () => {
     setResult(null);
+    setLookup(null);
     form.reset({
       vehicleNumber: '',
       vehicleType: undefined,
@@ -77,7 +131,7 @@ export function VehicleEntryPage() {
         <AllocationResult result={result} onNext={reset} />
       ) : (
         <Card className="max-w-2xl">
-          <CardContent>
+          <CardContent className="pt-6">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-6" noValidate>
                 {submitError !== null && (
@@ -92,7 +146,14 @@ export function VehicleEntryPage() {
                   name="vehicleNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('parking.common.vehicleNumber')}</FormLabel>
+                      <div className="flex items-center justify-between">
+                        <FormLabel>{t('parking.common.vehicleNumber')}</FormLabel>
+                        {lookupLoading && (
+                          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                            <LoaderCircle className="size-3 animate-spin" /> Verifying plate...
+                          </span>
+                        )}
+                      </div>
                       <FormControl>
                         <Input
                           {...field}
@@ -102,13 +163,51 @@ export function VehicleEntryPage() {
                           autoCapitalize="characters"
                           spellCheck={false}
                           autoFocus
-                          className="font-mono text-lg tracking-wide uppercase placeholder:normal-case"
+                          className="font-mono text-lg tracking-wide uppercase"
                         />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {/* Authoritative Lookup Status Feedback */}
+                {activeLookup?.known && (
+                  <div className="space-y-2">
+                    {activeLookup.accountCategory ? (
+                      <Alert className="border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200">
+                        <ShieldCheck className="size-4 text-emerald-600 dark:text-emerald-400" />
+                        <AlertTitle className="text-xs font-bold">
+                          Verified Campus Account Recognized
+                        </AlertTitle>
+                        <AlertDescription className="text-xs">
+                          This vehicle is registered to a verified{' '}
+                          <Badge variant="outline" className="font-semibold bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 ml-1">
+                            {activeLookup.accountCategory}
+                          </Badge>{' '}
+                          account. Institutional fee exemption / rates apply automatically.
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <Alert className="border-blue-500/30 bg-blue-500/10 text-blue-900 dark:text-blue-200">
+                        <CheckCircle2 className="size-4 text-blue-600" />
+                        <AlertDescription className="text-xs">
+                          Known vehicle record found. Please confirm vehicle type and category.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {activeLookup.hasActiveSession && (
+                      <Alert variant="destructive">
+                        <AlertTriangle className="size-4" />
+                        <AlertTitle className="text-xs font-bold">Duplicate Active Session</AlertTitle>
+                        <AlertDescription className="text-xs">
+                          This vehicle already has an active parking session on campus. Please check out the existing session first.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                )}
 
                 <FormField
                   control={form.control}
@@ -140,13 +239,22 @@ export function VehicleEntryPage() {
                   name="ownerCategory"
                   render={({ field, fieldState }) => (
                     <FormItem>
-                      <FormLabel id="owner-category-label">
-                        {t('parking.common.ownerCategory')}
-                      </FormLabel>
+                      <div className="flex items-center justify-between">
+                        <FormLabel id="owner-category-label">
+                          {t('parking.common.ownerCategory')}
+                        </FormLabel>
+                        {categoryLocked && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Locked by Server (Authoritative)
+                          </Badge>
+                        )}
+                      </div>
                       <ChoiceGroup
                         name={field.name}
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={(val) => {
+                          if (!categoryLocked) field.onChange(val);
+                        }}
                         aria-labelledby="owner-category-label"
                         aria-invalid={fieldState.invalid}
                         options={OWNER_CATEGORIES.map((value) => ({
@@ -154,6 +262,11 @@ export function VehicleEntryPage() {
                           label: t(`ownerCategories.${value}`),
                         }))}
                       />
+                      {categoryLocked && (
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          Security staff cannot change an institutional verified account category.
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -188,7 +301,7 @@ export function VehicleEntryPage() {
                 <Button
                   type="submit"
                   size="lg"
-                  disabled={form.formState.isSubmitting}
+                  disabled={form.formState.isSubmitting || lookup?.hasActiveSession}
                   className="sm:w-fit"
                 >
                   {form.formState.isSubmitting && (

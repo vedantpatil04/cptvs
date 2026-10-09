@@ -7,7 +7,7 @@ services:
     plan: free
     region: singapore
     # Repository root: npm workspaces need the root lockfile.
-    buildCommand: npm ci --include=dev && npm run build:api
+    buildCommand: npm ci --include=dev && npm run build:shared && npx prisma generate --schema apps/api/prisma/schema.prisma && npm run build --workspace=apps/api
     # Applies pending migrations, then starts the server.
     startCommand: npm run db:migrate:deploy && npm run start:api
     healthCheckPath: /health
@@ -22,6 +22,13 @@ services:
       # Render terminates TLS in front of the service (one proxy hop).
       - key: TRUST_PROXY
         value: '1'
+      # Security Staff shifts: `required` or `optional` (see docs/DEPLOYMENT.md).
+      - key: SHIFT_ENFORCEMENT
+        value: required
+      - key: SHIFT_EARLY_CHECK_IN_MINUTES
+        value: '60'
+      - key: SHIFT_OVERRUN_MINUTES
+        value: '30'
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL

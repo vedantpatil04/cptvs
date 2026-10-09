@@ -1,8 +1,7 @@
 import type { DbClient } from '../../db/client.js';
 import { prisma } from '../../db/prisma.js';
 import type { SlotStatus, VehicleType } from '../../generated/prisma/client.js';
-
-const ACTIVE_ZONE = { isActive: true, block: { isActive: true } } as const;
+import { ACTIVE_ZONE, IN_SERVICE } from '../parking/slot-filters.js';
 
 export interface SlotStatusCount {
   vehicleType: VehicleType;
@@ -21,7 +20,7 @@ export const publicRepository = {
       db.parkingZone.findMany({ where: ACTIVE_ZONE, select: { id: true, vehicleType: true } }),
       db.parkingSlot.groupBy({
         by: ['zoneId', 'status'],
-        where: { isActive: true, zone: ACTIVE_ZONE },
+        where: { zone: ACTIVE_ZONE, ...IN_SERVICE },
         _count: { _all: true },
       }),
     ]);

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { ParkingUserCategory, VerificationStatus } from './portal.js';
+import type { ParkingUserCategory, ParkNowEligibility, VerificationStatus } from './portal.js';
 import type { UserRole } from './roles.js';
 import { VALIDATION_MESSAGES } from './validation.js';
 
@@ -35,10 +35,16 @@ export const passwordPolicySchema = z
     error: VALIDATION_MESSAGES.passwordTooLong,
   });
 
-/** Category and verification of a parking user, as decided by the server. */
+/**
+ * Category and verification of a parking user, as decided by the server. The server reads
+ * this from the database on every request (never from the token), so `GET /auth/me`
+ * always reflects an administrator's latest decision.
+ */
 export interface ParkingUserSummary {
   category: ParkingUserCategory;
   verificationStatus: VerificationStatus;
+  /** Whether Park Now and the other verified-only features are open to this account right now. */
+  parkNow: ParkNowEligibility;
 }
 
 /** Public representation of the signed-in user. Never includes credentials. */

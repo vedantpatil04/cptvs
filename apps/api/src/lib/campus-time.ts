@@ -58,6 +58,21 @@ export const campusDayStart = (now = new Date(), timeZone = config.parking.timeZ
   return new Date(localMidnightAsUtc - offsetMs(new Date(firstGuess), timeZone));
 };
 
+/**
+ * The instant at which the campus clock reads `minuteOfDay` (0–1439) on the campus calendar
+ * date `date` (YYYY-MM-DD). Shifts use it to turn "08:00 on 2026-10-09" into a real instant.
+ */
+export const campusInstant = (
+  date: string,
+  minuteOfDay: number,
+  timeZone = config.parking.timeZone,
+): Date => {
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
+  const localAsUtc = Date.UTC(year, month - 1, day, 0, minuteOfDay);
+  const firstGuess = localAsUtc - offsetMs(new Date(localAsUtc), timeZone);
+  return new Date(localAsUtc - offsetMs(new Date(firstGuess), timeZone));
+};
+
 /** Campus calendar date (YYYY-MM-DD) of an instant. */
 export const campusDateString = (date = new Date(), timeZone = config.parking.timeZone): string => {
   const p = zonedParts(date, timeZone);

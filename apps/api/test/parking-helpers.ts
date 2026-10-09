@@ -10,6 +10,7 @@ import request from 'supertest';
 
 import { prisma } from '../src/db/prisma.js';
 import type { Prisma } from '../src/generated/prisma/client.js';
+import { campusDateString } from '../src/lib/campus-time.js';
 import { tokenService } from '../src/modules/auth/token.service.js';
 import { OFFICIAL_FEE_SCHEDULE } from '../src/modules/fees/official-fee-schedule.js';
 import { createUser } from './helpers.js';
@@ -49,10 +50,45 @@ export const seedLayout = async (): Promise<void> => {
 export const seedFees = (schedule: Prisma.InputJsonValue = OFFICIAL_FEE_SCHEDULE) =>
   prisma.setting.create({ data: { key: 'parking.feeSchedule', value: schedule } });
 
-/** Creates a user and returns a bearer token without going through bcrypt login. */
-export const signIn = async (role: 'ADMIN' | 'SECURITY_STAFF', username: string) => {
+const HOUR_MS = 3_600_000;
+
+/**
+ * An ACTIVE duty shift for a guard that is on duty right now and stays so for three days, so
+ * gate operations (which need an on-duty shift) work in tests that are not about shifts, even
+ * with the clock moved a day ahead.
+ */
+export const startShift = (
+  staffId: string,
+  overrides: Partial<Prisma.SecurityShiftUncheckedCreateInput> = {},
+) => {
+  const now = Date.now();
+  return prisma.securityShift.create({
+    data: {
+      staffId,
+      shiftName: 'Test shift',
+      shiftDate: new Date(`${campusDateString(new Date(now))}T00:00:00.000Z`),
+      startsAt: new Date(now - HOUR_MS),
+      endsAt: new Date(now + 72 * HOUR_MS),
+      status: 'ACTIVE',
+      checkedInAt: new Date(now - HOUR_MS),
+      gate: 'Main Gate',
+      ...overrides,
+    },
+  });
+};
+
+/**
+ * Creates a user and returns a bearer token without going through bcrypt login. A Security
+ * Staff member comes with an on-duty shift (pass `{ onDuty: false }` for one without).
+ */
+export const signIn = async (
+  role: 'ADMIN' | 'SECURITY_STAFF',
+  username: string,
+  { onDuty = true }: { onDuty?: boolean } = {},
+) => {
   const user = await createUser(role, username);
-  return { user, token: tokenService.issueAccessToken(user.id, user.tokenVersion).token };
+  const shift = role === 'SECURITY_STAFF' && onDuty ? await startShift(user.id) : null;
+  return { user, shift, token: tokenService.issueAccessToken(user.id, user.tokenVersion).token };
 };
 
 export const slotStatus = async (code: string) =>
@@ -78,7 +114,11 @@ export const parkingApi = (app: Express, token: string) => {
     },
     track: (q: string) => request(app).get('/api/v1/parking/tracking').query({ q }).set(auth),
     map: () => request(app).get('/api/v1/parking/map').set(auth),
-    active: () => request(app).get('/api/v1/parking/sessions/active').set(auth),
+    active: (query: Record<string, string | number | boolean> = {}) =>
+      request(app).get('/api/v1/parking/sessions/active').query(query).set(auth),
+    /** Camera checkout: the scanned text of the session QR. */
+    scan: (qr: string) =>
+      request(app).post('/api/v1/parking/checkouts/scan').set(auth).send({ qr }),
     session: (sessionNumber: string) =>
       request(app).get(`/api/v1/parking/sessions/${sessionNumber}`).set(auth),
     quote: (body: Record<string, unknown>) =>

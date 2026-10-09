@@ -37,6 +37,24 @@ export const parkingErrors = {
     new AppError(409, 'SESSION_SLOT_MISMATCH', 'The slot does not match this parking session.'),
   invalidQrReference: () =>
     new AppError(400, 'INVALID_QR_REFERENCE', 'The QR code is not a valid CPVTS session code.'),
+  qrSessionMismatch: () =>
+    new AppError(
+      409,
+      'QR_SESSION_MISMATCH',
+      'This QR code does not belong to the session being checked out.',
+    ),
+  sessionInconsistent: () =>
+    new AppError(
+      409,
+      'SESSION_INCONSISTENT',
+      'The parking records for this session do not agree. Ask an administrator to check them.',
+    ),
+  gateCheckoutRequired: () =>
+    new AppError(
+      403,
+      'GATE_CHECKOUT_REQUIRED',
+      'Final checkout is completed at the exit gate by Security Staff. Tell them you are ready to leave.',
+    ),
   invalidPaymentMethod: () =>
     new AppError(
       400,
@@ -61,10 +79,4 @@ export const parkingErrors = {
       'The payment amount no longer matches the calculated fee. Start checkout again.',
     ),
   receiptNotFound: () => new AppError(404, 'RECEIPT_NOT_FOUND', 'Receipt not found.'),
-  parkProposalExpired: () =>
-    new AppError(
-      409,
-      'PARK_PROPOSAL_EXPIRED',
-      'The parking space proposed to you is no longer held. Please start again.',
-    ),
 };

@@ -1,7 +1,9 @@
 import type {
+  AcademicProfile,
   CurrentUserResponse,
   LoginRequest,
   ParkingUserCategory,
+  RegistrationInput,
   UserLoginRequest,
 } from '@cpvts/shared';
 import type { RequestHandler } from 'express';
@@ -18,19 +20,16 @@ export const authController = {
   }) satisfies RequestHandler,
 
   userLogin: (async (req, res) => {
-    res.set('Cache-Control', 'no-store');
-    res
-      .status(200)
-      .json(await authService.userLogin(req.body as UserLoginRequest, requestMeta(req)));
+    const result = await authService.userLogin(req.body as UserLoginRequest, requestMeta(req));
+    res.status(200).json(result);
   }) satisfies RequestHandler,
 
-  /** The category comes from the route, never from the request body. */
+  /** The category comes from the endpoint, never from the request body. */
   register: (category: ParkingUserCategory) =>
     (async (req, res) => {
-      res.set('Cache-Control', 'no-store');
       const result = await registrationService.register(
         category,
-        req.body as Parameters<typeof registrationService.register>[1],
+        req.body as RegistrationInput & { academic?: AcademicProfile },
         requestMeta(req),
       );
       res.status(201).json(result);

@@ -9,9 +9,11 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "prisma generate && tsx watch --env-file-if-exists=.env src/server.ts",
+    "dev": "prisma generate && node --watch --env-file-if-exists=.env --import tsx/esm src/server.ts",
+    "prebuild": "npm run build -w @cpvts/shared",
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "start": "node --enable-source-maps dist/server.js",
+    "pretypecheck": "npm run build -w @cpvts/shared",
     "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
     "test": "prisma generate && vitest run",
     "test:watch": "vitest",

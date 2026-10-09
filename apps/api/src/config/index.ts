@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { parseEnv, type Env } from './env.js';
 
-const DEFAULT_DEV_ORIGIN = 'http://localhost:5173';
+const DEFAULT_DEV_ORIGINS = ['http://localhost:5173', 'http://localhost:4173'];
 
 const readPackageVersion = (): string => {
   try {
@@ -20,7 +20,7 @@ const readPackageVersion = (): string => {
 const resolveCorsOrigins = (env: Env): string[] => {
   if (env.CORS_ORIGINS?.length) return env.CORS_ORIGINS;
   if (env.FRONTEND_URL) return [env.FRONTEND_URL.replace(/\/+$/, '')];
-  return env.NODE_ENV === 'production' ? [] : [DEFAULT_DEV_ORIGIN];
+  return env.NODE_ENV === 'production' ? [] : DEFAULT_DEV_ORIGINS;
 };
 
 export const buildConfig = (env: Env) =>
@@ -47,7 +47,7 @@ export const buildConfig = (env: Env) =>
     parking: Object.freeze({
       timeZone: env.CAMPUS_TIMEZONE,
       slotHoldMs: env.SLOT_HOLD_SECONDS * 1000,
-      proposalHoldMs: env.PARK_PROPOSAL_SECONDS * 1000,
+      parkNowHoldMs: env.PARK_NOW_HOLD_SECONDS * 1000,
     }),
     alerts: Object.freeze({
       nearlyFullPercent: env.ALERT_NEARLY_FULL_PERCENT,
@@ -56,6 +56,11 @@ export const buildConfig = (env: Env) =>
     accounts: Object.freeze({
       emailDomains: Object.freeze(env.INSTITUTION_EMAIL_DOMAINS ?? []),
       visitorAccessSeconds: env.VISITOR_ACCESS_HOURS * 3600,
+    }),
+    shifts: Object.freeze({
+      enforcement: env.SHIFT_ENFORCEMENT,
+      earlyCheckInMs: env.SHIFT_EARLY_CHECK_IN_MINUTES * 60_000,
+      overrunMs: env.SHIFT_OVERRUN_MINUTES * 60_000,
     }),
     cors: Object.freeze({
       origins: Object.freeze(resolveCorsOrigins(env)),

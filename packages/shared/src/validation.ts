@@ -27,9 +27,15 @@ export const VALIDATION_MESSAGES = {
   documentType: 'validation.documentType',
   passwordsDoNotMatch: 'validation.passwordsDoNotMatch',
   rejectionNoteRequired: 'validation.rejectionNoteRequired',
-  invalidNewSlotCode: 'validation.invalidNewSlotCode',
-  slotCodeVehicleMismatch: 'validation.slotCodeVehicleMismatch',
+  invalidInventoryCode: 'validation.invalidInventoryCode',
+  slotCodePrefix: 'validation.slotCodePrefix',
   nothingToUpdate: 'validation.nothingToUpdate',
+  semesterOutOfRange: 'validation.semesterOutOfRange',
+  admissionYearInvalid: 'validation.admissionYearInvalid',
+  academicIncomplete: 'validation.academicIncomplete',
+  invalidTime: 'validation.invalidTime',
+  shiftTimesEqual: 'validation.shiftTimesEqual',
+  invalidBatch: 'validation.invalidBatch',
 } as const;
 
 export type ValidationMessageKey = (typeof VALIDATION_MESSAGES)[keyof typeof VALIDATION_MESSAGES];

@@ -22,8 +22,7 @@ export function LanguageSwitcher() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" aria-label={t('language.select')} className="gap-2">
           <Languages aria-hidden />
-          {/* Icon only on narrow phones so the header never crowds the brand. */}
-          <span className="hidden min-[430px]:inline">{current?.nativeName}</span>
+          <span>{current?.nativeName}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">

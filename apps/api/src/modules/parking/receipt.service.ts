@@ -1,4 +1,8 @@
-import type { ReceiptVerificationResponse, ReceiptView } from '@cpvts/shared';
+import {
+  maskVehicleNumber,
+  type ReceiptVerificationResponse,
+  type ReceiptView,
+} from '@cpvts/shared';
 
 import { logger } from '../../lib/logger.js';
 import { parkingErrors } from './parking.errors.js';
@@ -48,7 +52,8 @@ export const receiptService = {
       receipt: {
         receiptNumber: receipt.receiptNumber,
         issuedAt: receipt.issuedAt.toISOString(),
-        vehicleNumber: receipt.session.vehicle.vehicleNumber,
+        // The public check is a capability link, not a login: never show a full plate.
+        vehicleNumber: maskVehicleNumber(receipt.session.vehicle.vehicleNumber),
         blockName: receipt.session.slot.zone.block.name,
         slotCode: receipt.session.slot.code,
         durationHours: receipt.session.durationHours ?? 0,

@@ -1,6 +1,7 @@
 import {
   loginRequestSchema,
   registrationRequestSchema,
+  studentRegistrationRequestSchema,
   userLoginRequestSchema,
 } from '@cpvts/shared';
 import { Router } from 'express';
@@ -18,10 +19,7 @@ authRouter.post(
   validate({ body: loginRequestSchema }),
   authController.login,
 );
-authRouter.post('/logout', authenticate, authController.logout);
-authRouter.get('/me', authenticate, authController.me);
-
-// Parking users (Student / Campus Staff) sign in and register through their own door.
+// Student / Campus Staff: a separate door from the operational sign-in above.
 authRouter.post(
   '/user-login',
   loginRateLimiter,
@@ -31,7 +29,7 @@ authRouter.post(
 authRouter.post(
   '/register/student',
   registrationRateLimiter,
-  validate({ body: registrationRequestSchema }),
+  validate({ body: studentRegistrationRequestSchema }),
   authController.register('STUDENT'),
 );
 authRouter.post(
@@ -40,3 +38,5 @@ authRouter.post(
   validate({ body: registrationRequestSchema }),
   authController.register('STAFF'),
 );
+authRouter.post('/logout', authenticate, authController.logout);
+authRouter.get('/me', authenticate, authController.me);

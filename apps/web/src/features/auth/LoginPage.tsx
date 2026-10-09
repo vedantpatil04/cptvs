@@ -60,15 +60,6 @@ export function LoginPage() {
                 </Alert>
               )}
               <LoginForm />
-              <p className="border-t pt-4 text-sm text-muted-foreground">
-                {t('userAuth.studentStaffPrompt')}{' '}
-                <Link
-                  className="font-medium text-primary underline-offset-4 hover:underline"
-                  to={PATHS.userLogin}
-                >
-                  {t('userAuth.studentStaffLink')}
-                </Link>
-              </p>
             </CardContent>
           </Card>
         </div>

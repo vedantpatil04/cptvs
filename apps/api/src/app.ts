@@ -9,8 +9,17 @@ import { requestLogger } from './middleware/request-logger.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { apiV1Router } from './routes/api-v1.js';
 
-const UPLOAD_PATHS =
-  /^\/api\/v1\/(auth\/register\/(student|staff)|portal\/verification\/resubmit)\/?$/;
+export const isOriginAllowed = (origin: string, allowedOrigins: readonly string[]): boolean => {
+  for (const allowed of allowedOrigins) {
+    if (allowed === origin) return true;
+    if (allowed.includes('*')) {
+      const escaped = allowed.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[a-zA-Z0-9-]+');
+      const regex = new RegExp(`^${escaped}$`, 'i');
+      if (regex.test(origin)) return true;
+    }
+  }
+  return false;
+};
 
 export const createApp = (config: AppConfig): Express => {
   const app = express();
@@ -23,19 +32,29 @@ export const createApp = (config: AppConfig): Express => {
   app.use(helmet());
   app.use(
     cors({
-      origin: [...config.cors.origins],
+      origin: (requestOrigin, callback) => {
+        // Non-browser or server-to-server requests without Origin header
+        if (!requestOrigin) {
+          callback(null, true);
+          return;
+        }
+        if (isOriginAllowed(requestOrigin, config.cors.origins)) {
+          callback(null, true);
+          return;
+        }
+        callback(null, false);
+      },
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
       allowedHeaders: ['Authorization', 'Content-Type', 'Accept-Language', 'X-Request-Id'],
       exposedHeaders: ['X-Request-Id', 'Content-Disposition'],
       maxAge: 600,
     }),
   );
-  // Registration and re-submission carry an identity document (base64, up to 2 MB).
-  const json = express.json({ limit: '100kb' });
-  const uploadJson = express.json({ limit: '3500kb' });
-  app.use((req, res, next) =>
-    UPLOAD_PATHS.test(req.path) ? uploadJson(req, res, next) : json(req, res, next),
-  );
+  // Identity documents arrive base64-encoded in the JSON body (at most 2 MB of file,
+  // ~2.8 MB encoded). Only the registration and resubmission routes get the larger
+  // limit; once a body is parsed here the default parser below skips it.
+  app.use(['/api/v1/auth/register', '/api/v1/portal/verification'], express.json({ limit: '4mb' }));
+  app.use(express.json({ limit: '100kb' }));
 
   app.use('/health', healthRouter);
   app.use('/api/v1', apiV1Router);

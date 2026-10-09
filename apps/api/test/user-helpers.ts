@@ -1,137 +1,164 @@
 import type {
+  AcademicProgram,
   ApiErrorBody,
   ParkingUserCategory,
-  RegisteredVehicle,
   VerificationStatus,
 } from '@cpvts/shared';
 import type { Express } from 'express';
 import request from 'supertest';
-import { expect, vi } from 'vitest';
 
-import { createApp } from '../src/app.js';
-import { config } from '../src/config/index.js';
 import { prisma } from '../src/db/prisma.js';
+import { campusHour } from '../src/lib/campus-time.js';
 import { hashPassword } from '../src/modules/auth/password.js';
 import { tokenService } from '../src/modules/auth/token.service.js';
 import { TEST_PASSWORD } from './helpers.js';
+import { signIn } from './parking-helpers.js';
 
-export const app: Express = createApp(config);
 export const API = '/api/v1';
 
-/** The first bytes of a real PNG: enough for the server's content sniffing. */
+/** The smallest bytes the server accepts as a PNG: only the file signature is checked. */
 export const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
 
-export const document = (bytes: Buffer = PNG_BYTES, mimeType = 'image/png') => ({
+export const identityDocument = (bytes: Buffer = PNG_BYTES, mimeType = 'image/png') => ({
   fileName: 'college-id.png',
   mimeType,
   contentBase64: bytes.toString('base64'),
 });
 
-export const registration = (id: string, email: string, extra: Record<string, unknown> = {}) => ({
-  fullName: 'Asha Patil',
-  institutionalId: id,
-  confirmInstitutionalId: id,
-  email,
-  phone: '9876543210',
-  password: TEST_PASSWORD,
-  document: document(),
-  ...extra,
+/** What a student gives at registration to identify themselves academically. */
+export interface AcademicDetails {
+  program: AcademicProgram;
+  department: string;
+  admissionYear: number;
+  currentSemester: number;
+}
+
+export const academicDetails = (overrides: Partial<AcademicDetails> = {}): AcademicDetails => ({
+  program: 'BCA',
+  department: 'Computer Applications',
+  admissionYear: 2024,
+  currentSemester: 3,
+  ...overrides,
 });
 
-export const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
-export const errorCode = (body: unknown) => (body as ApiErrorBody).error.code;
+/** A student registration; Campus Staff registration ignores the `academic` block. */
+export const registrationBody = (overrides: Record<string, unknown> = {}) => ({
+  fullName: 'Asha Patil',
+  institutionalId: '2bt22cs001',
+  confirmInstitutionalId: '2BT22CS001',
+  email: 'Asha@College.edu.in',
+  phone: '+91 98450 12345',
+  password: TEST_PASSWORD,
+  document: identityDocument(),
+  academic: academicDetails(),
+  ...overrides,
+});
+
+export const errorCode = (res: { body: unknown }) => (res.body as ApiErrorBody).error.code;
+
+/** A small authenticated client for `/api/v1`. Pass a path relative to it, e.g. `/portal/vehicles`. */
+export const client = (app: Express, token?: string) => {
+  const auth = (req: request.Test) => (token ? req.set('Authorization', `Bearer ${token}`) : req);
+  return {
+    get: (path: string, query: Record<string, string | number | boolean> = {}) =>
+      auth(request(app).get(`${API}${path}`).query(query)),
+    post: (path: string, body: object = {}) => auth(request(app).post(`${API}${path}`).send(body)),
+    patch: (path: string, body: object = {}) =>
+      auth(request(app).patch(`${API}${path}`).send(body)),
+    delete: (path: string) => auth(request(app).delete(`${API}${path}`)),
+  };
+};
 
 let passwordHash: string | undefined;
-let counter = 0;
 
-/** Creates a parking user directly in the database (faster than the registration endpoint). */
-export const createParkingUser = async (
-  category: ParkingUserCategory,
-  status: VerificationStatus = 'VERIFIED',
-  overrides: { email?: string; institutionalId?: string; isActive?: boolean } = {},
-) => {
+export interface ParkingUserOptions {
+  category?: ParkingUserCategory;
+  verification?: VerificationStatus;
+  institutionalId?: string;
+  email?: string;
+  fullName?: string;
+  isActive?: boolean;
+  note?: string;
+  /** Students only. `null` leaves the academic profile empty (an account from before it existed). */
+  academic?: Partial<AcademicDetails> | null;
+}
+
+/** Creates a Student / Campus Staff account directly (fast path for tests that are not about registration). */
+export const createParkingUser = async (options: ParkingUserOptions = {}) => {
+  const category = options.category ?? 'STUDENT';
+  const institutionalId = (
+    options.institutionalId ?? (category === 'STUDENT' ? '2BT22CS001' : 'EMP-1042')
+  ).toUpperCase();
+  const verification = options.verification ?? 'VERIFIED';
   passwordHash ??= await hashPassword(TEST_PASSWORD);
-  counter += 1;
-  const institutionalId = overrides.institutionalId ?? `${category[0]}ID${counter}00`;
-  const email = overrides.email ?? `${category.toLowerCase()}${counter}@college.edu.in`;
+
   const user = await prisma.user.create({
     data: {
       username: `${category.toLowerCase()}:${institutionalId.toLowerCase()}`,
-      fullName: `${category} ${counter}`,
+      fullName: options.fullName ?? `${category} ${institutionalId}`,
       passwordHash,
       role: 'PARKING_USER',
-      isActive: overrides.isActive ?? true,
+      isActive: options.isActive ?? true,
       parkingProfile: {
         create: {
           category,
           institutionalId,
-          email,
-          phone: '9876543210',
-          verificationStatus: status,
+          email: (options.email ?? `${institutionalId.toLowerCase()}@college.edu.in`).toLowerCase(),
+          phone: '+919845012345',
+          verificationStatus: verification,
+          verificationNote:
+            verification === 'REJECTED' ? (options.note ?? 'Photo unreadable') : null,
           verificationSubmittedAt: new Date(),
-        },
-      },
-      identityDocuments: {
-        create: {
-          institutionalId,
-          fileName: 'college-id.png',
-          mimeType: 'image/png',
-          sizeBytes: PNG_BYTES.length,
-          sha256: 'a'.repeat(64),
-          content: new Uint8Array(PNG_BYTES),
+          ...(verification === 'PENDING' ? {} : { reviewedAt: new Date() }),
+          // Students carry academic details unless the test asks for an older, empty account.
+          ...(category === 'STUDENT' && options.academic !== null
+            ? academicDetails(options.academic ?? {})
+            : {}),
         },
       },
     },
-    include: { identityDocuments: true },
   });
-  return {
-    user,
-    email,
-    institutionalId,
-    documentId: user.identityDocuments[0]!.id,
-    token: tokenService.issueAccessToken(user.id, user.tokenVersion).token,
-  };
+  await prisma.identityDocument.create({
+    data: {
+      userId: user.id,
+      institutionalId,
+      fileName: 'college-id.png',
+      mimeType: 'image/png',
+      sizeBytes: PNG_BYTES.length,
+      sha256: 'a'.repeat(64),
+      content: new Uint8Array(PNG_BYTES),
+    },
+  });
+  const token = tokenService.issueAccessToken(user.id, user.tokenVersion).token;
+  return { user, token };
 };
 
-export const portal = (token: string) => ({
-  get: (path: string) => request(app).get(`${API}/portal${path}`).set(bearer(token)),
-  post: (path: string, body: object = {}) =>
-    request(app).post(`${API}/portal${path}`).set(bearer(token)).send(body),
-  patch: (path: string, body: object) =>
-    request(app).patch(`${API}/portal${path}`).set(bearer(token)).send(body),
-});
-
-export const admin = (token: string) => ({
-  get: (path: string) => request(app).get(`${API}/admin${path}`).set(bearer(token)),
-  post: (path: string, body: object = {}) =>
-    request(app).post(`${API}/admin${path}`).set(bearer(token)).send(body),
-  patch: (path: string, body: object) =>
-    request(app).patch(`${API}/admin${path}`).set(bearer(token)).send(body),
-  delete: (path: string) => request(app).delete(`${API}/admin${path}`).set(bearer(token)),
-});
-
-export const visitor = (token: string) => ({
-  get: (path: string) => request(app).get(`${API}/visitor${path}`).set(bearer(token)),
-  post: (path: string, body: object = {}) =>
-    request(app).post(`${API}/visitor${path}`).set(bearer(token)).send(body),
-});
-
-export const addVehicle = async (
-  token: string,
-  vehicleNumber: string,
-  vehicleType = 'TWO_WHEELER',
+/** A verified user with one registered vehicle, ready to Park Now. */
+export const createParkingUserWithVehicle = async (
+  app: Express,
+  options: ParkingUserOptions & {
+    vehicleNumber?: string;
+    vehicleType?: 'TWO_WHEELER' | 'FOUR_WHEELER';
+  } = {},
 ) => {
-  const res = await portal(token).post('/vehicles', { vehicleNumber, vehicleType });
-  expect(res.status).toBe(201);
-  return res.body as RegisteredVehicle;
+  const account = await createParkingUser(options);
+  const res = await client(app, account.token).post('/portal/vehicles', {
+    vehicleNumber: options.vehicleNumber ?? 'KA22AB1234',
+    vehicleType: options.vehicleType ?? 'TWO_WHEELER',
+  });
+  if (res.status !== 201)
+    throw new Error(`vehicle registration failed: ${JSON.stringify(res.body)}`);
+  return { ...account, vehicle: res.body as { id: string; vehicleNumber: string } };
 };
 
-/**
- * Freezes the clock at a campus hour (Asia/Kolkata, UTC+05:30) on a fixed day.
- * Only `Date` is faked, so timers, the database driver and bcrypt run normally.
- * Call `vi.useRealTimers()` afterwards.
- */
-export const setCampusHour = (hour: number, minute = 10): void => {
-  vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(new Date(Date.UTC(2026, 9, 8, 0, hour * 60 + minute - 330)));
+export const adminAccount = (username = 'boss') => signIn('ADMIN', username);
+export const guardAccount = (username = 'guard') => signIn('SECURITY_STAFF', username);
+
+/** The first future instant whose campus hour is `hour` (used to fake the clock for checkout). */
+export const nextInstantAtCampusHour = (hour: number, from = new Date()): Date => {
+  for (let k = 1; k <= 24; k += 1) {
+    const candidate = new Date(from.getTime() + k * 3_600_000);
+    if (campusHour(candidate) === hour) return candidate;
+  }
+  throw new Error(`no instant with campus hour ${hour}`);
 };

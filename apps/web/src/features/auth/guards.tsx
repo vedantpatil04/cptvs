@@ -1,5 +1,5 @@
 import type { UserRole } from '@cpvts/shared';
-import { useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, Outlet, useLocation } from 'react-router';
 
@@ -7,7 +7,6 @@ import { ForbiddenPage } from '@/app/pages/ForbiddenPage';
 import { PATHS, ROLE_HOME } from '@/app/paths';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { FullPageLoader } from '@/components/feedback/LoadingState';
-import { VerificationPage } from '@/features/registration/VerificationPage';
 
 import { useAuth } from './use-auth';
 
@@ -44,12 +43,7 @@ export function RequireAuth() {
 
   if (state.status === 'unauthenticated') {
     const from: LoginLocationState = { from: `${location.pathname}${location.search}` };
-    // Students and Campus Staff have their own sign-in door.
-    const door =
-      location.pathname.startsWith(`${PATHS.user.root}/`) || location.pathname === PATHS.user.root
-        ? PATHS.userLogin
-        : PATHS.login;
-    return <Navigate to={door} replace state={from} />;
+    return <Navigate to={PATHS.login} replace state={from} />;
   }
 
   return <Outlet />;
@@ -62,26 +56,7 @@ export function RequireAuth() {
 export function RequireRole({ role }: { role: UserRole }) {
   const { state } = useAuth();
   if (state.status !== 'authenticated') return null;
-  return state.user.role === role ? <Outlet /> : <FramelessForbidden />;
-}
-
-/** "Access denied" for a role that has no shell around the page (centred on its own). */
-function FramelessForbidden() {
-  return (
-    <div className="grid min-h-dvh place-items-center p-6">
-      <ForbiddenPage />
-    </div>
-  );
-}
-
-/**
- * The operational frame (sidebar shell) is for Administrators and Security
- * Staff. Students and Campus Staff never see it; they have their own area.
- */
-export function RequireOperational() {
-  const { state } = useAuth();
-  if (state.status !== 'authenticated') return null;
-  return state.user.role === 'PARKING_USER' ? <FramelessForbidden /> : <Outlet />;
+  return state.user.role === role ? <Outlet /> : <ForbiddenPage />;
 }
 
 /**
@@ -98,29 +73,4 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
     return <Navigate to={postLoginPath(state.user.role, location.state)} replace />;
   }
   return children;
-}
-
-/**
- * Parking pages for Students and Campus Staff are for verified accounts only.
- * Until an administrator approves the identity document the user sees the
- * verification status instead; the API refuses the same requests regardless.
- * The status is refreshed when the page opens and when the tab regains focus,
- * so an approval shows up without signing in again.
- */
-export function RequireVerified() {
-  const { state, refresh } = useAuth();
-
-  useEffect(() => {
-    void refresh();
-    const onFocus = () => void refresh();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [refresh]);
-
-  if (state.status !== 'authenticated') return null;
-  return state.user.parkingUser?.verificationStatus === 'VERIFIED' ? (
-    <Outlet />
-  ) : (
-    <VerificationPage />
-  );
 }

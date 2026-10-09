@@ -23,6 +23,15 @@ describe('parseEnv', () => {
       CORS_ORIGINS: 'https://a.example/, https://b.example ,https://a.example',
     });
     expect(env.CORS_ORIGINS).toEqual(['https://a.example', 'https://b.example']);
+
+    const mobileAndPreview = parseEnv({
+      ...base,
+      CORS_ORIGINS: 'https://*.vercel.app, capacitor://localhost',
+    });
+    expect(mobileAndPreview.CORS_ORIGINS).toEqual([
+      'https://*.vercel.app',
+      'capacitor://localhost',
+    ]);
   });
 
   it('rejects a short JWT secret', () => {
@@ -32,6 +41,21 @@ describe('parseEnv', () => {
   it('rejects a non-PostgreSQL database URL', () => {
     expect(() => parseEnv({ ...base, DATABASE_URL: 'mysql://localhost/db' })).toThrow(
       /DATABASE_URL/,
+    );
+  });
+
+  it('requires shifts for gate operations unless told otherwise', () => {
+    expect(parseEnv({ ...base })).toMatchObject({
+      SHIFT_ENFORCEMENT: 'required',
+      SHIFT_EARLY_CHECK_IN_MINUTES: 60,
+      SHIFT_OVERRUN_MINUTES: 30,
+    });
+    expect(parseEnv({ ...base, SHIFT_ENFORCEMENT: 'optional' }).SHIFT_ENFORCEMENT).toBe('optional');
+    expect(() => parseEnv({ ...base, SHIFT_ENFORCEMENT: 'sometimes' })).toThrow(
+      /SHIFT_ENFORCEMENT/,
+    );
+    expect(() => parseEnv({ ...base, SHIFT_OVERRUN_MINUTES: '999' })).toThrow(
+      /SHIFT_OVERRUN_MINUTES/,
     );
   });
 

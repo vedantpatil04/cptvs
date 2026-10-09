@@ -2,19 +2,10 @@ import type { PublicParkingLocation } from '@cpvts/shared';
 import { MapPin, MapPinOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { ImageSlot } from '@/components/branding/ImageSlot';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { BlockMapLink } from '@/components/parking/BlockMapLink';
 import { StatusBadge } from '@/components/feedback/StatusBadge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import type { ImageSlotId } from '@/config/images';
-
-const slotFor = (vehicleTypes: string[]): ImageSlotId =>
-  vehicleTypes.length === 1 && vehicleTypes[0] === 'FOUR_WHEELER'
-    ? 'fourWheelerBlock'
-    : vehicleTypes.length === 1 && vehicleTypes[0] === 'TWO_WHEELER'
-      ? 'twoWheelerBlock'
-      : 'campus';
 
 /** Parking blocks and their real-world location (block level only, never slots). */
 export function ParkingLocations({ locations }: { locations: PublicParkingLocation[] }) {
@@ -28,10 +19,7 @@ export function ParkingLocations({ locations }: { locations: PublicParkingLocati
     <ul className="grid gap-4 md:grid-cols-2">
       {locations.map((location) => (
         <li key={location.code}>
-          <Card className="h-full gap-4 overflow-hidden pt-0">
-            <div className="h-36">
-              <ImageSlot slot={slotFor(location.vehicleTypes)} />
-            </div>
+          <Card className="h-full gap-4">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <MapPin className="size-5 text-primary" aria-hidden />

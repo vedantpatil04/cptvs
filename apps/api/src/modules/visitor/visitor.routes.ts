@@ -1,21 +1,25 @@
-import {
-  selfPaymentRequestSchema,
-  selfProcessPaymentSchema,
-  VALIDATION_MESSAGES,
-  visitorAccessRequestSchema,
-} from '@cpvts/shared';
-import { Router } from 'express';
-import { z } from 'zod';
+import { visitorAccessRequestSchema } from '@cpvts/shared';
+import { Router, type Request } from 'express';
+import type { z } from 'zod';
 
 import { requestMeta } from '../../lib/request-context.js';
+import { unauthenticated } from '../../lib/errors.js';
+import { parkingErrors } from '../parking/parking.errors.js';
 import { authenticateVisitor } from '../../middleware/authenticate-visitor.js';
 import { visitorAccessRateLimiter } from '../../middleware/rate-limit.js';
 import { validate } from '../../middleware/validate.js';
 import { visitorService } from './visitor.service.js';
 
+const sessionId = (req: Request): string => {
+  if (!req.visitor) throw unauthenticated();
+  return req.visitor.sessionId;
+};
+
 /**
- * Visitor access (no account). The token from `/access` is bound to one
- * parking session and works only on these routes.
+ * Visitor API. Visitors have no account: `POST /access` exchanges the vehicle
+ * number and session number from the parking slip for a short-lived token bound
+ * to that one session, and every other route uses only that token. The token reaches
+ * that session and nothing else: no other user, no administration, no Security operations.
  */
 export const visitorRouter = Router();
 
@@ -24,67 +28,53 @@ visitorRouter.post(
   visitorAccessRateLimiter,
   validate({ body: visitorAccessRequestSchema }),
   async (req, res) => {
-    res.set('Cache-Control', 'no-store');
-    res.status(200).json(await visitorService.grantAccess(req.body, requestMeta(req)));
-  },
-);
-
-visitorRouter.use(authenticateVisitor);
-
-visitorRouter.get('/session', async (req, res) => {
-  res.status(200).json(await visitorService.getSession(req.visitor!.sessionId));
-});
-
-visitorRouter.get('/receipt', async (req, res) => {
-  res.status(200).json(await visitorService.getReceipt(req.visitor!.sessionId));
-});
-
-visitorRouter.get('/layout', async (req, res) => {
-  res.status(200).json(await visitorService.getLayout(req.visitor!.sessionId));
-});
-
-const paymentParams = z.object({ paymentId: z.uuid({ error: VALIDATION_MESSAGES.required }) });
-
-// Checkout and simulated payment for the visitor's own session.
-
-visitorRouter.post('/checkout', async (req, res) => {
-  res.status(200).json(await visitorService.quote(req.visitor!.sessionId, requestMeta(req)));
-});
-
-visitorRouter.post('/payments', validate({ body: selfPaymentRequestSchema }), async (req, res) => {
-  const { method } = req.body as z.infer<typeof selfPaymentRequestSchema>;
-  res
-    .status(201)
-    .json(await visitorService.createPayment(req.visitor!.sessionId, method, requestMeta(req)));
-});
-
-visitorRouter.post(
-  '/payments/:paymentId/process',
-  validate({ params: paymentParams, body: selfProcessPaymentSchema }),
-  async (req, res) => {
-    const { outcome } = req.body as z.infer<typeof selfProcessPaymentSchema>;
     res
       .status(200)
       .json(
-        await visitorService.processPayment(
-          req.visitor!.sessionId,
-          String(req.params.paymentId),
-          outcome,
+        await visitorService.access(
+          req.body as z.infer<typeof visitorAccessRequestSchema>,
           requestMeta(req),
         ),
       );
   },
 );
 
-visitorRouter.post(
-  '/payments/:paymentId/cancel',
-  validate({ params: paymentParams }),
-  async (req, res) => {
-    const payment = await visitorService.cancelPayment(
-      req.visitor!.sessionId,
-      String(req.params.paymentId),
-      requestMeta(req),
-    );
-    res.status(200).json({ payment });
-  },
-);
+visitorRouter.use(authenticateVisitor);
+
+visitorRouter.get('/session', async (req, res) => {
+  res.status(200).json(await visitorService.session(sessionId(req)));
+});
+
+visitorRouter.get('/layout', async (req, res) => {
+  res.status(200).json(await visitorService.layout(sessionId(req)));
+});
+
+visitorRouter.get('/timeline', async (req, res) => {
+  res.status(200).json(await visitorService.timeline(sessionId(req)));
+});
+
+/** A read-only preview of the amount due if the vehicle left now. */
+visitorRouter.post('/checkout/quote', async (req, res) => {
+  res.status(200).json(await visitorService.quote(sessionId(req), requestMeta(req)));
+});
+
+/** "I am ready to leave": tells the gate. The slot stays occupied until the gate checkout. */
+visitorRouter.post('/exit-request', async (req, res) => {
+  res.status(200).json(await visitorService.requestExit(sessionId(req), requestMeta(req)));
+});
+
+visitorRouter.delete('/exit-request', async (req, res) => {
+  res.status(200).json(await visitorService.cancelExitRequest(sessionId(req), requestMeta(req)));
+});
+
+/**
+ * A visitor cannot pay or finalize remotely: the session is completed only by the exit
+ * gate's checkout (payment, receipt, slot release). Old clients get a clear, stable answer.
+ */
+visitorRouter.all('/checkout/payments{/*splat}', () => {
+  throw parkingErrors.gateCheckoutRequired();
+});
+
+visitorRouter.get('/receipt', async (req, res) => {
+  res.status(200).json(await visitorService.receipt(sessionId(req)));
+});

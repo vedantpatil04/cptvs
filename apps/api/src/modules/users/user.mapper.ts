@@ -1,8 +1,9 @@
-import type {
-  AuthUser,
-  ParkingUserCategory as SharedCategory,
-  UserRole as SharedUserRole,
-  VerificationStatus as SharedVerificationStatus,
+import {
+  parkNowEligibilityOf,
+  type AuthUser,
+  type ParkingUserCategory as SharedCategory,
+  type UserRole as SharedUserRole,
+  type VerificationStatus as SharedVerificationStatus,
 } from '@cpvts/shared';
 
 import type {
@@ -29,10 +30,13 @@ export const toAuthenticatedUser = (user: UserWithProfile): AuthenticatedUser =>
   role: user.role,
   tokenVersion: user.tokenVersion,
   lastLoginAt: user.lastLoginAt,
+  // Read from the database with the user on every request (see `authenticate`); the token
+  // never carries it, so an administrator's decision shows on the very next request.
   parkingUser: user.parkingProfile
     ? {
         category: user.parkingProfile.category,
         verificationStatus: user.parkingProfile.verificationStatus,
+        parkNow: parkNowEligibilityOf(user.parkingProfile.verificationStatus, user.isActive),
       }
     : null,
 });

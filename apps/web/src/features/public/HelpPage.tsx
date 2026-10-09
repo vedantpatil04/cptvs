@@ -16,10 +16,6 @@ const QUESTIONS: QuestionKey[] = [
   'locations',
   'fees',
   'vehicle',
-  'register',
-  'verification',
-  'visitor',
-  'findVehicle',
   'login',
   'language',
 ];

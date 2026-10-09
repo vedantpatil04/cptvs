@@ -34,8 +34,6 @@
   --warning: oklch(0.666 0.157 58.318);
   --warning-foreground: oklch(0.985 0 0);
   --info: oklch(0.546 0.215 262.881);
-  /* Bright "live" green for status dots on the dark brand surface. */
-  --live: oklch(0.82 0.17 155);
   --info-foreground: oklch(0.985 0 0);
 
   --border: oklch(0.929 0.013 255.508);
@@ -89,7 +87,6 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
-  --color-live: var(--live);
   --color-info-foreground: var(--info-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -125,28 +122,11 @@
   }
 }
 
-@utility pb-safe {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-@utility pt-safe {
-  padding-top: env(safe-area-inset-top);
-}
-
-/* Parking-bay lines: the one decorative motif of the CPVTS user experience. */
-@utility bay-lines {
-  background-image: repeating-linear-gradient(
-    90deg,
-    color-mix(in oklab, currentColor 14%, transparent) 0 2px,
-    transparent 2px 3.5rem
-  );
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+@keyframes scan {
+  0%, 100% {
+    top: 5%;
+  }
+  50% {
+    top: 95%;
   }
 }

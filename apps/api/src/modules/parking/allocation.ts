@@ -63,6 +63,7 @@ export interface SlotHoldStore {
 export type CommitAllocation<T> = (
   candidate: RankedCandidate,
   holdToken: string,
+  explanation: AllocationExplanation,
 ) => Promise<T | null>;
 
 export interface AllocationOutcome<T> {
@@ -78,26 +79,6 @@ const CHECKS: AllocationCheck[] = [
   'FINAL_AVAILABILITY_VERIFIED',
 ];
 
-/** The reasons a slot was chosen, for the operator, the student and the audit trail. */
-export const buildExplanation = (
-  candidate: RankedCandidate,
-  candidatesConsidered: number,
-  fallbacks: number,
-): AllocationExplanation => ({
-  slotCode: candidate.slotCode,
-  zoneName: candidate.zoneName,
-  blockName: candidate.blockName,
-  score: candidate.score,
-  factors: {
-    priority: candidate.priority,
-    usesToday: candidate.usesToday,
-    layoutPosition: candidate.layoutPosition,
-  },
-  candidatesConsidered,
-  fallbacks,
-  checks: CHECKS,
-});
-
 /**
  * Walks the ranked candidates: hold the best slot, run the final verification
  * and commit; if another terminal claimed the slot first (hold or final check
@@ -111,6 +92,21 @@ export const allocateWithHold = async <T>(
 ): Promise<AllocationOutcome<T>> => {
   let fallbacks = 0;
 
+  const explain = (candidate: RankedCandidate): AllocationExplanation => ({
+    slotCode: candidate.slotCode,
+    zoneName: candidate.zoneName,
+    blockName: candidate.blockName,
+    score: candidate.score,
+    factors: {
+      priority: candidate.priority,
+      usesToday: candidate.usesToday,
+      layoutPosition: candidate.layoutPosition,
+    },
+    candidatesConsidered: ranked.length,
+    fallbacks,
+    checks: CHECKS,
+  });
+
   for (const candidate of ranked) {
     const token = await holds.acquire(candidate.slotId);
     if (!token) {
@@ -118,9 +114,10 @@ export const allocateWithHold = async <T>(
       continue;
     }
 
+    const explanation = explain(candidate);
     let result: T | null;
     try {
-      result = await commit(candidate, token);
+      result = await commit(candidate, token, explanation);
     } catch (error) {
       await holds.release(candidate.slotId, token);
       throw error;
@@ -132,7 +129,7 @@ export const allocateWithHold = async <T>(
       continue;
     }
 
-    return { result, explanation: buildExplanation(candidate, ranked.length, fallbacks) };
+    return { result, explanation };
   }
 
   throw parkingErrors.allocationFailed();

@@ -1,17 +1,14 @@
 import {
-  SLOT_CODE_PREFIX,
-  type createSlotRequestSchema,
-  type DeleteSlotResponse,
+  slotCodeMatchesVehicleType,
+  type CreateSlotInput,
   type ManagedBlock,
   type ManagedLayout,
   type ManagedSlot,
   type ManagedZone,
-  type NextSlotCodeResponse,
-  type updateBlockRequestSchema,
-  type updateSlotRequestSchema,
-  type updateZoneRequestSchema,
+  type SlotCounts,
+  type SlotDeletionResult,
+  type UpdateSlotRequest,
 } from '@cpvts/shared';
-import type { z } from 'zod';
 
 import { isUniqueViolation } from '../../db/errors.js';
 import { prisma } from '../../db/prisma.js';
@@ -25,21 +22,15 @@ import { currentDuration, toBlockSummary } from '../parking/parking.mappers.js';
 import { slotHoldRepository } from '../parking/slot-hold.repository.js';
 import { managementErrors } from './management.errors.js';
 
-type CreateSlotInput = z.output<typeof createSlotRequestSchema>;
-type UpdateSlotInput = z.output<typeof updateSlotRequestSchema>;
-type UpdateBlockInput = z.output<typeof updateBlockRequestSchema>;
-type UpdateZoneInput = z.output<typeof updateZoneRequestSchema>;
-
-/** What the administrator sees of a slot: its state, the parked vehicle and whether it has history. */
 const SLOT_INCLUDE = {
-  sessions: { where: { status: 'ACTIVE' }, take: 1, include: { vehicle: true } },
+  sessions: { where: { status: 'ACTIVE' }, include: { vehicle: true }, take: 1 },
   _count: { select: { sessions: true } },
 } as const satisfies Prisma.ParkingSlotInclude;
 
 type SlotRow = Prisma.ParkingSlotGetPayload<{ include: typeof SLOT_INCLUDE }>;
 
-/** Archived slots are hidden everywhere; they only keep history intact. */
-const VISIBLE = { archivedAt: null } as const;
+/** Slots that can be edited, disabled or archived: idle ones. */
+const IDLE_STATUSES = ['AVAILABLE', 'BLOCKED'] as const;
 
 const toManagedSlot = (slot: SlotRow, hour: number): ManagedSlot => {
   const session = slot.sessions[0];
@@ -48,9 +39,11 @@ const toManagedSlot = (slot: SlotRow, hour: number): ManagedSlot => {
     status: slot.status,
     priority: slot.priority,
     blockedReason: slot.status === 'BLOCKED' ? slot.blockedReason : null,
-    label: slot.label,
-    isActive: slot.isActive,
-    sessionCount: slot._count.sessions,
+    isEnabled: slot.isEnabled,
+    archivedAt: slot.archivedAt?.toISOString() ?? null,
+    sortOrder: slot.sortOrder,
+    holdExpiresAt: slot.status === 'HELD' ? (slot.holdExpiresAt?.toISOString() ?? null) : null,
+    hasHistory: slot._count.sessions > 0,
     occupant: session
       ? {
           sessionNumber: session.sessionNumber,
@@ -58,249 +51,311 @@ const toManagedSlot = (slot: SlotRow, hour: number): ManagedSlot => {
           vehicleType: session.vehicleType,
           ownerCategory: session.ownerCategory,
           entryHour: session.entryHour,
-          entryAt: session.entryAt.toISOString(),
           currentDurationHours: currentDuration(session.entryHour, hour),
         }
       : null,
-    createdAt: slot.createdAt.toISOString(),
-    updatedAt: slot.updatedAt.toISOString(),
   };
 };
 
-const ZONE_INCLUDE = {
-  slots: {
-    where: VISIBLE,
-    orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
-    include: SLOT_INCLUDE,
-  },
-} as const satisfies Prisma.ParkingZoneInclude;
+const countsOf = (slots: ManagedSlot[]): SlotCounts => {
+  const counts: SlotCounts = { total: 0, available: 0, occupied: 0, blocked: 0, held: 0 };
+  for (const slot of slots) {
+    if (!slot.isEnabled || slot.archivedAt) continue;
+    counts.total += 1;
+    if (slot.status === 'AVAILABLE') counts.available += 1;
+    else if (slot.status === 'OCCUPIED') counts.occupied += 1;
+    else if (slot.status === 'BLOCKED') counts.blocked += 1;
+    else counts.held += 1;
+  }
+  return counts;
+};
 
-type ZoneRow = Prisma.ParkingZoneGetPayload<{ include: typeof ZONE_INCLUDE }>;
+const blockInclude = (includeArchived: boolean) =>
+  ({
+    zones: {
+      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+      include: {
+        slots: {
+          where: includeArchived ? {} : { archivedAt: null },
+          orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+          include: SLOT_INCLUDE,
+        },
+      },
+    },
+  }) as const satisfies Prisma.ParkingBlockInclude;
 
-const toManagedZone = (zone: ZoneRow, hour: number): ManagedZone => ({
-  code: zone.code,
-  name: zone.name,
-  vehicleType: zone.vehicleType,
-  isActive: zone.isActive,
-  slots: zone.slots.map((slot) => toManagedSlot(slot, hour)),
-});
+type BlockRow = Prisma.ParkingBlockGetPayload<{ include: ReturnType<typeof blockInclude> }>;
 
-const toManagedBlock = (
-  block: Prisma.ParkingBlockGetPayload<{ include: { zones: { include: typeof ZONE_INCLUDE } } }>,
-  hour: number,
-): ManagedBlock => ({
+const toManagedBlock = (block: BlockRow, hour: number): ManagedBlock => ({
   ...toBlockSummary(block),
   description: block.description,
   isActive: block.isActive,
-  zones: block.zones.map((zone) => toManagedZone(zone, hour)),
+  sortOrder: block.sortOrder,
+  zones: block.zones.map((zone): ManagedZone => {
+    const slots = zone.slots.map((slot) => toManagedSlot(slot, hour));
+    return {
+      code: zone.code,
+      name: zone.name,
+      vehicleType: zone.vehicleType,
+      isActive: zone.isActive,
+      sortOrder: zone.sortOrder,
+      counts: countsOf(slots),
+      disabledSlots: slots.filter((slot) => !slot.isEnabled && !slot.archivedAt).length,
+      slots,
+    };
+  }),
 });
+
+export const loadManagedBlock = async (code: string): Promise<ManagedBlock> => {
+  const block = await prisma.parkingBlock.findUnique({
+    where: { code },
+    include: blockInclude(false),
+  });
+  if (!block) throw managementErrors.blockNotFound();
+  return toManagedBlock(block, campusHour());
+};
+
+const loadManagedSlot = async (code: string): Promise<ManagedSlot> => {
+  const slot = await prisma.parkingSlot.findUnique({ where: { code }, include: SLOT_INCLUDE });
+  if (!slot) throw managementErrors.slotNotFound();
+  return toManagedSlot(slot, campusHour());
+};
 
 const audit = (
   context: OperationContext,
   action: (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS],
-  entityType: (typeof AUDIT_ENTITY_TYPES)[keyof typeof AUDIT_ENTITY_TYPES],
   entityId: string,
   metadata: Prisma.InputJsonObject,
   tx: Prisma.TransactionClient,
+  entityType: (typeof AUDIT_ENTITY_TYPES)[keyof typeof AUDIT_ENTITY_TYPES] = AUDIT_ENTITY_TYPES.parkingSlot,
 ) =>
   auditRepository.record(
     { action, actorId: context.actor.id, entityType, entityId, metadata, request: context.request },
     tx,
   );
 
-const loadSlot = async (tx: Prisma.TransactionClient, code: string): Promise<ManagedSlot> =>
-  toManagedSlot(
-    await tx.parkingSlot.findFirstOrThrow({ where: { code, ...VISIBLE }, include: SLOT_INCLUDE }),
-    campusHour(),
-  );
-
-/** Why a conditional slot update matched nothing: unknown, out of service, or in the wrong state. */
-const explainRefusal = async (
+/** Why a conditional update touched no row: missing, archived, or in the wrong state. */
+const explainMiss = async (
   tx: Prisma.TransactionClient,
   code: string,
-  inState: () => Error,
-): Promise<Error> => {
-  const slot = await tx.parkingSlot.findUnique({ where: { code } });
-  if (!slot || slot.archivedAt) return managementErrors.slotNotFound();
-  if (!slot.isActive) return managementErrors.slotDisabled();
-  return inState();
+  wrongState: () => Error,
+): Promise<never> => {
+  const slot = await tx.parkingSlot.findUnique({ where: { code }, select: { archivedAt: true } });
+  if (!slot) throw managementErrors.slotNotFound();
+  if (slot.archivedAt) throw managementErrors.slotArchived();
+  throw wrongState();
 };
 
-/** True while the slot, or a session in it, is in use right now. */
-const slotBusy = (slot: { status: string }, activeSessions: number): boolean =>
-  slot.status === 'OCCUPIED' || slot.status === 'HELD' || activeSessions > 0;
-
 /**
- * Administrator slot management (Master Blueprint §23). Every state change is
- * an atomic conditional update, so none of them can disturb a parked vehicle or
- * a slot an allocation is holding; history is never destroyed.
+ * Administrator slot inventory (Master Blueprint §23). Every state change is an
+ * atomic conditional update, so no operation can disturb a parked vehicle or a
+ * slot held for a user, and every change is audited.
+ *
+ * Capacity rules: only enabled, non-archived slots count and are allocated. A
+ * new AVAILABLE slot is allocated by the existing engine immediately — the
+ * engine reads the slot table, not a list in code. A slot with parking history
+ * is never removed (archived instead), so history, receipts and reports stay
+ * intact.
  */
 export const slotManagementService = {
-  /** Every block, zone and slot (disabled ones included) with the parked vehicle of occupied slots. */
-  async getLayout(): Promise<ManagedLayout> {
+  async getLayout({ includeArchived = false } = {}): Promise<ManagedLayout> {
     await slotHoldRepository.releaseExpired();
     const blocks = await prisma.parkingBlock.findMany({
       orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
-      include: {
-        zones: { orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }], include: ZONE_INCLUDE },
-      },
+      include: blockInclude(includeArchived),
     });
     const hour = campusHour();
     return { blocks: blocks.map((block) => toManagedBlock(block, hour)) };
   },
 
-  /**
-   * Adds a slot to an existing zone. The zone fixes the vehicle type, the ID
-   * must carry the matching letter and be unused, and the slot joins the
-   * allocation pool immediately when it is created available.
-   */
   async create(input: CreateSlotInput, context: OperationContext): Promise<ManagedSlot> {
     try {
-      return await withTransaction(async (tx) => {
-        const zone = await tx.parkingZone.findUnique({ where: { code: input.zoneCode } });
+      await withTransaction(async (tx) => {
+        const zone = await tx.parkingZone.findUnique({
+          where: { code: input.zoneCode },
+          include: { block: { select: { isActive: true } } },
+        });
         if (!zone) throw managementErrors.zoneNotFound();
-        if (zone.vehicleType !== input.vehicleType) throw managementErrors.slotVehicleMismatch();
-        if (await tx.parkingSlot.count({ where: { code: input.code } })) {
-          throw managementErrors.slotCodeTaken();
-        }
+        if (!zone.isActive || !zone.block.isActive) throw managementErrors.zoneInactive();
+        if (zone.vehicleType !== input.vehicleType) throw managementErrors.zoneTypeMismatch();
+
+        const taken = await tx.parkingSlot.findUnique({
+          where: { code: input.code },
+          select: { archivedAt: true },
+        });
+        if (taken) throw managementErrors.slotCodeTaken(Boolean(taken.archivedAt));
 
         const last = await tx.parkingSlot.aggregate({
           where: { zoneId: zone.id },
           _max: { sortOrder: true },
         });
         const blocked = input.status === 'BLOCKED';
-        const created = await tx.parkingSlot.create({
+        await tx.parkingSlot.create({
           data: {
             zoneId: zone.id,
             code: input.code,
+            status: input.status,
             priority: input.priority,
-            label: input.label ?? null,
-            sortOrder: (last._max.sortOrder ?? -1) + 1,
-            status: blocked ? 'BLOCKED' : 'AVAILABLE',
+            sortOrder: input.sortOrder ?? (last._max.sortOrder ?? -1) + 1,
             blockedReason: blocked ? (input.blockedReason ?? null) : null,
-            isActive: input.status !== 'DISABLED',
           },
         });
         await audit(
           context,
           AUDIT_ACTIONS.slotCreated,
-          AUDIT_ENTITY_TYPES.parkingSlot,
-          created.code,
+          input.code,
           {
             zone: zone.code,
             vehicleType: zone.vehicleType,
-            priority: created.priority,
+            priority: input.priority,
             status: input.status,
           },
           tx,
         );
-        return loadSlot(tx, created.code);
       });
     } catch (error) {
-      if (isUniqueViolation(error, 'parking_slots_code_key'))
+      if (isUniqueViolation(error, 'parking_slots_code_key')) {
         throw managementErrors.slotCodeTaken();
+      }
       throw error;
     }
+    return loadManagedSlot(input.code);
   },
 
-  /** The next unused slot ID for a zone, e.g. T-11 after T-10 (archived IDs stay reserved). */
-  async nextCode(zoneCode: string): Promise<NextSlotCodeResponse> {
-    const zone = await prisma.parkingZone.findUnique({ where: { code: zoneCode } });
-    if (!zone) throw managementErrors.zoneNotFound();
-    const prefix = SLOT_CODE_PREFIX[zone.vehicleType];
-    const existing = await prisma.parkingSlot.findMany({
-      where: { code: { startsWith: `${prefix}-` } },
-      select: { code: true },
-    });
-    const highest = existing.reduce((max, slot) => {
-      const number = Number(slot.code.slice(prefix.length + 1));
-      return Number.isInteger(number) ? Math.max(max, number) : max;
-    }, 0);
-    return { code: `${prefix}-${String(highest + 1).padStart(2, '0')}` };
-  },
-
-  /** Priority, label and (for a blocked slot) the block reason. The slot ID never changes. */
+  /**
+   * Edits priority and layout order at any time (neither disturbs a parked
+   * vehicle). Renaming or moving a slot needs an idle slot without history;
+   * the blocked reason can change only while the slot is blocked.
+   */
   async update(
     code: string,
-    input: UpdateSlotInput,
+    patch: UpdateSlotRequest,
     context: OperationContext,
   ): Promise<ManagedSlot> {
-    return withTransaction(async (tx) => {
-      const slot = await tx.parkingSlot.findFirst({ where: { code, ...VISIBLE } });
-      if (!slot) throw managementErrors.slotNotFound();
-      if (input.blockedReason !== undefined && slot.status !== 'BLOCKED') {
-        throw managementErrors.slotNotBlocked();
-      }
+    let finalCode = code;
+    try {
+      await withTransaction(async (tx) => {
+        const slot = await tx.parkingSlot.findUnique({
+          where: { code },
+          include: {
+            zone: { include: { block: { select: { isActive: true } } } },
+            _count: { select: { sessions: true } },
+          },
+        });
+        if (!slot) throw managementErrors.slotNotFound();
+        if (slot.archivedAt) throw managementErrors.slotArchived();
 
-      await tx.parkingSlot.update({
-        where: { id: slot.id },
-        data: {
-          ...(input.priority !== undefined ? { priority: input.priority } : {}),
-          ...(input.label !== undefined ? { label: input.label } : {}),
-          ...(input.blockedReason !== undefined ? { blockedReason: input.blockedReason } : {}),
-        },
+        const data: Prisma.ParkingSlotUncheckedUpdateInput = {};
+        const changes: Record<string, { from: unknown; to: unknown }> = {};
+        const change = (field: string, from: unknown, to: unknown) => {
+          changes[field] = { from, to };
+        };
+
+        const newCode = patch.code ?? slot.code;
+        const movesOrRenames =
+          newCode !== slot.code ||
+          (patch.zoneCode !== undefined && patch.zoneCode !== slot.zone.code);
+        if (movesOrRenames) {
+          if (!IDLE_STATUSES.includes(slot.status as (typeof IDLE_STATUSES)[number])) {
+            throw managementErrors.slotInUse();
+          }
+          if (slot._count.sessions > 0) throw managementErrors.slotHasHistory();
+
+          const zone =
+            patch.zoneCode !== undefined && patch.zoneCode !== slot.zone.code
+              ? await tx.parkingZone.findUnique({
+                  where: { code: patch.zoneCode },
+                  include: { block: { select: { isActive: true } } },
+                })
+              : slot.zone;
+          if (!zone) throw managementErrors.zoneNotFound();
+          if (!zone.isActive || !zone.block.isActive) throw managementErrors.zoneInactive();
+          if (!slotCodeMatchesVehicleType(newCode, zone.vehicleType)) {
+            throw managementErrors.slotCodeMismatch();
+          }
+          if (newCode !== slot.code) {
+            const taken = await tx.parkingSlot.findUnique({
+              where: { code: newCode },
+              select: { archivedAt: true },
+            });
+            if (taken) throw managementErrors.slotCodeTaken(Boolean(taken.archivedAt));
+            data.code = newCode;
+            change('code', slot.code, newCode);
+          }
+          if (zone.id !== slot.zoneId) {
+            data.zoneId = zone.id;
+            change('zone', slot.zone.code, zone.code);
+          }
+        }
+
+        if (patch.priority !== undefined && patch.priority !== slot.priority) {
+          data.priority = patch.priority;
+          change('priority', slot.priority, patch.priority);
+        }
+        if (patch.sortOrder !== undefined && patch.sortOrder !== slot.sortOrder) {
+          data.sortOrder = patch.sortOrder;
+          change('sortOrder', slot.sortOrder, patch.sortOrder);
+        }
+        if (patch.blockedReason !== undefined && patch.blockedReason !== slot.blockedReason) {
+          if (slot.status !== 'BLOCKED') throw managementErrors.slotNotBlocked();
+          data.blockedReason = patch.blockedReason;
+          change('blockedReason', slot.blockedReason, patch.blockedReason);
+        }
+
+        if (Object.keys(data).length === 0) return;
+        // Guard against a vehicle or hold arriving since the read above.
+        const updated = await tx.parkingSlot.updateMany({
+          where: {
+            id: slot.id,
+            archivedAt: null,
+            ...(movesOrRenames ? { status: { in: [...IDLE_STATUSES] } } : {}),
+          },
+          data,
+        });
+        if (updated.count !== 1) throw managementErrors.slotInUse();
+        finalCode = newCode;
+        await audit(
+          context,
+          AUDIT_ACTIONS.slotUpdated,
+          newCode,
+          {
+            changes: changes as Prisma.InputJsonObject,
+            ...(newCode !== code ? { previousCode: code } : {}),
+          },
+          tx,
+        );
       });
-      await audit(
-        context,
-        input.priority !== undefined && input.priority !== slot.priority
-          ? AUDIT_ACTIONS.slotPriorityChanged
-          : AUDIT_ACTIONS.slotUpdated,
-        AUDIT_ENTITY_TYPES.parkingSlot,
-        code,
-        {
-          ...(input.priority !== undefined ? { from: slot.priority, to: input.priority } : {}),
-          ...(input.label !== undefined ? { label: input.label } : {}),
-          ...(input.blockedReason !== undefined ? { blockedReason: input.blockedReason } : {}),
-        },
-        tx,
-      );
-      return loadSlot(tx, code);
-    });
+    } catch (error) {
+      if (isUniqueViolation(error, 'parking_slots_code_key')) {
+        throw managementErrors.slotCodeTaken();
+      }
+      throw error;
+    }
+    return loadManagedSlot(finalCode);
   },
 
   async block(code: string, reason: string, context: OperationContext): Promise<ManagedSlot> {
-    return withTransaction(async (tx) => {
+    await withTransaction(async (tx) => {
       const { count } = await tx.parkingSlot.updateMany({
-        where: { code, status: 'AVAILABLE', isActive: true, ...VISIBLE },
+        where: { code, status: 'AVAILABLE', archivedAt: null },
         data: { status: 'BLOCKED', blockedReason: reason },
       });
-      if (count !== 1) {
-        throw await explainRefusal(tx, code, managementErrors.slotNotAvailable);
-      }
-      await audit(
-        context,
-        AUDIT_ACTIONS.slotBlocked,
-        AUDIT_ENTITY_TYPES.parkingSlot,
-        code,
-        { reason },
-        tx,
-      );
-      return loadSlot(tx, code);
+      if (count !== 1) await explainMiss(tx, code, managementErrors.slotNotAvailable);
+      await audit(context, AUDIT_ACTIONS.slotBlocked, code, { reason }, tx);
     });
+    return loadManagedSlot(code);
   },
 
   async unblock(code: string, context: OperationContext): Promise<ManagedSlot> {
-    return withTransaction(async (tx) => {
+    await withTransaction(async (tx) => {
       const { count } = await tx.parkingSlot.updateMany({
-        where: { code, status: 'BLOCKED', ...VISIBLE },
+        where: { code, status: 'BLOCKED', archivedAt: null },
         data: { status: 'AVAILABLE', blockedReason: null },
       });
-      if (count !== 1) {
-        const slot = await tx.parkingSlot.findUnique({ where: { code } });
-        throw !slot || slot.archivedAt
-          ? managementErrors.slotNotFound()
-          : managementErrors.slotNotBlocked();
-      }
-      await audit(
-        context,
-        AUDIT_ACTIONS.slotUnblocked,
-        AUDIT_ENTITY_TYPES.parkingSlot,
-        code,
-        {},
-        tx,
-      );
-      return loadSlot(tx, code);
+      if (count !== 1) await explainMiss(tx, code, managementErrors.slotNotBlocked);
+      await audit(context, AUDIT_ACTIONS.slotUnblocked, code, {}, tx);
     });
+    return loadManagedSlot(code);
   },
 
   async setPriority(
@@ -308,200 +363,116 @@ export const slotManagementService = {
     priority: number,
     context: OperationContext,
   ): Promise<ManagedSlot> {
-    return this.update(code, { priority }, context);
-  },
-
-  /** Takes a slot out of service: never offered for allocation, hidden from drivers. */
-  async disable(code: string, context: OperationContext): Promise<ManagedSlot> {
-    return withTransaction(async (tx) => {
-      const slot = await tx.parkingSlot.findFirst({
-        where: { code, ...VISIBLE },
-        include: { _count: { select: { sessions: { where: { status: 'ACTIVE' } } } } },
-      });
+    await withTransaction(async (tx) => {
+      const slot = await tx.parkingSlot.findUnique({ where: { code } });
       if (!slot) throw managementErrors.slotNotFound();
-      if (!slot.isActive) return loadSlot(tx, code);
-      if (slotBusy(slot, slot._count.sessions)) throw managementErrors.slotInUse();
-
-      // The status condition makes this lose cleanly to a concurrent allocation.
-      const { count } = await tx.parkingSlot.updateMany({
-        where: { id: slot.id, status: { in: ['AVAILABLE', 'BLOCKED'] }, isActive: true },
-        data: { isActive: false },
-      });
-      if (count !== 1) throw managementErrors.slotInUse();
+      if (slot.archivedAt) throw managementErrors.slotArchived();
+      await tx.parkingSlot.update({ where: { code }, data: { priority } });
       await audit(
         context,
-        AUDIT_ACTIONS.slotDisabled,
-        AUDIT_ENTITY_TYPES.parkingSlot,
+        AUDIT_ACTIONS.slotPriorityChanged,
         code,
-        {},
+        { from: slot.priority, to: priority },
         tx,
       );
-      return loadSlot(tx, code);
     });
+    return loadManagedSlot(code);
+  },
+
+  /** Takes an idle slot out of service: never allocated, not counted as capacity. */
+  async disable(code: string, context: OperationContext): Promise<ManagedSlot> {
+    await withTransaction(async (tx) => {
+      const { count } = await tx.parkingSlot.updateMany({
+        where: { code, archivedAt: null, isEnabled: true, status: { in: [...IDLE_STATUSES] } },
+        data: { isEnabled: false },
+      });
+      if (count === 1) {
+        await audit(context, AUDIT_ACTIONS.slotDisabled, code, {}, tx);
+        return;
+      }
+      const slot = await tx.parkingSlot.findUnique({ where: { code } });
+      if (!slot) throw managementErrors.slotNotFound();
+      if (slot.archivedAt) throw managementErrors.slotArchived();
+      if (!slot.isEnabled) return; // already disabled: nothing to do
+      throw managementErrors.slotInUse();
+    });
+    return loadManagedSlot(code);
   },
 
   async enable(code: string, context: OperationContext): Promise<ManagedSlot> {
-    return withTransaction(async (tx) => {
-      const slot = await tx.parkingSlot.findFirst({ where: { code, ...VISIBLE } });
+    await withTransaction(async (tx) => {
+      const { count } = await tx.parkingSlot.updateMany({
+        where: { code, archivedAt: null, isEnabled: false },
+        data: { isEnabled: true },
+      });
+      if (count === 1) {
+        await audit(context, AUDIT_ACTIONS.slotEnabled, code, {}, tx);
+        return;
+      }
+      const slot = await tx.parkingSlot.findUnique({ where: { code } });
       if (!slot) throw managementErrors.slotNotFound();
-      if (slot.isActive) return loadSlot(tx, code);
-      await tx.parkingSlot.update({ where: { id: slot.id }, data: { isActive: true } });
-      await audit(context, AUDIT_ACTIONS.slotEnabled, AUDIT_ENTITY_TYPES.parkingSlot, code, {}, tx);
-      return loadSlot(tx, code);
+      if (slot.archivedAt) throw managementErrors.slotArchived();
+      // already enabled: nothing to do
     });
+    return loadManagedSlot(code);
   },
 
   /**
-   * Deletes a slot that was never used, or archives one with parking history so
-   * sessions, receipts and reports keep referring to it. A slot that has a
-   * vehicle in it (or is being assigned) can never be removed.
+   * Safe delete. An idle slot that nothing ever referenced is removed; one with
+   * parking history is archived instead (`forceArchive` archives either way).
+   * Occupied or held slots are refused. History, receipts and reports keep
+   * pointing at archived slots.
    */
-  async remove(code: string, context: OperationContext): Promise<DeleteSlotResponse> {
+  async remove(
+    code: string,
+    context: OperationContext,
+    { forceArchive = false } = {},
+  ): Promise<SlotDeletionResult> {
     return withTransaction(async (tx) => {
-      const slot = await tx.parkingSlot.findFirst({
-        where: { code, ...VISIBLE },
-        include: {
-          _count: { select: { sessions: true } },
-        },
+      const slot = await tx.parkingSlot.findUnique({
+        where: { code },
+        include: { _count: { select: { sessions: true } } },
       });
       if (!slot) throw managementErrors.slotNotFound();
+      if (!IDLE_STATUSES.includes(slot.status as (typeof IDLE_STATUSES)[number])) {
+        throw managementErrors.slotInUse();
+      }
+      const hasHistory = slot._count.sessions > 0;
 
-      const activeSessions = await tx.parkingSession.count({
-        where: { slotId: slot.id, status: 'ACTIVE' },
-      });
-      if (slotBusy(slot, activeSessions)) throw managementErrors.slotInUse();
-
-      const idle: Prisma.ParkingSlotWhereInput = {
-        id: slot.id,
-        status: { in: ['AVAILABLE', 'BLOCKED'] },
-      };
-      if (slot._count.sessions === 0) {
-        const { count } = await tx.parkingSlot.deleteMany({ where: idle });
+      if (!hasHistory && !forceArchive) {
+        // Conditional on idleness and no sessions; Park Now offers go with the slot.
+        const { count } = await tx.parkingSlot.deleteMany({
+          where: { id: slot.id, status: { in: [...IDLE_STATUSES] }, sessions: { none: {} } },
+        });
         if (count !== 1) throw managementErrors.slotInUse();
-        await audit(
-          context,
-          AUDIT_ACTIONS.slotDeleted,
-          AUDIT_ENTITY_TYPES.parkingSlot,
-          code,
-          {},
-          tx,
-        );
-        return { code, outcome: 'DELETED' as const };
+        await audit(context, AUDIT_ACTIONS.slotDeleted, code, {}, tx);
+        return { outcome: 'DELETED', code };
       }
 
+      if (slot.archivedAt) throw managementErrors.slotArchived();
       const { count } = await tx.parkingSlot.updateMany({
-        where: idle,
-        data: { isActive: false, archivedAt: new Date() },
+        where: { id: slot.id, archivedAt: null, status: { in: [...IDLE_STATUSES] } },
+        data: { archivedAt: new Date() },
       });
       if (count !== 1) throw managementErrors.slotInUse();
-      await audit(
-        context,
-        AUDIT_ACTIONS.slotArchived,
-        AUDIT_ENTITY_TYPES.parkingSlot,
-        code,
-        { sessions: slot._count.sessions },
-        tx,
-      );
-      return { code, outcome: 'ARCHIVED' as const };
+      await audit(context, AUDIT_ACTIONS.slotArchived, code, { hasHistory }, tx);
+      return { outcome: 'ARCHIVED', code };
     });
   },
 
-  /** Display name, description and in-service flag. Taking a block out of service needs it to be empty. */
-  async updateBlock(
-    code: string,
-    input: UpdateBlockInput,
-    context: OperationContext,
-  ): Promise<ManagedBlock> {
-    return withTransaction(async (tx) => {
-      const block = await tx.parkingBlock.findUnique({ where: { code } });
-      if (!block) throw managementErrors.blockNotFound();
-      if (input.isActive === false && block.isActive) {
-        const busy = await tx.parkingSlot.count({
-          where: {
-            zone: { blockId: block.id },
-            OR: [
-              { status: { in: ['OCCUPIED', 'HELD'] } },
-              { sessions: { some: { status: 'ACTIVE' } } },
-            ],
-          },
-        });
-        if (busy) throw managementErrors.blockInUse();
+  async restore(code: string, context: OperationContext): Promise<ManagedSlot> {
+    await withTransaction(async (tx) => {
+      const { count } = await tx.parkingSlot.updateMany({
+        where: { code, archivedAt: { not: null } },
+        data: { archivedAt: null },
+      });
+      if (count !== 1) {
+        const exists = await tx.parkingSlot.count({ where: { code } });
+        throw exists ? managementErrors.slotNotArchived() : managementErrors.slotNotFound();
       }
-      await tx.parkingBlock.update({
-        where: { id: block.id },
-        data: {
-          ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.description !== undefined ? { description: input.description } : {}),
-          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-        },
-      });
-      await audit(
-        context,
-        AUDIT_ACTIONS.blockUpdated,
-        AUDIT_ENTITY_TYPES.parkingBlock,
-        code,
-        {
-          ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.description !== undefined ? { description: input.description } : {}),
-          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-        },
-        tx,
-      );
-      const updated = await tx.parkingBlock.findUniqueOrThrow({
-        where: { id: block.id },
-        include: {
-          zones: { orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }], include: ZONE_INCLUDE },
-        },
-      });
-      return toManagedBlock(updated, campusHour());
+      await audit(context, AUDIT_ACTIONS.slotRestored, code, {}, tx);
     });
-  },
-
-  /** Display name and in-service flag of a zone; its vehicle type never changes. */
-  async updateZone(
-    code: string,
-    input: UpdateZoneInput,
-    context: OperationContext,
-  ): Promise<ManagedZone> {
-    return withTransaction(async (tx) => {
-      const zone = await tx.parkingZone.findUnique({ where: { code } });
-      if (!zone) throw managementErrors.zoneNotFound();
-      if (input.isActive === false && zone.isActive) {
-        const busy = await tx.parkingSlot.count({
-          where: {
-            zoneId: zone.id,
-            OR: [
-              { status: { in: ['OCCUPIED', 'HELD'] } },
-              { sessions: { some: { status: 'ACTIVE' } } },
-            ],
-          },
-        });
-        if (busy) throw managementErrors.zoneInUse();
-      }
-      await tx.parkingZone.update({
-        where: { id: zone.id },
-        data: {
-          ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-        },
-      });
-      await audit(
-        context,
-        AUDIT_ACTIONS.zoneUpdated,
-        AUDIT_ENTITY_TYPES.parkingZone,
-        code,
-        {
-          ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-        },
-        tx,
-      );
-      const updated = await tx.parkingZone.findUniqueOrThrow({
-        where: { id: zone.id },
-        include: ZONE_INCLUDE,
-      });
-      return toManagedZone(updated, campusHour());
-    });
+    return loadManagedSlot(code);
   },
 
   /** Sets (or clears) a block's real-world coordinates. */
@@ -520,10 +491,10 @@ export const slotManagementService = {
       await audit(
         context,
         AUDIT_ACTIONS.blockLocationUpdated,
-        AUDIT_ENTITY_TYPES.parkingBlock,
         code,
         { latitude: location.latitude, longitude: location.longitude },
         tx,
+        AUDIT_ENTITY_TYPES.parkingBlock,
       );
       return toBlockSummary(updated);
     });

@@ -2,8 +2,8 @@ import type {
   CurrentUserResponse,
   LoginRequest,
   LoginResponse,
-  ParkingUserCategory,
   RegistrationRequest,
+  StudentRegistrationRequest,
   UserLoginRequest,
 } from '@cpvts/shared';
 
@@ -24,10 +24,17 @@ export const authApi = {
       authenticated: false,
     }),
 
-  register: (category: ParkingUserCategory, body: RegistrationRequest) =>
-    apiRequest<LoginResponse>(`/auth/register/${category.toLowerCase()}`, {
+  registerStudent: (data: StudentRegistrationRequest) =>
+    apiRequest<LoginResponse>('/auth/register/student', {
       method: 'POST',
-      body,
+      body: data,
+      authenticated: false,
+    }),
+
+  registerStaff: (data: RegistrationRequest) =>
+    apiRequest<LoginResponse>('/auth/register/staff', {
+      method: 'POST',
+      body: data,
       authenticated: false,
     }),
 

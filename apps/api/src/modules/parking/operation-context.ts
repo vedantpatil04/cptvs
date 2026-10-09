@@ -4,21 +4,37 @@ import { AUDIT_ACTIONS, type AuditEntityType } from '../audit/audit-actions.js';
 import { auditRepository } from '../audit/audit.repository.js';
 import type { AuthenticatedUser, RequestMeta } from '../auth/auth.types.js';
 
-/** Who is performing a parking operation, for authorisation context and the audit log. */
-export interface OperationContext {
-  actor: AuthenticatedUser;
+/** How an operation reached the system. Security-desk operations are the default and are not annotated. */
+export type OperationChannel = 'SELF_SERVICE' | 'VISITOR';
+
+/**
+ * Who is performing an operation, for the audit log. `actor` is null for a
+ * visitor, who has no account; `channel` then says how the step happened.
+ */
+export interface ActorContext {
+  actor: { id: string } | null;
   request: RequestMeta;
+  channel?: OperationChannel;
+  /** The duty shift of the Security Staff member acting (null for administrators and when none). */
+  shiftId?: string | null;
+  /** An administrator acting outside any shift (emergency / management override). */
+  override?: boolean;
+}
+
+/** Who is performing a parking operation, for authorisation context and the audit log. */
+export interface OperationContext extends ActorContext {
+  actor: AuthenticatedUser;
 }
 
 /**
- * The context of a checkout step. Operators and parking users act as
- * themselves; a visitor completing their own checkout has no account, so the
- * actor is null and the audit trail records a system action.
+ * Audit metadata that records how a step happened: the channel of a self-service or
+ * visitor step, the duty shift of a gate operation and an administrator's override.
  */
-export interface CheckoutContext {
-  actor: { id: string } | null;
-  request: RequestMeta;
-}
+export const channelMetadata = (context: ActorContext): Prisma.InputJsonObject => ({
+  ...(context.channel ? { via: context.channel } : {}),
+  ...(context.shiftId ? { shiftId: context.shiftId } : {}),
+  ...(context.override ? { override: true } : {}),
+});
 
 /**
  * Records a refused operation (duplicate entry, mismatch, repeated checkout …)
@@ -26,7 +42,7 @@ export interface CheckoutContext {
  */
 export const auditRejection = async (
   error: AppError,
-  context: CheckoutContext,
+  context: ActorContext,
   subject: {
     entityType?: AuditEntityType;
     entityId?: string;
@@ -38,7 +54,7 @@ export const auditRejection = async (
     actorId: context.actor?.id ?? null,
     entityType: subject.entityType,
     entityId: subject.entityId,
-    metadata: { code: error.code, ...subject.metadata },
+    metadata: { code: error.code, ...subject.metadata, ...channelMetadata(context) },
     request: context.request,
   });
   return error;

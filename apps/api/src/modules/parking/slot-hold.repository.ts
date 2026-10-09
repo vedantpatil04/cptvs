@@ -4,13 +4,9 @@ import { prisma } from '../../db/prisma.js';
 import type { VehicleType } from '../../generated/prisma/client.js';
 import { newHoldToken } from '../../lib/identifiers.js';
 import type { SlotHoldStore } from './allocation.js';
+import { IN_SERVICE } from './slot-filters.js';
 
-const RELEASED = {
-  status: 'AVAILABLE',
-  holdToken: null,
-  holdUserId: null,
-  holdExpiresAt: null,
-} as const;
+const RELEASED = { status: 'AVAILABLE', holdToken: null, holdExpiresAt: null } as const;
 
 /**
  * Temporary slot holds implemented as atomic compare-and-set updates, so two
@@ -19,23 +15,22 @@ const RELEASED = {
  */
 export const slotHoldRepository = {
   /**
-   * AVAILABLE → HELD for an in-service slot. Returns the hold token, or null if
-   * the slot was not available. Operator allocation uses the short default hold;
-   * a self-service "Park now" proposal passes a longer hold and the user's id.
+   * AVAILABLE → HELD. Returns the hold token, or null if the slot was not
+   * available. `ttlMs` defaults to the short allocation hold; Park Now uses a
+   * longer one so the user can read the offer and confirm.
    */
   async acquire(
     slotId: string,
-    options: { holdMs?: number; userId?: string } = {},
     db: DbClient = prisma,
+    ttlMs: number = config.parking.slotHoldMs,
   ): Promise<string | null> {
     const token = newHoldToken();
     const { count } = await db.parkingSlot.updateMany({
-      where: { id: slotId, status: 'AVAILABLE', isActive: true },
+      where: { id: slotId, status: 'AVAILABLE', ...IN_SERVICE },
       data: {
         status: 'HELD',
         holdToken: token,
-        holdUserId: options.userId ?? null,
-        holdExpiresAt: new Date(Date.now() + (options.holdMs ?? config.parking.slotHoldMs)),
+        holdExpiresAt: new Date(Date.now() + ttlMs),
       },
     });
     return count === 1 ? token : null;
@@ -51,31 +46,19 @@ export const slotHoldRepository = {
     token: string,
     vehicleType: VehicleType,
     db: DbClient = prisma,
-    /** Self-service confirmation: the slot must be held by this user. */
-    userId?: string,
   ): Promise<boolean> {
     const { count } = await db.parkingSlot.updateMany({
       where: {
         id: slotId,
         status: 'HELD',
         holdToken: token,
-        ...(userId ? { holdUserId: userId } : {}),
         holdExpiresAt: { gt: new Date() },
-        isActive: true,
+        ...IN_SERVICE,
         zone: { vehicleType, isActive: true, block: { isActive: true } },
       },
-      data: { status: 'OCCUPIED', holdToken: null, holdUserId: null, holdExpiresAt: null },
+      data: { status: 'OCCUPIED', holdToken: null, holdExpiresAt: null },
     });
     return count === 1;
-  },
-
-  /** Returns every slot a user is holding for an unconfirmed "Park now" proposal to AVAILABLE. */
-  async releaseHeldBy(userId: string, db: DbClient = prisma): Promise<number> {
-    const { count } = await db.parkingSlot.updateMany({
-      where: { status: 'HELD', holdUserId: userId },
-      data: RELEASED,
-    });
-    return count;
   },
 
   /** HELD → AVAILABLE, only for the holder of `token`. */
@@ -86,11 +69,19 @@ export const slotHoldRepository = {
     });
   },
 
-  /** Returns every expired hold to AVAILABLE (e.g. after a crashed request). */
+  /**
+   * Returns every expired hold to AVAILABLE (e.g. after a crashed request or an
+   * unconfirmed Park Now offer) and marks the matching offers EXPIRED.
+   */
   async releaseExpired(db: DbClient = prisma): Promise<number> {
+    const now = new Date();
     const { count } = await db.parkingSlot.updateMany({
-      where: { status: 'HELD', holdExpiresAt: { lte: new Date() } },
+      where: { status: 'HELD', holdExpiresAt: { lte: now } },
       data: RELEASED,
+    });
+    await db.parkNowOffer.updateMany({
+      where: { status: 'OFFERED', expiresAt: { lte: now } },
+      data: { status: 'EXPIRED' },
     });
     return count;
   },

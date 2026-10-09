@@ -1,297 +1,161 @@
-import type {
-  AuditAction,
-  HistoryItem,
-  Page,
-  ParkingSessionView,
-  ParkingUserProfileView,
-  PendingCheckout,
-  PortalHistoryQuery,
-  PortalLayoutResponse,
-  PortalOverview,
-  ProfileUpdate,
-  ReceiptView,
-  SessionTimelineResponse,
-  TimelineEvent,
+import {
+  type ActiveSessionsResponse,
+  type HistoryItem,
+  type Page,
+  type ParkingSessionView,
+  type PortalHistoryQuery,
+  type PortalLayoutResponse,
+  type PortalOverview,
+  type ReceiptView,
+  type SessionTimelineResponse,
 } from '@cpvts/shared';
 
 import { prisma } from '../../db/prisma.js';
-import { withTransaction } from '../../db/transaction.js';
-import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit/audit-actions.js';
-import { auditRepository } from '../audit/audit.repository.js';
-import { accountErrors } from '../accounts/accounts.errors.js';
-import { HISTORY_INCLUDE, historyWhere, toHistoryItem } from '../management/history.service.js';
-import { feeScheduleService } from '../fees/fee-schedule.service.js';
-import { liveContext } from '../parking/live-context.js';
-import type { OperationContext } from '../parking/operation-context.js';
+import type { Prisma } from '../../generated/prisma/client.js';
+import { HISTORY_INCLUDE, toHistoryItem } from '../management/history.service.js';
+import { optionalDateFilter } from '../management/date-range.js';
 import { parkingErrors } from '../parking/parking.errors.js';
 import { toReceiptView, toSessionView } from '../parking/parking.mappers.js';
-import { RECEIPT_INCLUDE, SESSION_INCLUDE } from '../parking/parking.repository.js';
+import { parkingRepository, SESSION_INCLUDE } from '../parking/parking.repository.js';
 import { timelineService } from '../parking/timeline.service.js';
-import { trackingService } from '../parking/tracking.service.js';
+import { liveContext, trackingService } from '../parking/tracking.service.js';
 import { publicService } from '../public/public.service.js';
-import { ownedSessionWhere, portalRepository } from './portal.repository.js';
-import { vehicleService } from './vehicle.service.js';
+import { findOwnSession, ownedSessionWhere } from './portal-access.js';
+import { toUserLayout } from './portal-layout.js';
+import { listVehiclesOf } from './vehicle.service.js';
 
-const RECENT_ACTIVITY_COUNT = 5;
-/** A completed parking stays the "latest" result on the home page for this long. */
-const LAST_COMPLETED_HOURS = 12;
+const RECENT_ACTIVITY = 5;
 
-/**
- * What a user may see of a session's audit trail: the parking steps only. No
- * operator names, allocation scores, refusals or other internal detail.
- */
-const USER_TIMELINE_ACTIONS: ReadonlySet<AuditAction> = new Set<AuditAction>([
-  'VEHICLE_CHECKED_IN',
-  'SLOT_ASSIGNED',
-  'CHECKOUT_INITIATED',
-  'PAYMENT_INITIATED',
-  'PAYMENT_SUCCEEDED',
-  'PAYMENT_FAILED',
-  'PAYMENT_CANCELLED',
-  'TRANSACTION_FINALIZED',
-  'RECEIPT_GENERATED',
-  'SLOT_RELEASED',
-]);
+interface PageRequest {
+  page: number;
+  pageSize: number;
+}
 
-const toUserTimelineEvent = (event: TimelineEvent): TimelineEvent => {
-  const { score: _score, reason: _reason, ...details } = event.details;
-  void _score;
-  void _reason;
-  return { at: event.at, action: event.action, actor: null, details };
-};
-
-/**
- * Live layout for a signed-in viewer. Other people's vehicles are never
- * revealed: only the viewer's own slots (`ownSlots`) keep their occupant, and
- * administrative block reasons are dropped.
- */
-export const buildPortalLayout = async (ownSlots: string[]): Promise<PortalLayoutResponse> => {
-  const map = await trackingService.getMap();
-  const own = new Set(ownSlots);
-  return {
-    ...map,
-    blocks: map.blocks.map((block) => ({
-      ...block,
-      zones: block.zones.map((zone) => ({
-        ...zone,
-        slots: zone.slots.map((slot) => ({
-          ...slot,
-          blockedReason: null,
-          occupant: own.has(slot.code) ? slot.occupant : null,
-        })),
-      })),
-    })),
-    mySlots: [...own],
-  };
-};
-
+/** Reads for a Student / Campus Staff member. Every query is limited to their own sessions. */
 export const portalService = {
-  async getProfile(userId: string): Promise<ParkingUserProfileView> {
-    const user = await portalRepository.findProfile(userId);
-    const profile = user?.parkingProfile;
-    if (!user || !profile) throw accountErrors.userNotFound();
-    const schedule = await feeScheduleService.find();
-    const rules = schedule?.rules[profile.category];
-    return {
-      id: user.id,
-      fullName: user.fullName,
-      email: profile.email,
-      phone: profile.phone,
-      category: profile.category,
-      institutionalId: profile.institutionalId,
-      verification: {
-        status: profile.verificationStatus,
-        note: profile.verificationStatus === 'REJECTED' ? profile.verificationNote : null,
-        submittedAt: profile.verificationSubmittedAt.toISOString(),
-        reviewedAt: profile.reviewedAt?.toISOString() ?? null,
-      },
-      preferredLocale: profile.preferredLocale,
-      vehicleCount: user._count.vehicles,
-      memberSince: user.createdAt.toISOString(),
-      pricing: rules ?? null,
-    };
-  },
-
-  /** Name, phone and language only; category, ID, e-mail and verification are server-controlled. */
-  async updateProfile(
-    input: ProfileUpdate,
-    context: OperationContext,
-  ): Promise<ParkingUserProfileView> {
-    const userId = context.actor.id;
-    const changes = input as { fullName?: string; phone?: string; preferredLocale?: string | null };
-    await withTransaction(async (tx) => {
-      if (changes.fullName !== undefined) {
-        await tx.user.update({ where: { id: userId }, data: { fullName: changes.fullName } });
-      }
-      if (changes.phone !== undefined || changes.preferredLocale !== undefined) {
-        await tx.parkingUserProfile.update({
-          where: { userId },
-          data: {
-            ...(changes.phone !== undefined ? { phone: changes.phone } : {}),
-            ...(changes.preferredLocale !== undefined
-              ? { preferredLocale: changes.preferredLocale }
-              : {}),
-          },
-        });
-      }
-      await auditRepository.record(
-        {
-          action: AUDIT_ACTIONS.profileUpdated,
-          actorId: userId,
-          entityType: AUDIT_ENTITY_TYPES.user,
-          entityId: userId,
-          metadata: { fields: Object.keys(changes) },
-          request: context.request,
-        },
-        tx,
-      );
-    });
-    return this.getProfile(userId);
-  },
-
-  async listActiveSessions(userId: string): Promise<ParkingSessionView[]> {
-    const where = await ownedSessionWhere(userId);
-    const [sessions, context] = await Promise.all([
+  async overview(userId: string): Promise<PortalOverview> {
+    const scope = ownedSessionWhere(userId);
+    const [availability, active, recent, vehicles, live] = await Promise.all([
+      publicService.getAvailability(),
       prisma.parkingSession.findMany({
-        where: { AND: [where, { status: 'ACTIVE' }] },
+        where: { ...scope, status: 'ACTIVE' },
         include: SESSION_INCLUDE,
-        orderBy: { entryAt: 'asc' },
+        orderBy: [{ entryAt: 'asc' }, { sessionNumber: 'asc' }],
       }),
+      prisma.parkingSession.findMany({
+        where: scope,
+        include: HISTORY_INCLUDE,
+        orderBy: [{ entryAt: 'desc' }, { sessionNumber: 'asc' }],
+        take: RECENT_ACTIVITY,
+      }),
+      listVehiclesOf(userId),
       liveContext(),
     ]);
-    return sessions.map((session) => toSessionView(session, context));
-  },
-
-  async getSession(userId: string, sessionNumber: string): Promise<ParkingSessionView> {
-    const where = await ownedSessionWhere(userId);
-    const session = await prisma.parkingSession.findFirst({
-      where: { AND: [where, { sessionNumber }] },
-      include: SESSION_INCLUDE,
-    });
-    // Another user's session is indistinguishable from a missing one.
-    if (!session) throw parkingErrors.sessionNotFound();
-    return toSessionView(session, await liveContext());
-  },
-
-  async getOverview(userId: string): Promise<PortalOverview> {
-    const [availability, activeSessions, recent, vehicles, pendingCheckouts, lastCompleted] =
-      await Promise.all([
-        publicService.getAvailability(),
-        this.listActiveSessions(userId),
-        this.listHistory(userId, { page: 1, pageSize: RECENT_ACTIVITY_COUNT }),
-        vehicleService.list(userId),
-        this.listPendingCheckouts(userId),
-        this.findLastCompleted(userId),
-      ]);
     return {
       generatedAt: new Date().toISOString(),
       availability,
-      activeSessions,
-      recentActivity: recent.items,
+      activeSessions: active.map((session) => toSessionView(session, live)),
+      recentActivity: recent.map(toHistoryItem),
       vehicleCount: vehicles.length,
-      vehicles,
-      pendingCheckouts,
-      lastCompleted,
     };
   },
 
-  /** Active sessions whose checkout was started (a payment is waiting) but not completed. */
-  async listPendingCheckouts(userId: string): Promise<PendingCheckout[]> {
-    const owned = await ownedSessionWhere(userId);
-    const payments = await prisma.payment.findMany({
-      where: {
-        status: { in: ['PENDING', 'PROCESSING'] },
-        session: { AND: [owned, { status: 'ACTIVE' }] },
-      },
-      include: { session: { select: { sessionNumber: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
-    return payments.map((payment) => ({
-      sessionNumber: payment.session.sessionNumber,
-      paymentId: payment.id,
-      amountPaise: payment.amountPaise,
-      exitHour: payment.exitHour,
-    }));
-  },
-
-  /** The user's latest completed parking, while it is still recent. */
-  async findLastCompleted(userId: string): Promise<HistoryItem | null> {
-    const since = new Date(Date.now() - LAST_COMPLETED_HOURS * 3_600_000);
-    const session = await prisma.parkingSession.findFirst({
-      where: {
-        AND: [await ownedSessionWhere(userId), { status: 'COMPLETED', exitAt: { gte: since } }],
-      },
-      include: HISTORY_INCLUDE,
-      orderBy: { exitAt: 'desc' },
-    });
-    return session ? toHistoryItem(session) : null;
-  },
-
-  /** The parking steps of one of the user's own sessions (no operators, scores or refusals). */
-  async getTimeline(userId: string, sessionNumber: string): Promise<SessionTimelineResponse> {
-    await this.getSession(userId, sessionNumber);
-    const timeline = await timelineService.forSession(sessionNumber);
-    return {
-      sessionNumber,
-      events: timeline.events
-        .filter((event) => USER_TIMELINE_ACTIONS.has(event.action))
-        .map(toUserTimelineEvent),
-    };
-  },
-
-  async listHistory(userId: string, query: PortalHistoryQuery): Promise<Page<HistoryItem>> {
-    const {
-      page = 1,
-      pageSize = 25,
-      ...filters
-    } = query as {
-      page?: number;
-      pageSize?: number;
-      vehicleNumber?: string;
-      vehicleType?: HistoryItem['vehicleType'];
-      from?: string;
-      to?: string;
-    };
-    const where = { AND: [await ownedSessionWhere(userId), historyWhere(filters)] };
-    const [total, sessions] = await Promise.all([
-      prisma.parkingSession.count({ where }),
+  async layout(userId: string): Promise<PortalLayoutResponse> {
+    const [map, active] = await Promise.all([
+      trackingService.getMap(),
       prisma.parkingSession.findMany({
-        where,
-        include: HISTORY_INCLUDE,
-        orderBy: [{ entryAt: 'desc' }, { sessionNumber: 'asc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        where: { ...ownedSessionWhere(userId), status: 'ACTIVE' },
+        select: { slot: { select: { code: true } } },
       }),
     ]);
-    return { items: sessions.map(toHistoryItem), page, pageSize, total };
+    return toUserLayout(
+      map,
+      active.map((session: { slot: { code: string } }) => session.slot.code),
+    );
   },
 
-  async listReceipts(userId: string, page: number, pageSize: number): Promise<Page<ReceiptView>> {
-    const where = { session: await ownedSessionWhere(userId) };
-    const [total, receipts] = await Promise.all([
-      prisma.receipt.count({ where }),
-      prisma.receipt.findMany({
-        where,
-        include: RECEIPT_INCLUDE,
-        orderBy: [{ issuedAt: 'desc' }, { receiptNumber: 'asc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+  async activeSessions(userId: string): Promise<ActiveSessionsResponse> {
+    const [sessions, live] = await Promise.all([
+      prisma.parkingSession.findMany({
+        where: { ...ownedSessionWhere(userId), status: 'ACTIVE' },
+        include: SESSION_INCLUDE,
+        orderBy: [{ entryAt: 'asc' }, { sessionNumber: 'asc' }],
       }),
+      liveContext(),
     ]);
-    return { items: receipts.map(toReceiptView), page, pageSize, total };
+    return {
+      currentHour: live.currentHour,
+      sessions: sessions.map((session) => toSessionView(session, live)),
+    };
   },
 
-  async getReceipt(userId: string, receiptNumber: string): Promise<ReceiptView> {
-    const receipt = await prisma.receipt.findFirst({
-      where: { receiptNumber, session: await ownedSessionWhere(userId) },
-      include: RECEIPT_INCLUDE,
+  async session(userId: string, sessionNumber: string): Promise<ParkingSessionView> {
+    const session = await findOwnSession(userId, sessionNumber);
+    return toSessionView(session, await liveContext());
+  },
+
+  async timeline(userId: string, sessionNumber: string): Promise<SessionTimelineResponse> {
+    await findOwnSession(userId, sessionNumber);
+    return timelineService.forSession(sessionNumber, { isOwner: true });
+  },
+
+  async history(
+    userId: string,
+    query: PortalHistoryQuery & PageRequest,
+  ): Promise<Page<HistoryItem>> {
+    const filters: Prisma.ParkingSessionWhereInput = {
+      ...(query.vehicleNumber
+        ? { vehicle: { vehicleNumber: { contains: String(query.vehicleNumber) } } }
+        : {}),
+      ...(query.vehicleType ? { vehicleType: query.vehicleType } : {}),
+    };
+    const entryAt = optionalDateFilter({
+      from: query.from as string | undefined,
+      to: query.to as string | undefined,
     });
+    return listSessions(
+      userId,
+      { ...filters, ...(entryAt ? { entryAt } : {}) },
+      query.page,
+      query.pageSize,
+    );
+  },
+
+  /** Finished sessions with their receipts, newest first. */
+  async receipts(userId: string, { page, pageSize }: PageRequest): Promise<Page<HistoryItem>> {
+    return listSessions(userId, { status: 'COMPLETED', receipt: { isNot: null } }, page, pageSize);
+  },
+
+  async receipt(userId: string, receiptNumber: string): Promise<ReceiptView> {
+    const receipt = await parkingRepository.findReceiptByNumber(receiptNumber);
     if (!receipt) throw parkingErrors.receiptNotFound();
+    const owned = await prisma.parkingSession.count({
+      where: { id: receipt.sessionId, ...ownedSessionWhere(userId) },
+    });
+    // Someone else's receipt looks exactly like one that does not exist.
+    if (owned === 0) throw parkingErrors.receiptNotFound();
     return toReceiptView(receipt);
   },
+};
 
-  async getLayout(userId: string): Promise<PortalLayoutResponse> {
-    const sessions = await this.listActiveSessions(userId);
-    return buildPortalLayout(sessions.map((session) => session.slotCode));
-  },
+const listSessions = async (
+  userId: string,
+  filters: Prisma.ParkingSessionWhereInput,
+  page: number,
+  pageSize: number,
+): Promise<Page<HistoryItem>> => {
+  const where: Prisma.ParkingSessionWhereInput = {
+    AND: [ownedSessionWhere(userId), filters],
+  };
+  const [total, sessions] = await Promise.all([
+    prisma.parkingSession.count({ where }),
+    prisma.parkingSession.findMany({
+      where,
+      include: HISTORY_INCLUDE,
+      orderBy: [{ entryAt: 'desc' }, { sessionNumber: 'asc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+  return { items: sessions.map(toHistoryItem), page, pageSize, total };
 };
