@@ -7,11 +7,16 @@ import type { ParkingMapResponse, PortalLayoutResponse } from '@cpvts/shared';
  */
 export const toUserLayout = (map: ParkingMapResponse, mySlots: string[]): PortalLayoutResponse => ({
   ...map,
-  blocks: map.blocks.map((block) => ({
+  blocks: map.blocks.map((block: ParkingMapResponse['blocks'][number]) => ({
     ...block,
-    zones: block.zones.map((zone) => ({
+    zones: block.zones.map((zone: ParkingMapResponse['blocks'][number]['zones'][number]) => ({
       ...zone,
-      slots: zone.slots.map((slot) => ({ ...slot, occupant: null })),
+      slots: zone.slots.map(
+        (slot: ParkingMapResponse['blocks'][number]['zones'][number]['slots'][number]) => ({
+          ...slot,
+          occupant: null,
+        }),
+      ),
     })),
   })),
   mySlots,

@@ -7,7 +7,7 @@ services:
     plan: free
     region: singapore
     # Repository root: npm workspaces need the root lockfile.
-    buildCommand: npm ci --include=dev && npm run build:api
+    buildCommand: npm ci --include=dev && npm run build:shared && npx prisma generate --schema apps/api/prisma/schema.prisma && npm run build --workspace=apps/api
     # Applies pending migrations, then starts the server.
     startCommand: npm run db:migrate:deploy && npm run start:api
     healthCheckPath: /health

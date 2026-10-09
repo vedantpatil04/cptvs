@@ -16,7 +16,9 @@ const RECENT_ACTIVITY = 8;
 
 const summarise = (counts: SlotStatusCount[]): OccupancySummary => {
   const of = (status: SlotStatusCount['status']) =>
-    counts.filter((entry) => entry.status === status).reduce((sum, entry) => sum + entry.count, 0);
+    counts
+      .filter((entry: SlotStatusCount) => entry.status === status)
+      .reduce((sum: number, entry: SlotStatusCount) => sum + entry.count, 0);
   const available = of('AVAILABLE');
   const occupied = of('OCCUPIED');
   const blocked = of('BLOCKED');
@@ -68,13 +70,13 @@ export const dashboardService = {
       overall: summarise(counts),
       byVehicleType: VEHICLE_TYPES.map((vehicleType) => ({
         vehicleType,
-        ...summarise(counts.filter((entry) => entry.vehicleType === vehicleType)),
+        ...summarise(counts.filter((entry: SlotStatusCount) => entry.vehicleType === vehicleType)),
       })),
       currentlyParked,
       todayVehicleCount,
       todayFeesCollectedPaise: revenue ? (revenue._sum.amountPaise ?? 0) : null,
       users,
-      recentActivity: recent ? recent.map(toHistoryItem) : null,
+      recentActivity: recent ? recent.map((item) => toHistoryItem(item)) : null,
     };
   },
 };

@@ -6,6 +6,7 @@ import {
   PROGRAMS,
   ACADEMIC_PROGRAMS,
   type AcademicFacets,
+  type AcademicProgram,
   type AdminUserUpdate,
   type HistoryItem,
   type Page,
@@ -168,7 +169,7 @@ const mergeAcademic = (
     const complete = academicProfileSchema.safeParse(patch);
     if (!complete.success) {
       throw validationError(
-        complete.error.issues.map((issue) => ({
+        complete.error.issues.map((issue: z.ZodIssue) => ({
           path: ['body', 'academic', ...issue.path].join('.'),
           message: issue.message,
         })),
@@ -184,7 +185,7 @@ const mergeAcademic = (
   });
   if (!merged.success) {
     throw validationError(
-      merged.error.issues.map((issue) => ({
+      merged.error.issues.map((issue: z.ZodIssue) => ({
         path: ['body', 'academic', ...issue.path].join('.'),
         message: issue.message,
       })),
@@ -280,7 +281,7 @@ export const adminUserService = {
       }
     }
     return {
-      programs: ACADEMIC_PROGRAMS.map((program) => ({
+      programs: ACADEMIC_PROGRAMS.map((program: AcademicProgram) => ({
         program,
         label: PROGRAMS[program].label,
         level: PROGRAMS[program].level,

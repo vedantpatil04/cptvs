@@ -27,6 +27,12 @@ const sniff = (bytes: Uint8Array): IdentityDocumentType | null => {
   return null;
 };
 
+const MIME_EXTENSIONS: Record<IdentityDocumentType, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'application/pdf': 'pdf',
+};
+
 /** Keeps only a safe display name (no paths or control characters). */
 const safeFileName = (name: string, mimeType: IdentityDocumentType): string => {
   const base = name.split(/[\\/]/).pop() ?? '';
@@ -34,7 +40,7 @@ const safeFileName = (name: string, mimeType: IdentityDocumentType): string => {
     .replace(/[^\p{L}\p{N} ._()-]/gu, '')
     .trim()
     .slice(0, 120);
-  const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf' }[mimeType];
+  const extension = MIME_EXTENSIONS[mimeType] ?? 'bin';
   return cleaned || `identity-document.${extension}`;
 };
 

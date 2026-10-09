@@ -205,6 +205,10 @@ export const reportsService = {
       case 'vehicles':
         report = await vehiclesCsv();
         break;
+      default: {
+        const _exhaustive: never = kind;
+        throw new Error(`Unsupported report kind: ${String(_exhaustive)}`);
+      }
     }
 
     await auditRepository.record({

@@ -178,7 +178,8 @@ export const integrityService = {
   async scan(): Promise<IntegrityReport> {
     const checks = await Promise.all(
       INTEGRITY_CHECKS.map(async (code) => {
-        const findings = await CHECKS[code]();
+        const checkFn = CHECKS[code];
+        const findings = typeof checkFn === 'function' ? await checkFn() : [];
         return { code, passed: findings.length === 0, findings };
       }),
     );
@@ -190,7 +191,7 @@ export const integrityService = {
     });
     return {
       checkedAt: new Date().toISOString(),
-      healthy: checks.every((check) => check.passed),
+      healthy: checks.every((check: { passed: boolean }) => check.passed),
       checks,
       recentRejections: rejections.map((entry) => ({
         at: entry.createdAt.toISOString(),

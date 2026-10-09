@@ -77,25 +77,34 @@ export const analyticsService = {
       }),
     ]);
 
-    const occupancyByHour = HOURS.map((hour) => {
+    const occupancyByHour = HOURS.map((hour: number) => {
       const row = { hour, TWO_WHEELER: 0, FOUR_WHEELER: 0 };
       for (const session of sessions) {
-        if (occupies(session, hour, lastActiveHour)) row[session.vehicleType] += 1;
+        if (occupies(session, hour, lastActiveHour)) {
+          row[session.vehicleType] = (row[session.vehicleType] ?? 0) + 1;
+        }
       }
       return row;
     });
 
-    const entriesByHour = HOURS.map((hour) => ({
+    const entriesByHour = HOURS.map((hour: number) => ({
       hour,
       count: sessions.filter((session) => session.entryHour === hour).length,
     }));
-    const peak = entriesByHour.reduce((best, row) => (row.count > best.count ? row : best), {
-      hour: -1,
-      count: 0,
-    });
+    const peak = entriesByHour.reduce(
+      (best: { hour: number; count: number }, row: { hour: number; count: number }) =>
+        row.count > best.count ? row : best,
+      {
+        hour: -1,
+        count: 0,
+      },
+    );
 
     const completed = sessions.filter((session) => session.status === 'COMPLETED');
-    const totalDuration = completed.reduce((sum, session) => sum + (session.durationHours ?? 0), 0);
+    const totalDuration = completed.reduce(
+      (sum: number, session) => sum + (session.durationHours ?? 0),
+      0,
+    );
 
     const byVehicleType = Object.fromEntries(VEHICLE_TYPES.map((key) => [key, 0])) as Record<
       VehicleType,
@@ -106,8 +115,10 @@ export const analyticsService = {
       number
     >;
     for (const receipt of receipts) {
-      byVehicleType[receipt.session.vehicleType] += receipt.amountPaise;
-      byOwnerCategory[receipt.session.ownerCategory] += receipt.amountPaise;
+      const vt = receipt.session.vehicleType;
+      byVehicleType[vt] = (byVehicleType[vt] ?? 0) + receipt.amountPaise;
+      const oc = receipt.session.ownerCategory;
+      byOwnerCategory[oc] = (byOwnerCategory[oc] ?? 0) + receipt.amountPaise;
     }
 
     const zoneUsage: ZoneUsage[] = zones.map((zone) => {

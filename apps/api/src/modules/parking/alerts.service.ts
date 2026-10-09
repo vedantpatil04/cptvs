@@ -7,7 +7,11 @@ import { currentDuration } from './parking.mappers.js';
 import { slotHoldRepository } from './slot-hold.repository.js';
 import { IN_SERVICE } from './slot-filters.js';
 
-const SEVERITY_ORDER = { critical: 0, warning: 1, info: 2 } as const;
+const SEVERITY_ORDER: Record<ParkingAlert['severity'], number> = {
+  critical: 0,
+  warning: 1,
+  info: 2,
+};
 
 /**
  * Rule-based operational alerts (Master Blueprint §26). Transparent
@@ -88,7 +92,9 @@ export const alertsService = {
     }
 
     alerts.sort((a, b) => {
-      const bySeverity = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+      const orderA = SEVERITY_ORDER[a.severity] ?? 99;
+      const orderB = SEVERITY_ORDER[b.severity] ?? 99;
+      const bySeverity = orderA - orderB;
       if (bySeverity !== 0) return bySeverity;
       if (a.kind === 'LONG_DURATION' && b.kind === 'LONG_DURATION') {
         return b.session.durationHours - a.session.durationHours;

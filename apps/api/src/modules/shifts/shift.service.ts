@@ -81,6 +81,10 @@ const cashWhere = (cash: NonNullable<ListQuery['cash']>): Prisma.SecurityShiftWh
       return { handover: { is: { differencePaise: { not: 0 }, resolvedAt: null } } };
     case 'RECONCILED':
       return { status: 'CLOSED' };
+    default: {
+      const _exhaustive: never = cash;
+      return {};
+    }
   }
 };
 

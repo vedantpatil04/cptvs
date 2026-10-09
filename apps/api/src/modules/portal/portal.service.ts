@@ -70,7 +70,7 @@ export const portalService = {
     ]);
     return toUserLayout(
       map,
-      active.map((session) => session.slot.code),
+      active.map((session: { slot: { code: string } }) => session.slot.code),
     );
   },
 
